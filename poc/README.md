@@ -1,13 +1,17 @@
-# IntegriShield — Dev 2 POC
+# IntegriShield POC
+
+> Self-contained development environment for the Day 14 demo.
+
+## Dev 2 — ML Pipeline POC
 
 Demonstrates 3 SAP RFC anomaly detection scenarios:
 1. **Off-hours RFC** — call at 2:30am triggers ML anomaly + logs WARNING
 2. **Bulk extraction** — RFC_READ_TABLE with 80k rows triggers ML anomaly + DLP alert
 3. **Shadow endpoint** — unknown `ZRFC_EXFIL_DATA` triggers shadow alert
 
-## Quick Start
+### Quick Start
 
-### Step 1 — Install Python deps and train the model
+#### Step 1 — Install Python deps and train the model
 
 ```bash
 pip install scikit-learn mlflow numpy pandas redis
@@ -22,7 +26,7 @@ python ml/training/train_model.py
 python ml/training/evaluate_model.py
 ```
 
-### Step 2 — Run the full POC stack
+#### Step 2 — Run the Dev2 POC stack
 
 ```bash
 cd poc
@@ -40,7 +44,7 @@ Services started:
 | m11-shadow-integration | — | Shadow endpoint detection |
 | seed-injector | — | Injects demo events (exits after) |
 
-### Step 3 — Check results
+#### Step 3 — Check results
 
 ```bash
 # See anomaly alerts (from M8)
@@ -56,14 +60,7 @@ docker exec poc-redis-1 redis-cli XRANGE shadow_alerts - +
 open http://localhost:5000
 ```
 
-## Demo Checklist
-
-- [ ] Off-hours RFC call → `anomaly_events` entry with `anomaly_type=OFF_HOURS`
-- [ ] Bulk extraction → `anomaly_events` + `dlp_alerts` (rule=`HIGH_ROW_COUNT` or `BLOCKLISTED_FUNCTION`)
-- [ ] Shadow endpoint → `shadow_alerts` with `first_seen=true`
-- [ ] Alert latency < 5 seconds from Redis ingest to alert published
-
-## Architecture
+### Architecture
 
 ```
 rfc_events (Redis Stream)
@@ -74,4 +71,53 @@ rfc_events (Redis Stream)
 ```
 
 Streams are capped at 10,000 entries (approximate) for POC memory safety.
-Dev 4's dashboard can consume all 4 streams directly.
+
+---
+
+## Dev 4 — Dashboard + Infrastructure POC
+
+### Quick Start
+
+```bash
+# From repo root — start the full stack (Redis, Postgres, Dashboard)
+docker compose -f poc/docker-compose.dev4.yml up --build
+
+# In another terminal — start the demo event producer
+python scripts/demo_event_producer.py --interval 2
+```
+
+Then open **http://localhost:4173** to see the SOC dashboard.
+
+| Service | Port | Description |
+|---------|------|-------------|
+| Redis | 6379 | Event bus (Redis Streams) |
+| Dashboard Backend | 8787 | Multi-stream consumer + REST API |
+| Dashboard UI | 4173 | SOC dashboard |
+
+### Running Without Docker
+
+```bash
+# 1. Start Redis
+redis-server --daemonize yes
+
+# 2. Start backend
+python3 apps/dashboard/backend/server.py
+
+# 3. Start frontend
+python3 -m http.server 4173 --directory apps/dashboard
+
+# 4. Start demo event producer
+python3 scripts/demo_event_producer.py --interval 2
+```
+
+### Seed Data
+
+Pre-built SAP RFC events are in `poc/seed/api_call_events.json` covering all 3 scenarios:
+- **Bulk extraction** — 15–22MB data transfers
+- **Off-hours RFC** — 02:00–04:00 UTC service account calls
+- **Shadow endpoint** — Undocumented RFC destinations
+
+### Adding Other Dev Modules
+
+When Dev1/Dev2/Dev3 have their Dockerfiles ready, uncomment the corresponding
+service blocks in `docker-compose.yml` (M01, M05, M08) and restart.
