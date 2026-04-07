@@ -1,0 +1,74 @@
+[
+  {
+    "event_id": "seed-001",
+    "source_ip": "10.42.0.15",
+    "bytes_out": 15000000,
+    "off_hours": false,
+    "unknown_endpoint": false,
+    "scenario": "bulk-extraction",
+    "description": "SAP RFC BAPI_MATERIAL_GETLIST extracting 15MB of material master data"
+  },
+  {
+    "event_id": "seed-002",
+    "source_ip": "10.42.0.22",
+    "bytes_out": 1500,
+    "off_hours": true,
+    "unknown_endpoint": false,
+    "scenario": "off-hours-rfc",
+    "description": "RFC_READ_TABLE called at 02:30 UTC by service account SVC_DATA_SYNC"
+  },
+  {
+    "event_id": "seed-003",
+    "source_ip": "10.42.0.88",
+    "bytes_out": 4500,
+    "off_hours": false,
+    "unknown_endpoint": true,
+    "scenario": "shadow-endpoint",
+    "description": "Unknown RFC destination ZSHADOW_BACKUP discovered in production landscape"
+  },
+  {
+    "event_id": "seed-004",
+    "source_ip": "10.42.0.15",
+    "bytes_out": 22000000,
+    "off_hours": true,
+    "unknown_endpoint": false,
+    "scenario": "bulk-extraction",
+    "description": "BAPI_FLIGHT_GETLIST extracting 22MB during off-hours maintenance window"
+  },
+  {
+    "event_id": "seed-005",
+    "source_ip": "192.168.1.105",
+    "bytes_out": 800,
+    "off_hours": true,
+    "unknown_endpoint": false,
+    "scenario": "off-hours-rfc",
+    "description": "RFC_SYSTEM_INFO called from external IP at 03:15 UTC"
+  },
+  {
+    "event_id": "seed-006",
+    "source_ip": "10.42.0.200",
+    "bytes_out": 3200,
+    "off_hours": false,
+    "unknown_endpoint": true,
+    "scenario": "shadow-endpoint",
+    "description": "Undocumented endpoint Z_CUSTOM_EXTRACT found routing to external system"
+  },
+  {
+    "event_id": "seed-007",
+    "source_ip": "10.42.0.33",
+    "bytes_out": 18500000,
+    "off_hours": false,
+    "unknown_endpoint": false,
+    "scenario": "bulk-extraction",
+    "description": "Mass download of vendor master data via BAPI_VENDOR_GETLIST"
+  },
+  {
+    "event_id": "seed-008",
+    "source_ip": "172.16.0.45",
+    "bytes_out": 500,
+    "off_hours": true,
+    "unknown_endpoint": true,
+    "scenario": "shadow-endpoint",
+    "description": "Unknown shadow RFC from VPN subnet at 04:00 UTC"
+  }
+]
