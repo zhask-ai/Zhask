@@ -1,0 +1,58 @@
+# ═══════════ Python ═══════════
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+
+# ═══════════ Virtual Environments ═══════════
+.venv/
+venv/
+env/
+ENV/
+
+# ═══════════ IDE ═══════════
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ═══════════ Environment / Secrets ═══════════
+.env
+.env.local
+.env.*.local
+
+# ═══════════ Testing ═══════════
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ═══════════ Redis ═══════════
+dump.rdb
+
+# ═══════════ ML Artifacts ═══════════
+ml/mlruns/
+ml/models/*.pkl
+!ml/models/.gitkeep
+
+# ═══════════ Node (dashboard) ═══════════
+node_modules/
+.next/
+
+# ═══════════ Docker ═══════════
+*.log
+
+# ═══════════ Terraform ═══════════
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
