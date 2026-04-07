@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ApiCallEvent",
+  "description": "SAP RFC call event published by M1 (API Gateway Shield) to the rfc_events stream.",
+  "type": "object",
+  "required": ["event_id", "rfc_function", "client_ip", "user_id", "timestamp", "rows_returned", "response_time_ms", "status"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "description": "Unique event identifier (UUID)"
+    },
+    "rfc_function": {
+      "type": "string",
+      "description": "SAP RFC function module name (e.g. RFC_READ_TABLE)"
+    },
+    "client_ip": {
+      "type": "string",
+      "description": "IP address of the calling client"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "SAP user ID making the call"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of the call"
+    },
+    "rows_returned": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of data rows returned by the RFC call"
+    },
+    "response_time_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "RFC call duration in milliseconds"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["SUCCESS", "ERROR", "TIMEOUT"],
+      "description": "Outcome of the RFC call"
+    },
+    "sap_system": {
+      "type": "string",
+      "description": "SAP system ID (optional, e.g. PRD, QA)"
+    }
+  },
+  "additionalProperties": false
+}

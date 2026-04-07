@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ShadowAlert",
+  "description": "Shadow endpoint alert published by M11 to the shadow_alerts stream.",
+  "type": "object",
+  "required": ["alert_id", "original_event_id", "rfc_function", "client_ip", "user_id", "timestamp", "first_seen"],
+  "properties": {
+    "alert_id": { "type": "string" },
+    "original_event_id": { "type": "string" },
+    "rfc_function": { "type": "string", "description": "The unknown RFC function that was called" },
+    "client_ip": { "type": "string" },
+    "user_id": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "first_seen": {
+      "type": "boolean",
+      "description": "True if this is the first time this RFC function has ever been seen"
+    },
+    "times_seen_today": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "How many times this unknown function has been called today"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM"],
+      "default": "HIGH"
+    }
+  },
+  "additionalProperties": false
+}

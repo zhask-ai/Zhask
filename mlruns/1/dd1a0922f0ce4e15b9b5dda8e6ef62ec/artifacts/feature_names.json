@@ -1,0 +1,14 @@
+{
+  "features": [
+    "hour_of_day",
+    "is_off_hours",
+    "is_weekend",
+    "rows_returned",
+    "rows_per_second",
+    "response_time_ms",
+    "client_req_count_5m",
+    "unique_functions_10m",
+    "endpoint_entropy_10m",
+    "is_known_endpoint"
+  ]
+}

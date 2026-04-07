@@ -1,0 +1,123 @@
+version: "3.9"
+
+# IntegriShield — Dev 2 POC Stack
+# Spins up: Redis, MLflow UI, M03, M08, M09, M11, seed-injector
+#
+# Usage:
+#   1. Train model first:  python ml/training/train_model.py
+#   2. docker-compose up --build
+#   3. MLflow UI:          http://localhost:5000
+#   4. Check alerts:       docker exec poc-redis-1 redis-cli XLEN anomaly_events
+
+x-common-env: &common-env
+  REDIS_URL: redis://redis:6379
+  LOG_LEVEL: INFO
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  mlflow:
+    image: python:3.12-slim
+    working_dir: /mlflow
+    command: >
+      sh -c "pip install mlflow==2.17.2 --quiet &&
+             mlflow server
+               --backend-store-uri sqlite:///mlflow.db
+               --default-artifact-root /mlflow/artifacts
+               --host 0.0.0.0
+               --port 5000"
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../ml/mlruns:/mlflow
+
+  m03-traffic-analyzer:
+    build:
+      context: ..
+      dockerfile: modules/m03-traffic-analyzer/Dockerfile
+    environment:
+      <<: *common-env
+      INPUT_STREAM: rfc_events
+      OUTPUT_STREAM: analyzed_events
+      CONSUMER_NAME: m03-traffic-analyzer
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  m08-anomaly-detection:
+    build:
+      context: ..
+      dockerfile: modules/m08-anomaly-detection/Dockerfile
+    environment:
+      <<: *common-env
+      INPUT_STREAM: analyzed_events
+      OUTPUT_STREAM: anomaly_events
+      CONSUMER_NAME: m08-anomaly-detection
+      MODEL_PATH: /app/ml/models/isolation_forest_v1.pkl
+    volumes:
+      - ../ml/models:/app/ml/models:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  m09-dlp:
+    build:
+      context: ..
+      dockerfile: modules/m09-dlp/Dockerfile
+    environment:
+      <<: *common-env
+      INPUT_STREAM: analyzed_events
+      OUTPUT_STREAM: dlp_alerts
+      CONSUMER_NAME: m09-dlp
+      HIGH_ROW_COUNT_THRESHOLD: "10000"
+      BLOCKLIST_ROW_THRESHOLD: "5000"
+      VELOCITY_THRESHOLD: "50"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  m11-shadow-integration:
+    build:
+      context: ..
+      dockerfile: modules/m11-shadow-integration/Dockerfile
+    environment:
+      <<: *common-env
+      INPUT_STREAM: rfc_events
+      OUTPUT_STREAM: shadow_alerts
+      CONSUMER_NAME: m11-shadow-integration
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One-shot container: injects seed events into Redis for demo
+  seed-injector:
+    build:
+      context: ..
+      dockerfile: poc/seed-injector/Dockerfile
+    environment:
+      REDIS_URL: redis://redis:6379
+      INJECT_DELAY_MS: "200"   # ms between events (slow enough to see live)
+    depends_on:
+      redis:
+        condition: service_healthy
+      m03-traffic-analyzer:
+        condition: service_started
+      m08-anomaly-detection:
+        condition: service_started
+      m09-dlp:
+        condition: service_started
+      m11-shadow-integration:
+        condition: service_started
+    restart: "no"
