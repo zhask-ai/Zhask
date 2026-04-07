@@ -1,9 +1,12 @@
-"""IntegriShield — Shared Auth Package.
+"""
+shared.auth — authentication helpers for IntegriShield modules.
+Owned by Dev 1.
 
-JWT validation, tenant extraction, and FastAPI middleware for all modules.
+POC: simple API-key check via X-API-Key header.
+Post-funding: swap in JWT / OAuth2 without changing call-sites
+              (callers only import verify_api_key or require_api_key).
 """
 
-from integrishield_auth.middleware import AuthMiddleware
-from integrishield_auth.tenant import extract_tenant_id, validate_tenant_header
+from shared.auth.api_key import verify_api_key, require_api_key, APIKeyError
 
-__all__ = ["AuthMiddleware", "extract_tenant_id", "validate_tenant_header"]
+__all__ = ["verify_api_key", "require_api_key", "APIKeyError"]

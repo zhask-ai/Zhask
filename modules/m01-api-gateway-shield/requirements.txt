@@ -1,0 +1,16 @@
+# M01 — API Gateway Shield dependencies
+# Inherits shared/ deps; this file adds M01-specific packages.
+
+# Shared library (installed as local path in Docker)
+# -e ../../shared   ← handled in Dockerfile COPY step
+
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+httpx==0.27.2          # async HTTP client for forwarding to SAP backend
+
+# Shared deps (pinned to match shared/requirements.txt)
+redis==5.0.8
+jsonschema==4.23.0
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
