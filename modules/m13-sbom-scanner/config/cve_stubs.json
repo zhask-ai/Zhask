@@ -1,0 +1,142 @@
+{
+  "RFC_READ_TABLE": [
+    {
+      "cve_id": "CVE-2021-38163",
+      "cvss": 9.1,
+      "summary": "SAP NetWeaver: RFC_READ_TABLE allows unauthenticated remote table reads, leading to full database disclosure."
+    }
+  ],
+  "BAPI_USER_CHANGE": [
+    {
+      "cve_id": "CVE-2020-6207",
+      "cvss": 10.0,
+      "summary": "Missing authentication check in SAP Solution Manager allows remote admin user modification via BAPI_USER_CHANGE."
+    }
+  ],
+  "BAPI_USER_CREATE": [
+    {
+      "cve_id": "CVE-2021-27608",
+      "cvss": 9.8,
+      "summary": "SAP NetWeaver: BAPI_USER_CREATE exposed via RFC allows remote creation of privileged accounts."
+    }
+  ],
+  "RFC_ABAP_INSTALL_AND_RUN": [
+    {
+      "cve_id": "CVE-2022-22536",
+      "cvss": 10.0,
+      "summary": "SAP HTTP request smuggling vulnerability allows HTTP desync attack leading to RCE via RFC_ABAP_INSTALL_AND_RUN."
+    }
+  ],
+  "SXPG_COMMAND_EXECUTE": [
+    {
+      "cve_id": "CVE-2021-33705",
+      "cvss": 9.1,
+      "summary": "SAP NetWeaver: SXPG_COMMAND_EXECUTE allows OS command injection via crafted RFC call."
+    }
+  ],
+  "SXPG_CALL_SYSTEM": [
+    {
+      "cve_id": "CVE-2019-0307",
+      "cvss": 9.0,
+      "summary": "SAP Diagnostics Agent: SXPG_CALL_SYSTEM exposed without authentication check allows arbitrary command execution."
+    }
+  ],
+  "STRUST_MODIFY": [
+    {
+      "cve_id": "CVE-2020-26832",
+      "cvss": 9.1,
+      "summary": "SAP AS ABAP: STRUST_MODIFY allows modification of trust store, enabling MITM on encrypted SAP communications."
+    }
+  ],
+  "/SAPSLL/API_6700_SOCUST": [
+    {
+      "cve_id": "CVE-STUB-2024-0001",
+      "cvss": 7.5,
+      "summary": "Custom SAP GTS namespace function with known privilege escalation path in versions < SP18."
+    }
+  ],
+  "/SAPTRX/ASSIGN_APPOBJ": [
+    {
+      "cve_id": "CVE-STUB-2024-0002",
+      "cvss": 6.5,
+      "summary": "SAP Track and Trace namespace function: insufficient authorisation check allows cross-tenant data access."
+    }
+  ],
+  "/SCMB/MON_JCDS_INBOUND": [
+    {
+      "cve_id": "CVE-STUB-2024-0003",
+      "cvss": 8.1,
+      "summary": "SAP SCM namespace: inbound monitoring function exposes order data without tenant isolation."
+    }
+  ],
+  "/BEV1/RBBRWAUFT": [
+    {
+      "cve_id": "CVE-STUB-2023-0004",
+      "cvss": 5.3,
+      "summary": "SAP Beverage industry namespace: audit trail function allows backdated entries under certain configs."
+    }
+  ],
+  "/IWFND/SG_MED_CATALOG": [
+    {
+      "cve_id": "CVE-STUB-2023-0005",
+      "cvss": 7.2,
+      "summary": "SAP Gateway namespace: catalog service exposes internal OData metadata to unauthenticated callers."
+    }
+  ],
+  "/SAPAPO/MVM_LIST": [
+    {
+      "cve_id": "CVE-STUB-2024-0006",
+      "cvss": 6.1,
+      "summary": "SAP APO namespace: material version management list function allows cross-client material read."
+    }
+  ],
+  "/ISDFPS/ADOPT_FPS_OBJECT": [
+    {
+      "cve_id": "CVE-STUB-2023-0007",
+      "cvss": 8.8,
+      "summary": "SAP Defense Forces namespace: object adoption function misses authorisation check on target client."
+    }
+  ],
+  "/SAPPSSRM/DB_WRITE": [
+    {
+      "cve_id": "CVE-STUB-2024-0008",
+      "cvss": 9.3,
+      "summary": "SAP SRM namespace: direct database write function bypasses SRM transaction validation layer."
+    }
+  ],
+  "/BOBF/CONF_UI_MODEL_GET": [
+    {
+      "cve_id": "CVE-STUB-2023-0009",
+      "cvss": 4.3,
+      "summary": "SAP BOPF namespace: configuration model read function leaks internal UI model structure to low-priv users."
+    }
+  ],
+  "/SRMERP/PURCH_REQ_CREATE": [
+    {
+      "cve_id": "CVE-STUB-2024-0010",
+      "cvss": 7.1,
+      "summary": "SAP SRM ERP namespace: purchase requisition creation function lacks secondary authorisation on cost centres."
+    }
+  ],
+  "INCLUDE_ZCOMMON_DB_UTILS": [
+    {
+      "cve_id": "CVE-STUB-2023-0011",
+      "cvss": 6.8,
+      "summary": "Custom INCLUDE program: known SQL concatenation vulnerability in shared ABAP utility library."
+    }
+  ],
+  "INCLUDE_ZAUTH_BYPASS": [
+    {
+      "cve_id": "CVE-STUB-2024-0012",
+      "cvss": 9.5,
+      "summary": "Custom INCLUDE program: auth bypass pattern detected — AUTHORITY-CHECK ... DUMMY used unconditionally."
+    }
+  ],
+  "SUSR_USER_AUTH_FOR_OBJ_GET": [
+    {
+      "cve_id": "CVE-STUB-2023-0013",
+      "cvss": 6.5,
+      "summary": "User authorisation enumeration via SUSR_USER_AUTH_FOR_OBJ_GET can expose authorisation object assignments."
+    }
+  ]
+}

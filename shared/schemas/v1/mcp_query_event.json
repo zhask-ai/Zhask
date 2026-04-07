@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "McpQueryEvent",
+  "description": "Event published by M05 SAP MCP Suite when an MCP tool call is executed.",
+  "type": "object",
+  "required": ["event_id", "tool_name", "timestamp_utc"],
+  "properties": {
+    "event_id":      { "type": "string", "description": "UUID of this event" },
+    "session_id":    { "type": "string", "description": "MCP session identifier" },
+    "tool_name":     {
+      "type": "string",
+      "enum": ["query_events", "get_anomaly_scores", "list_alerts", "run_security_check"],
+      "description": "Name of the MCP tool that was called"
+    },
+    "tenant_id":     { "type": "string", "description": "Tenant identifier" },
+    "latency_ms":    { "type": "integer", "minimum": 0, "description": "Tool call latency in milliseconds" },
+    "is_error":      { "type": "boolean", "description": "Whether the tool call resulted in an error" },
+    "timestamp_utc": { "type": "string", "format": "date-time", "description": "UTC timestamp of the tool call" },
+    "source_module": { "type": "string", "description": "Module that published this event" }
+  },
+  "additionalProperties": false
+}

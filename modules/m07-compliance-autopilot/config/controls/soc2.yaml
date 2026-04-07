@@ -1,0 +1,63 @@
+framework: soc2
+controls:
+  - control_id: CC6.1
+    title: Logical and Physical Access Controls
+    description: >
+      The entity implements logical access security measures to protect against
+      threats from sources outside its system boundaries. SAP RFC calls,
+      zero-trust access decisions, and anomaly scores provide evidence.
+    evidence_streams:
+      - integrishield:api_call_events
+      - integrishield:anomaly_events
+      - integrishield:alert_events
+    violation_streams:
+      - integrishield:alert_events
+    remediation_guidance: >
+      Ensure Zero-Trust fabric is enforcing MFA and device trust. Review
+      privilege-escalation and geo-anomaly alerts as access control violations.
+
+  - control_id: CC7.2
+    title: System Monitoring — Anomaly Detection
+    description: >
+      The entity monitors system components and the operation of controls, including
+      the use of automated detection mechanisms to identify anomalies. Anomaly
+      detection scores from M08 are direct evidence for this control.
+    evidence_streams:
+      - integrishield:anomaly_events
+      - integrishield:alert_events
+    violation_streams:
+      - integrishield:anomaly_events
+    remediation_guidance: >
+      Tune anomaly detection thresholds. Review ML model performance quarterly.
+      Ensure all anomaly_events above threshold are investigated within 24 hours.
+
+  - control_id: CC8.1
+    title: Change Management
+    description: >
+      The entity authorises, designs, develops or acquires, configures, documents,
+      tests, approves, and implements changes to infrastructure, data, software,
+      and procedures to meet its objectives. Shadow endpoint detections indicate
+      unapproved changes.
+    evidence_streams:
+      - integrishield:shadow_alerts
+      - integrishield:api_call_events
+    violation_streams:
+      - integrishield:shadow_alerts
+    remediation_guidance: >
+      All new RFC endpoints must be registered in the approved endpoint registry
+      before use. Shadow endpoint detections must trigger a change management review.
+
+  - control_id: CC9.2
+    title: Risk Mitigation — Vendor and Business Partner Management
+    description: >
+      The entity assesses and manages risks associated with vendors and business
+      partners. DLP violations involving partner namespaces or external IPs
+      are evidence of this control's effectiveness (or failure).
+    evidence_streams:
+      - integrishield:dlp_alerts
+      - integrishield:alert_events
+    violation_streams:
+      - integrishield:dlp_alerts
+    remediation_guidance: >
+      Review DLP policy coverage. Ensure external partner RFC access is
+      monitored and logged. Geo-anomaly alerts from partner IPs need investigation.
