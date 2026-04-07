@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ComplianceEvidence",
+  "description": "Control evidence item produced by M07 Compliance Autopilot.",
+  "type": "object",
+  "required": ["evidence_id", "control_id", "framework", "event_id", "evidence_type", "summary", "collected_at"],
+  "properties": {
+    "evidence_id":   { "type": "string", "description": "UUID of this evidence item" },
+    "control_id":    { "type": "string", "description": "Compliance control ID (e.g. SOX-ITGC-01)" },
+    "framework":     { "type": "string", "enum": ["sox", "soc2", "iso27001", "gdpr"] },
+    "event_id":      { "type": "string", "description": "Source event that generated this evidence" },
+    "evidence_type": {
+      "type": "string",
+      "enum": ["alert", "anomaly", "dlp_violation", "api_call_log", "shadow_endpoint", "access_denial"]
+    },
+    "tenant_id":     { "type": "string" },
+    "summary":       { "type": "string", "description": "Human-readable description of the evidence" },
+    "raw_payload":   { "type": "object", "description": "Original event payload" },
+    "is_violation":  { "type": "boolean", "description": "Whether this evidence represents a control violation" },
+    "collected_at":  { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}
