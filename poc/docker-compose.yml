@@ -38,8 +38,11 @@ services:
       timeout: 3s
       retries: 5
 
+  # ═══════════ Dev2 — MLflow Tracking UI ═══════════
+
   mlflow:
     image: python:3.12-slim
+    container_name: integrishield-mlflow
     working_dir: /mlflow
     command: >
       sh -c "pip install mlflow==2.17.2 --quiet &&
@@ -49,7 +52,7 @@ services:
                --host 0.0.0.0
                --port 5000"
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
       - ../ml/mlruns:/mlflow
 
@@ -73,6 +76,7 @@ services:
     build:
       context: ..
       dockerfile: modules/m03-traffic-analyzer/Dockerfile
+    container_name: integrishield-m03
     environment:
       <<: *common-env
       INPUT_STREAM: rfc_events
@@ -83,10 +87,13 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ═══════════ Dev2 — M08 Anomaly Detection ═══════════
+
   m08-anomaly-detection:
     build:
       context: ..
       dockerfile: modules/m08-anomaly-detection/Dockerfile
+    container_name: integrishield-m08
     environment:
       <<: *common-env
       INPUT_STREAM: analyzed_events
@@ -100,10 +107,13 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ═══════════ Dev2 — M09 DLP ═══════════
+
   m09-dlp:
     build:
       context: ..
       dockerfile: modules/m09-dlp/Dockerfile
+    container_name: integrishield-m09
     environment:
       <<: *common-env
       INPUT_STREAM: analyzed_events
@@ -117,10 +127,13 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ═══════════ Dev2 — M11 Shadow Integration ═══════════
+
   m11-shadow-integration:
     build:
       context: ..
       dockerfile: modules/m11-shadow-integration/Dockerfile
+    container_name: integrishield-m11
     environment:
       <<: *common-env
       INPUT_STREAM: rfc_events
@@ -187,6 +200,7 @@ services:
     build:
       context: ..
       dockerfile: poc/seed-injector/Dockerfile
+    container_name: integrishield-seed-injector
     environment:
       REDIS_URL: redis://redis:6379
       INJECT_DELAY_MS: "200"

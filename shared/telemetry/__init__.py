@@ -1,9 +1,8 @@
-"""IntegriShield — Shared Telemetry Package.
-
-OpenTelemetry setup for traces, metrics, and structured logging.
-Every module calls `setup_telemetry(service_name)` once at startup.
+"""
+shared.telemetry — structured logging for all IntegriShield modules.
+Owned by Dev 1.
 """
 
-from integrishield_telemetry.setup import setup_telemetry
+from shared.telemetry.logger import get_logger, configure_logging
 
-__all__ = ["setup_telemetry"]
+__all__ = ["get_logger", "configure_logging"]

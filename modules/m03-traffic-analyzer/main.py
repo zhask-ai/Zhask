@@ -31,6 +31,7 @@ class TrafficAnalyzerConsumer(RedisStreamConsumer):
             redis_url=config.REDIS_URL,
             stream_name=config.INPUT_STREAM,
             consumer_name=config.CONSUMER_NAME,
+            group_name=config.GROUP_NAME,
         )
         self._analyzer = TrafficAnalyzer(config.REDIS_URL, config.OUTPUT_STREAM)
 
