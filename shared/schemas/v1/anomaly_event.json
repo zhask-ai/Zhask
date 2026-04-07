@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AnomalyEvent",
+  "description": "Anomaly detection result published by M8 to the anomaly_events stream.",
+  "type": "object",
+  "required": ["event_id", "original_event_id", "rfc_function", "client_ip", "user_id", "timestamp", "anomaly_score", "severity", "anomaly_type", "is_anomaly"],
+  "properties": {
+    "event_id": { "type": "string", "description": "Unique ID of this anomaly record" },
+    "original_event_id": { "type": "string", "description": "event_id from the source analyzed_event" },
+    "rfc_function": { "type": "string" },
+    "client_ip": { "type": "string" },
+    "user_id": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "anomaly_score": {
+      "type": "number",
+      "description": "IsolationForest score_samples() output. More negative = more anomalous."
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+      "description": "Derived from anomaly_score thresholds"
+    },
+    "anomaly_type": {
+      "type": "string",
+      "enum": ["OFF_HOURS", "BULK_EXTRACTION", "SHADOW_ENDPOINT", "VELOCITY_SPIKE", "UNKNOWN"],
+      "description": "Best-guess classification of why this was flagged"
+    },
+    "is_anomaly": {
+      "type": "boolean",
+      "description": "True when IsolationForest predicts -1 (anomaly)"
+    },
+    "feature_snapshot": {
+      "type": "object",
+      "description": "Feature values used for this prediction (for explainability)"
+    }
+  },
+  "additionalProperties": false
+}
