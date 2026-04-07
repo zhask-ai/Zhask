@@ -1,13 +1,36 @@
 # IntegriShield POC — Full Stack
-# Combines Dev2 ML/Detection services + Dev4 Dashboard infrastructure
+# Owned by Dev 1.  Combines all active POC services.
 #
-# Dev2 usage:
-#   1. Train model:  python ml/training/train_model.py
+# Services            Owner   Port
+# ─────────────────────────────────────────────
+# redis               infra   6379
+# postgres            infra   5432
+# mock-sap            Dev 1   8080
+# m01-api-gateway     Dev 1   8000   ← entry point for RFC calls
+# m03-traffic-anlzr   Dev 2   (internal)
+# m08-anomaly-det     Dev 2   (internal)
+# m09-dlp             Dev 2   (internal)
+# m11-shadow-integ    Dev 2   (internal)
+# mlflow              Dev 2   5001
+# seed-injector       Dev 1   (one-shot)
+#
+# Quick start (Dev 1 — no ML model required):
+#   docker-compose up --build mock-sap m01-api-gateway-shield redis postgres
+#
+# Full POC demo (all services):
+#   1. python ml/training/train_model.py   ← Dev 2 step, needed for M08
 #   2. docker-compose up --build
-#   3. MLflow UI:    http://localhost:5000
-#   4. Check alerts: docker exec integrishield-redis redis-cli XRANGE anomaly_events - +
+#   3. Endpoints:
+#        M01 proxy:   http://localhost:8000/rfc/proxy
+#        M01 docs:    http://localhost:8000/docs
+#        Mock SAP:    http://localhost:8080/health
+#        MLflow:      http://localhost:5001
+#   4. Inspect streams:
+#        docker exec integrishield-redis redis-cli XRANGE rfc_events - +
+#        docker exec integrishield-redis redis-cli XRANGE anomaly_events - +
+#        docker exec integrishield-redis redis-cli XRANGE shadow_alerts - +
 #
-# Full demo (with continuous event producer):
+# Continuous demo (slower injection for live walkthrough):
 #   docker-compose --profile demo up --build
 
 x-common-env: &common-env
@@ -151,6 +174,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      m01-api-gateway-shield:
+        condition: service_healthy
       m03-traffic-analyzer:
         condition: service_started
       m08-anomaly-detection:
@@ -161,20 +186,54 @@ services:
         condition: service_started
     restart: "no"
 
+  # ═══════════ Dev1 — Mock SAP Backend ═══════════
+
+  mock-sap:
+    build:
+      context: ..
+      dockerfile: poc/mock-sap/Dockerfile
+    container_name: integrishield-mock-sap
+    environment:
+      MOCK_SAP_BULK_ROWS: "80000"
+      MOCK_SAP_NORMAL_ROWS: "500"
+      MOCK_SAP_LATENCY_MS: "120"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health')\""]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # ═══════════ Dev1 — M01 API Gateway Shield ═══════════
-  # Uncomment when Dev1's Dockerfile is ready
-  # m01-api-gateway-shield:
-  #   build:
-  #     context: ../modules/m01-api-gateway-shield
-  #   container_name: integrishield-m01
-  #   environment:
-  #     REDIS_URL: redis://redis:6379
-  #     PUBLISH_STREAM: rfc_events
-  #   ports:
-  #     - "8001:8001"
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
+
+  m01-api-gateway-shield:
+    build:
+      context: ..
+      dockerfile: modules/m01-api-gateway-shield/Dockerfile
+    container_name: integrishield-m01
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql://integrishield:integrishield_dev@postgres:5432/integrishield
+      SAP_BACKEND_URL: http://mock-sap:8080
+      INTEGRISHIELD_API_KEYS: poc-dev-key-abc123
+      BULK_ROW_THRESHOLD: "10000"
+      SAP_TIMEOUT_S: "30"
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mock-sap:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ═══════════ Dev3 — M05 SAP MCP Suite ═══════════
   # Uncomment when Dev3's Dockerfile is ready
