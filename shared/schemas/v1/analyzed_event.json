@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AnalyzedEvent",
+  "description": "RFC event enriched with ML features by M3 (Traffic Analyzer). Published to analyzed_events stream.",
+  "type": "object",
+  "required": ["event_id", "rfc_function", "client_ip", "user_id", "timestamp", "rows_returned", "response_time_ms", "status", "hour_of_day", "is_off_hours", "is_weekend", "rows_per_second", "client_req_count_5m", "unique_functions_10m", "endpoint_entropy_10m", "is_known_endpoint"],
+  "properties": {
+    "event_id": { "type": "string" },
+    "rfc_function": { "type": "string" },
+    "client_ip": { "type": "string" },
+    "user_id": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "rows_returned": { "type": "integer", "minimum": 0 },
+    "response_time_ms": { "type": "integer", "minimum": 0 },
+    "status": { "type": "string", "enum": ["SUCCESS", "ERROR", "TIMEOUT"] },
+    "sap_system": { "type": "string" },
+    "hour_of_day": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 23
+    },
+    "is_off_hours": {
+      "type": "boolean",
+      "description": "True if call is outside 08:00–18:00 weekday"
+    },
+    "is_weekend": {
+      "type": "boolean"
+    },
+    "rows_per_second": {
+      "type": "number",
+      "minimum": 0,
+      "description": "rows_returned / (response_time_ms / 1000)"
+    },
+    "client_req_count_5m": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of requests from this client IP in the last 5 minutes"
+    },
+    "unique_functions_10m": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of unique RFC functions called in the last 10 minutes (all clients)"
+    },
+    "endpoint_entropy_10m": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Shannon entropy of RFC function distribution over last 10 minutes"
+    },
+    "is_known_endpoint": {
+      "type": "boolean",
+      "description": "True if rfc_function is in the known allowlist"
+    }
+  },
+  "additionalProperties": false
+}
