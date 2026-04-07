@@ -10,18 +10,12 @@ Run via docker-compose seed-injector service, or directly:
   REDIS_URL=redis://localhost:6379 python poc/seed-injector/inject.py
 """
 
-import json
 import os
-import sys
 import time
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 
 import redis
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT))
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 INJECT_DELAY_MS = int(os.getenv("INJECT_DELAY_MS", "200"))
