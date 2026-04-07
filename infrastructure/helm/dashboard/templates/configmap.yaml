@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-dashboard-config
+data:
+  REDIS_URL: {{ .Values.env.redisUrl | quote }}
+  REDIS_STREAM_KEY: {{ .Values.env.redisStreamKey | quote }}
+  REDIS_START_ID: {{ .Values.env.redisStartId | quote }}
+  STREAM_API_CALLS: "integrishield:api_call_events"
+  STREAM_ANOMALIES: "integrishield:anomaly_scores"
+  STREAM_SAP_MCP: "integrishield:sap_mcp_events"
+  STREAM_ALERTS: "integrishield:alert_events"
+  STREAM_ZERO_TRUST: "integrishield:zero_trust_events"
+  STREAM_CREDENTIALS: "integrishield:credential_events"
+  STREAM_CLOUD_POSTURE: "integrishield:cloud_posture_events"
