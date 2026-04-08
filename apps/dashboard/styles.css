@@ -161,10 +161,13 @@ body {
 .card-anomaly    { border-left: 3px solid var(--purple); }   .card-anomaly p  { color: var(--purple); }
 .card-dlp        { border-left: 3px solid var(--teal); }     .card-dlp p      { color: var(--teal); }
 .card-shadow     { border-left: 3px solid var(--orange); }   .card-shadow p   { color: var(--orange); }
-.card-sap        { border-left: 3px solid var(--cyan); }     .card-sap p      { color: var(--cyan); }
-.card-zt         { border-left: 3px solid var(--accent); }   .card-zt p       { color: var(--accent); }
-.card-vault      { border-left: 3px solid var(--amber); }    .card-vault p    { color: var(--amber); }
-.card-cloud      { border-left: 3px solid var(--pink); }     .card-cloud p    { color: var(--pink); }
+.card-sap        { border-left: 3px solid var(--cyan); }     .card-sap p        { color: var(--cyan); }
+.card-compliance { border-left: 3px solid var(--teal); }     .card-compliance p { color: var(--teal); }
+.card-incident   { border-left: 3px solid var(--orange); }   .card-incident p   { color: var(--orange); }
+.card-sbom       { border-left: 3px solid var(--purple); }   .card-sbom p       { color: var(--purple); }
+.card-zt         { border-left: 3px solid var(--accent); }   .card-zt p         { color: var(--accent); }
+.card-vault      { border-left: 3px solid var(--amber); }    .card-vault p      { color: var(--amber); }
+.card-cloud      { border-left: 3px solid var(--pink); }     .card-cloud p      { color: var(--pink); }
 
 /* ───────────── CHART ROW ───────────── */
 .chart-row {
@@ -335,7 +338,10 @@ select:hover { border-color: var(--accent); }
 .ev-dlp       { border-left-color: var(--teal); }
 .ev-shadow    { border-left-color: var(--orange); }
 .ev-gateway   { border-left-color: var(--accent); }
-.ev-rules     { border-left-color: var(--purple); }
+.ev-rules      { border-left-color: var(--purple); }
+.ev-compliance { border-left-color: var(--teal); }
+.ev-incident   { border-left-color: var(--orange); }
+.ev-sbom       { border-left-color: var(--purple); }
 
 .sev-critical strong { color: var(--critical); }
 .sev-high strong     { color: var(--orange); }
@@ -348,7 +354,10 @@ select:hover { border-color: var(--accent); }
 .ev-dlp strong       { color: var(--teal); }
 .ev-shadow strong    { color: var(--orange); }
 .ev-gateway strong   { color: var(--accent); }
-.ev-rules strong     { color: var(--purple); }
+.ev-rules strong      { color: var(--purple); }
+.ev-compliance strong { color: var(--teal); }
+.ev-incident strong   { color: var(--orange); }
+.ev-sbom strong       { color: var(--purple); }
 .ev-zt-allow strong  { color: var(--ok); }
 .ev-zt-deny strong   { color: var(--critical); }
 .ev-zt-challenge strong{ color: var(--warning); }
