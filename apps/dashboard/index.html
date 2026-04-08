@@ -3,465 +3,537 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IntegriShield SOC</title>
+    <meta name="description" content="IntegriShield SOC — Real-time Security Operations Center dashboard for enterprise SAP monitoring, threat detection, and compliance automation." />
+    <title>IntegriShield SOC — Security Operations Center</title>
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.88em' font-size='85'>◆</text></svg>" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   </head>
   <body>
 
-    <!-- ══════════════════ TOP BAR ══════════════════ -->
-    <header class="topbar">
-      <div class="topbar-left">
-        <div class="logo">
-          <span class="logo-icon">◆</span>
-          <span class="logo-text">IntegriShield</span>
-        </div>
-        <span class="badge badge-poc">POC</span>
-        <span class="badge badge-sprint">Sprint · Day 7</span>
-      </div>
-      <div class="topbar-center">
-        <div class="health-pills">
-          <span class="pill pill-pending" id="pill-m01" title="M01 API Gateway">M01</span>
-          <span class="pill pill-pending" id="pill-m04" title="M04 Zero-Trust">M04</span>
-          <span class="pill pill-pending" id="pill-m05" title="M05 SAP MCP">M05</span>
-          <span class="pill pill-pending" id="pill-m06" title="M06 Credentials">M06</span>
-          <span class="pill pill-pending" id="pill-m07" title="M07 Compliance">M07</span>
-          <span class="pill pill-pending" id="pill-m08" title="M08 Anomaly">M08</span>
-          <span class="pill pill-pending" id="pill-m09" title="M09 DLP">M09</span>
-          <span class="pill pill-pending" id="pill-m10" title="M10 Incidents">M10</span>
-          <span class="pill pill-pending" id="pill-m11" title="M11 Shadow">M11</span>
-          <span class="pill pill-pending" id="pill-m12" title="M12 Rules">M12</span>
-          <span class="pill pill-pending" id="pill-m13" title="M13 SBOM">M13</span>
-          <span class="pill pill-pending" id="pill-m15" title="M15 Cloud">M15</span>
-        </div>
-      </div>
-      <div class="topbar-right">
-        <span class="status-dot" id="status-dot"></span>
-        <span id="backend-status">connecting…</span>
-        <span class="separator">|</span>
-        <span id="events-processed">0</span>&thinsp;events
-      </div>
-    </header>
+    <div class="app-shell">
 
-    <main class="layout">
-
-      <!-- ══════════════════ STAT CARDS ══════════════════ -->
-      <section class="cards">
-        <article class="card card-critical">
-          <h2>Total Alerts</h2><p id="total-alerts">0</p>
-          <span class="card-sub" id="trend-alerts">—</span>
-        </article>
-        <article class="card card-warning">
-          <h2>Critical</h2><p id="critical-alerts">0</p>
-          <span class="card-sub">severity</span>
-        </article>
-        <article class="card">
-          <h2>Avg Latency</h2><p id="avg-latency">0.0s</p>
-          <span class="card-sub">alert pipeline</span>
-        </article>
-        <article class="card card-anomaly">
-          <h2>Anomalies</h2><p id="anomaly-count">0</p>
-          <span class="card-sub">M08 · Dev 2</span>
-        </article>
-        <article class="card card-dlp">
-          <h2>DLP Violations</h2><p id="dlp-count">0</p>
-          <span class="card-sub">M09 · Dev 2</span>
-        </article>
-        <article class="card card-shadow">
-          <h2>Shadow Endpoints</h2><p id="shadow-count">0</p>
-          <span class="card-sub">M11 · Dev 2</span>
-        </article>
-        <article class="card card-sap">
-          <h2>SAP Events</h2><p id="sap-count">0</p>
-          <span class="card-sub">M05 · Dev 3</span>
-        </article>
-        <article class="card card-compliance">
-          <h2>Compliance</h2><p id="compliance-count">0</p>
-          <span class="card-sub">M07 · Dev 3</span>
-        </article>
-        <article class="card card-incident">
-          <h2>Incidents</h2><p id="incident-count">0</p>
-          <span class="card-sub">M10 · Dev 3</span>
-        </article>
-        <article class="card card-sbom">
-          <h2>SBOM Scans</h2><p id="sbom-count">0</p>
-          <span class="card-sub">M13 · Dev 3</span>
-        </article>
-        <article class="card card-zt">
-          <h2>Zero-Trust</h2><p id="zt-count">0</p>
-          <span class="card-sub">M04 · Dev 4</span>
-        </article>
-        <article class="card card-vault">
-          <h2>Credentials</h2><p id="cred-count">0</p>
-          <span class="card-sub">M06 · Dev 4</span>
-        </article>
-        <article class="card card-cloud">
-          <h2>Cloud Findings</h2><p id="cloud-count">0</p>
-          <span class="card-sub">M15 · Dev 4</span>
-        </article>
-      </section>
-
-      <!-- ══════════════════ CHART ROW ══════════════════ -->
-      <section class="chart-row">
-        <div class="panel chart-panel">
-          <div class="panel-title-row">
-            <h2>Alert Timeline</h2>
-            <span class="chart-legend-item"><span class="dot-inline" style="background:var(--accent)"></span>alerts / poll</span>
+      <!-- ══════════════════ TOP BAR ══════════════════ -->
+      <header class="topbar" id="topbar">
+        <div class="topbar-left">
+          <div class="logo">
+            <span class="logo-icon">◆</span>
+            <span class="logo-text">IntegriShield</span>
           </div>
-          <div class="chart-wrap"><canvas id="alert-chart"></canvas></div>
+          <span class="badge badge-poc">POC</span>
+          <span class="badge badge-sprint">Sprint · Day 7</span>
         </div>
-        <div class="panel chart-panel">
-          <div class="panel-title-row"><h2>Severity Distribution</h2></div>
-          <div class="chart-wrap chart-donut-wrap"><canvas id="severity-chart"></canvas></div>
+        <div class="topbar-center">
+          <div class="health-pills">
+            <span class="pill pill-pending" id="pill-m01" title="M01 API Gateway">M01</span>
+            <span class="pill pill-pending" id="pill-m04" title="M04 Zero-Trust">M04</span>
+            <span class="pill pill-pending" id="pill-m05" title="M05 SAP MCP">M05</span>
+            <span class="pill pill-pending" id="pill-m06" title="M06 Credentials">M06</span>
+            <span class="pill pill-pending" id="pill-m07" title="M07 Compliance">M07</span>
+            <span class="pill pill-pending" id="pill-m08" title="M08 Anomaly">M08</span>
+            <span class="pill pill-pending" id="pill-m09" title="M09 DLP">M09</span>
+            <span class="pill pill-pending" id="pill-m10" title="M10 Incidents">M10</span>
+            <span class="pill pill-pending" id="pill-m11" title="M11 Shadow">M11</span>
+            <span class="pill pill-pending" id="pill-m12" title="M12 Rules">M12</span>
+            <span class="pill pill-pending" id="pill-m13" title="M13 SBOM">M13</span>
+            <span class="pill pill-pending" id="pill-m15" title="M15 Cloud">M15</span>
+          </div>
         </div>
-        <div class="panel chart-panel">
-          <div class="panel-title-row"><h2>Rules Breakdown</h2></div>
-          <div class="chart-wrap chart-donut-wrap"><canvas id="rules-chart"></canvas></div>
+        <div class="topbar-right">
+          <span class="live-clock" id="live-clock">--:--:--</span>
+          <span class="separator">|</span>
+          <span class="status-dot" id="status-dot"></span>
+          <span id="backend-status">connecting…</span>
+          <span class="separator">|</span>
+          <span id="events-processed">0</span>&thinsp;events
         </div>
-      </section>
+      </header>
 
-      <!-- ══════════════════ TAB BAR ══════════════════ -->
-      <nav class="tab-bar" role="tablist">
-        <div class="tab-group">
-          <span class="tab-group-label">Overview</span>
-          <button class="tab active" data-tab="alerts">🔔 Alerts</button>
-          <button class="tab" data-tab="audit">📋 Audit</button>
-        </div>
-        <div class="tab-group-divider"></div>
-        <div class="tab-group">
-          <span class="tab-group-label">Dev 1 + Dev 2</span>
-          <button class="tab" data-tab="gateway"><span class="tab-chip">M01</span>Gateway</button>
-          <button class="tab" data-tab="anomalies"><span class="tab-chip chip-purple">M08</span>Anomaly</button>
-          <button class="tab" data-tab="dlp"><span class="tab-chip chip-teal">M09</span>DLP</button>
-          <button class="tab" data-tab="shadow"><span class="tab-chip chip-orange">M11</span>Shadow</button>
-        </div>
-        <div class="tab-group-divider"></div>
-        <div class="tab-group">
-          <span class="tab-group-label">Dev 3</span>
-          <button class="tab" data-tab="sap"><span class="tab-chip chip-cyan">M05</span>SAP MCP</button>
-          <button class="tab" data-tab="compliance"><span class="tab-chip chip-cyan">M07</span>Compliance</button>
-          <button class="tab" data-tab="incidents"><span class="tab-chip chip-cyan">M10</span>Incidents</button>
-          <button class="tab" data-tab="sbom"><span class="tab-chip chip-cyan">M13</span>SBOM</button>
-        </div>
-        <div class="tab-group-divider"></div>
-        <div class="tab-group">
-          <span class="tab-group-label">Dev 4</span>
-          <button class="tab" data-tab="rules"><span class="tab-chip chip-blue">M12</span>Rules</button>
-          <button class="tab" data-tab="zero-trust"><span class="tab-chip chip-blue">M04</span>Zero-Trust</button>
-          <button class="tab" data-tab="credentials"><span class="tab-chip chip-amber">M06</span>Credentials</button>
-          <button class="tab" data-tab="cloud"><span class="tab-chip chip-pink">M15</span>Cloud</button>
+      <!-- ══════════════════ SIDEBAR NAVIGATION ══════════════════ -->
+      <nav class="sidebar" id="sidebar" aria-label="Module navigation">
+        <span class="nav-group-label">Overview</span>
+        <button class="nav-btn active" data-tab="alerts" id="nav-alerts">
+          <span class="nav-icon">🔔</span>
+          Alerts Feed
+        </button>
+        <button class="nav-btn" data-tab="audit" id="nav-audit">
+          <span class="nav-icon">📋</span>
+          Audit Log
+        </button>
+
+        <span class="nav-group-label">Dev 1 + Dev 2</span>
+        <button class="nav-btn" data-tab="gateway" id="nav-gateway">
+          <span class="nav-chip">M01</span>
+          <span>Gateway</span>
+        </button>
+        <button class="nav-btn" data-tab="anomalies" id="nav-anomalies">
+          <span class="nav-chip chip-purple">M08</span>
+          <span>Anomaly</span>
+        </button>
+        <button class="nav-btn" data-tab="dlp" id="nav-dlp">
+          <span class="nav-chip chip-teal">M09</span>
+          <span>DLP</span>
+        </button>
+        <button class="nav-btn" data-tab="shadow" id="nav-shadow">
+          <span class="nav-chip chip-orange">M11</span>
+          <span>Shadow</span>
+        </button>
+
+        <span class="nav-group-label">Dev 3</span>
+        <button class="nav-btn" data-tab="sap" id="nav-sap">
+          <span class="nav-chip chip-cyan">M05</span>
+          <span>SAP MCP</span>
+        </button>
+        <button class="nav-btn" data-tab="compliance" id="nav-compliance">
+          <span class="nav-chip chip-cyan">M07</span>
+          <span>Compliance</span>
+        </button>
+        <button class="nav-btn" data-tab="incidents" id="nav-incidents">
+          <span class="nav-chip chip-cyan">M10</span>
+          <span>Incidents</span>
+        </button>
+        <button class="nav-btn" data-tab="sbom" id="nav-sbom">
+          <span class="nav-chip chip-cyan">M13</span>
+          <span>SBOM</span>
+        </button>
+
+        <span class="nav-group-label">Dev 4</span>
+        <button class="nav-btn" data-tab="rules" id="nav-rules">
+          <span class="nav-chip chip-blue">M12</span>
+          <span>Rules</span>
+        </button>
+        <button class="nav-btn" data-tab="zero-trust" id="nav-zero-trust">
+          <span class="nav-chip chip-blue">M04</span>
+          <span>Zero-Trust</span>
+        </button>
+        <button class="nav-btn" data-tab="credentials" id="nav-credentials">
+          <span class="nav-chip chip-amber">M06</span>
+          <span>Credentials</span>
+        </button>
+        <button class="nav-btn" data-tab="cloud" id="nav-cloud">
+          <span class="nav-chip chip-pink">M15</span>
+          <span>Cloud</span>
+        </button>
+        <div class="nav-footer">
+          <div class="shortcut-hint">
+            <kbd>⌘K</kbd> Quick nav
+          </div>
+          <div class="shortcut-hint">
+            <kbd>1</kbd>-<kbd>9</kbd> Switch tabs
+          </div>
         </div>
       </nav>
 
-      <!-- ══════════════ ALERTS ══════════════ -->
-      <section class="panel tab-content" id="tab-alerts">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <h2>Live Alerts</h2>
-            <span class="panel-subtitle">All rules · all modules · last 80</span>
+      <!-- ══════════════════ SIDEBAR OVERLAY (mobile) ══════════════════ -->
+      <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+      <!-- ══════════════════ MOBILE TOGGLE ══════════════════ -->
+      <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle navigation">☰</button>
+
+      <!-- ══════════════════ MAIN CONTENT ══════════════════ -->
+      <main class="main-content">
+
+        <!-- ══════════════════ STAT CARDS ══════════════════ -->
+        <section class="cards" id="stat-cards">
+          <article class="card card-critical">
+            <h2>Total Alerts</h2><p id="total-alerts">0</p>
+            <span class="card-sub" id="trend-alerts">—</span>
+          </article>
+          <article class="card card-warning">
+            <h2>Critical</h2><p id="critical-alerts">0</p>
+            <span class="card-sub">severity</span>
+          </article>
+          <article class="card">
+            <h2>Avg Latency</h2><p id="avg-latency">0.0s</p>
+            <span class="card-sub">alert pipeline</span>
+          </article>
+          <article class="card card-anomaly">
+            <h2>Anomalies</h2><p id="anomaly-count">0</p>
+            <span class="card-sub">M08 · Dev 2</span>
+          </article>
+          <article class="card card-dlp">
+            <h2>DLP Violations</h2><p id="dlp-count">0</p>
+            <span class="card-sub">M09 · Dev 2</span>
+          </article>
+          <article class="card card-shadow">
+            <h2>Shadow Endpoints</h2><p id="shadow-count">0</p>
+            <span class="card-sub">M11 · Dev 2</span>
+          </article>
+          <article class="card card-sap">
+            <h2>SAP Events</h2><p id="sap-count">0</p>
+            <span class="card-sub">M05 · Dev 3</span>
+          </article>
+          <article class="card card-compliance">
+            <h2>Compliance</h2><p id="compliance-count">0</p>
+            <span class="card-sub">M07 · Dev 3</span>
+          </article>
+          <article class="card card-incident">
+            <h2>Incidents</h2><p id="incident-count">0</p>
+            <span class="card-sub">M10 · Dev 3</span>
+          </article>
+          <article class="card card-sbom">
+            <h2>SBOM Scans</h2><p id="sbom-count">0</p>
+            <span class="card-sub">M13 · Dev 3</span>
+          </article>
+          <article class="card card-zt">
+            <h2>Zero-Trust</h2><p id="zt-count">0</p>
+            <span class="card-sub">M04 · Dev 4</span>
+          </article>
+          <article class="card card-vault">
+            <h2>Credentials</h2><p id="cred-count">0</p>
+            <span class="card-sub">M06 · Dev 4</span>
+          </article>
+          <article class="card card-cloud">
+            <h2>Cloud Findings</h2><p id="cloud-count">0</p>
+            <span class="card-sub">M15 · Dev 4</span>
+          </article>
+        </section>
+
+        <!-- ══════════════════ CHART ROW ══════════════════ -->
+        <section class="chart-row">
+          <div class="chart-panel">
+            <div class="panel-title-row">
+              <h2>Alert Timeline</h2>
+              <span class="chart-legend-item"><span class="dot-inline" style="background:var(--accent)"></span>alerts / poll</span>
+            </div>
+            <div class="chart-wrap"><canvas id="alert-chart"></canvas></div>
           </div>
-          <div class="panel-controls">
-            <select id="scenario-filter">
-              <option value="all">All scenarios</option>
-              <option value="off_hours_rfc">Off-hours RFC</option>
-              <option value="bulk_extraction">Bulk extraction</option>
-              <option value="shadow_endpoint">Shadow endpoint</option>
-              <option value="velocity_anomaly">Velocity anomaly</option>
-              <option value="credential_abuse">Credential abuse</option>
-              <option value="privilege_escalation">Privilege escalation</option>
-              <option value="data_staging">Data staging</option>
-              <option value="geo_anomaly">Geo anomaly</option>
+          <div class="chart-panel">
+            <div class="panel-title-row"><h2>Severity Distribution</h2></div>
+            <div class="chart-wrap chart-donut-wrap"><canvas id="severity-chart"></canvas></div>
+          </div>
+          <div class="chart-panel">
+            <div class="panel-title-row"><h2>Rules Breakdown</h2></div>
+            <div class="chart-wrap chart-donut-wrap"><canvas id="rules-chart"></canvas></div>
+          </div>
+        </section>
+
+        <!-- ══════════════ ALERTS ══════════════ -->
+        <section class="panel tab-content" id="tab-alerts">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <h2>Live Alerts</h2>
+              <span class="panel-subtitle">All rules · all modules · last 80</span>
+            </div>
+            <div class="panel-controls">
+              <select id="scenario-filter">
+                <option value="all">All scenarios</option>
+                <option value="off_hours_rfc">Off-hours RFC</option>
+                <option value="bulk_extraction">Bulk extraction</option>
+                <option value="shadow_endpoint">Shadow endpoint</option>
+                <option value="velocity_anomaly">Velocity anomaly</option>
+                <option value="credential_abuse">Credential abuse</option>
+                <option value="privilege_escalation">Privilege escalation</option>
+                <option value="data_staging">Data staging</option>
+                <option value="geo_anomaly">Geo anomaly</option>
+              </select>
+              <select id="severity-filter">
+                <option value="all">All severities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+          <ul id="alerts-list" class="feed-list"></ul>
+          <p class="empty-state hidden" id="alerts-empty">No alerts match the current filters.</p>
+        </section>
+
+        <!-- ══════════════ AUDIT ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-audit">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <h2>Audit Log</h2>
+              <span class="panel-subtitle">All modules · immutable trail · last 60</span>
+            </div>
+            <select id="audit-module-filter">
+              <option value="all">All modules</option>
+              <option value="m01-api-gateway-shield">M01 — Gateway</option>
+              <option value="m04-zero-trust-fabric">M04 — Zero-Trust</option>
+              <option value="m05-sap-mcp-suite">M05 — SAP MCP</option>
+              <option value="m06-credential-vault">M06 — Credentials</option>
+              <option value="m07-compliance-autopilot">M07 — Compliance</option>
+              <option value="m08-anomaly-detection">M08 — Anomaly</option>
+              <option value="m09-dlp">M09 — DLP</option>
+              <option value="m10-incident-response">M10 — Incidents</option>
+              <option value="m11-shadow-integration">M11 — Shadow</option>
+              <option value="m12-rules-engine">M12 — Rules</option>
+              <option value="m13-sbom-scanner">M13 — SBOM</option>
+              <option value="m15-multicloud-ispm">M15 — Cloud</option>
             </select>
-            <select id="severity-filter">
-              <option value="all">All severities</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
           </div>
-        </div>
-        <ul id="alerts-list" class="feed-list"></ul>
-        <p class="empty-state hidden" id="alerts-empty">No alerts match the current filters.</p>
-      </section>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Module</th><th>Status</th></tr></thead>
+              <tbody id="audit-body"></tbody>
+            </table>
+          </div>
+          <p class="empty-state hidden" id="audit-empty">No audit entries match filter.</p>
+        </section>
 
-      <!-- ══════════════ AUDIT ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-audit">
-        <div class="panel-header">
+        <!-- ══════════════ GATEWAY M01 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-gateway">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-default">M01</span>
+              <h2>API Gateway Shield</h2>
+              <span class="panel-subtitle">RFC proxy · request inspection · event publishing</span>
+            </div>
+            <span class="owner-tag">Dev 1</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat"><span id="gw-total">0</span><label>Total Calls</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="gw-off-hours">0</span><label>Off-Hours</label></div>
+            <div class="mini-stat mini-stat-critical"><span id="gw-bulk">0</span><label>Bulk Extractions</label></div>
+            <div class="mini-stat mini-stat-info"><span id="gw-velocity">0</span><label>Velocity Alerts</label></div>
+          </div>
+          <ul id="gateway-list" class="feed-list"></ul>
+          <p class="empty-state" id="gateway-empty">Waiting for API call events from M01 stream…</p>
+        </section>
+
+        <!-- ══════════════ ANOMALY M08 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-anomalies">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-purple">M08</span>
+              <h2>Anomaly Detection</h2>
+              <span class="panel-subtitle">Isolation Forest · baseline deviation · ML scoring</span>
+            </div>
+            <span class="owner-tag">Dev 2</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-purple"><span id="anom-total">0</span><label>Scored</label></div>
+            <div class="mini-stat mini-stat-critical"><span id="anom-high">0</span><label>High (&gt;0.7)</label></div>
+            <div class="mini-stat mini-stat-info"><span id="anom-new-ep">0</span><label>New Endpoints</label></div>
+          </div>
+          <ul id="anomaly-list" class="feed-list"></ul>
+          <p class="empty-state" id="anomaly-empty">Waiting for anomaly scores from M08…</p>
+        </section>
+
+        <!-- ══════════════ DLP M09 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-dlp">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-teal">M09</span>
+              <h2>Data Loss Prevention</h2>
+              <span class="panel-subtitle">Bulk extraction · data staging · blocklist violations</span>
+            </div>
+            <span class="owner-tag">Dev 2</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-critical"><span id="dlp-bulk">0</span><label>Bulk Extractions</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="dlp-staging">0</span><label>Data Staging</label></div>
+            <div class="mini-stat mini-stat-teal"><span id="dlp-blocklist">0</span><label>Blocklist Hits</label></div>
+          </div>
+          <ul id="dlp-list" class="feed-list"></ul>
+          <p class="empty-state" id="dlp-empty">No DLP violations from M09 yet.</p>
+        </section>
+
+        <!-- ══════════════ SHADOW M11 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-shadow">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-orange">M11</span>
+              <h2>Shadow Integration Detector</h2>
+              <span class="panel-subtitle">Unknown endpoints · unregistered SaaS · unauthorized connectors</span>
+            </div>
+            <span class="owner-tag">Dev 2</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-warn"><span id="shadow-total">0</span><label>Detections</label></div>
+            <div class="mini-stat mini-stat-critical"><span id="shadow-unique">0</span><label>Unique Hosts</label></div>
+          </div>
+          <ul id="shadow-list" class="feed-list"></ul>
+          <p class="empty-state" id="shadow-empty">No shadow endpoints from M11 yet.</p>
+        </section>
+
+        <!-- ══════════════ SAP MCP M05 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-sap">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-cyan">M05</span>
+              <h2>SAP MCP Suite</h2>
+              <span class="panel-subtitle">MCP tool registry · multi-stream consumer · event caching</span>
+            </div>
+            <span class="owner-tag">Dev 3</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-cyan"><span id="sap-total">0</span><label>Tool Invocations</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="sap-anomalous">0</span><label>Anomalous</label></div>
+          </div>
+          <ul id="sap-list" class="feed-list"></ul>
+          <p class="empty-state" id="sap-empty">Waiting for SAP MCP events from M05…</p>
+        </section>
+
+        <!-- ══════════════ COMPLIANCE M07 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-compliance">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-cyan">M07</span>
+              <h2>Compliance Autopilot</h2>
+              <span class="panel-subtitle">SOX · SOC2 · ISO 27001 · GDPR · continuous evidence collection</span>
+            </div>
+            <span class="owner-tag">Dev 3</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-critical"><span id="comp-violations">0</span><label>Violations</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="comp-warnings">0</span><label>Warnings</label></div>
+            <div class="mini-stat mini-stat-ok"><span id="comp-passed">0</span><label>Passed</label></div>
+            <div class="mini-stat mini-stat-info"><span id="comp-frameworks">0</span><label>Frameworks</label></div>
+          </div>
+          <ul id="compliance-list" class="feed-list"></ul>
+          <p class="empty-state" id="compliance-empty">Waiting for compliance findings from M07…</p>
+        </section>
+
+        <!-- ══════════════ INCIDENTS M10 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-incidents">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-cyan">M10</span>
+              <h2>Incident Response</h2>
+              <span class="panel-subtitle">Playbook engine · alert correlation · automated containment</span>
+            </div>
+            <span class="owner-tag">Dev 3</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-critical"><span id="inc-open">0</span><label>Open</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="inc-investigating">0</span><label>Investigating</label></div>
+            <div class="mini-stat mini-stat-ok"><span id="inc-resolved">0</span><label>Resolved</label></div>
+            <div class="mini-stat mini-stat-purple"><span id="inc-playbooks">0</span><label>Playbooks Run</label></div>
+          </div>
+          <ul id="incidents-list" class="feed-list"></ul>
+          <p class="empty-state" id="incidents-empty">Waiting for incident events from M10…</p>
+        </section>
+
+        <!-- ══════════════ SBOM M13 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-sbom">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-cyan">M13</span>
+              <h2>SBOM Scanner</h2>
+              <span class="panel-subtitle">CycloneDX 1.4 · CVE detection · SAP ABAP static analysis</span>
+            </div>
+            <span class="owner-tag">Dev 3</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-info"><span id="sbom-total">0</span><label>Scans</label></div>
+            <div class="mini-stat mini-stat-critical"><span id="sbom-cve">0</span><label>CVEs Found</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="sbom-insecure">0</span><label>Insecure RFC</label></div>
+            <div class="mini-stat mini-stat-ok"><span id="sbom-clean">0</span><label>Clean</label></div>
+          </div>
+          <ul id="sbom-list" class="feed-list"></ul>
+          <p class="empty-state" id="sbom-empty">Waiting for SBOM scan results from M13…</p>
+        </section>
+
+        <!-- ══════════════ RULES M12 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-rules">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-blue">M12</span>
+              <h2>Rules Engine</h2>
+              <span class="panel-subtitle">8 security rules · stateful counters · real-time evaluation</span>
+            </div>
+            <span class="owner-tag">Dev 4</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-critical"><span id="rule-bulk">0</span><label>Bulk Extraction</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="rule-off-hours">0</span><label>Off-Hours RFC</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="rule-shadow">0</span><label>Shadow Endpoint</label></div>
+            <div class="mini-stat mini-stat-info"><span id="rule-velocity">0</span><label>Velocity</label></div>
+            <div class="mini-stat mini-stat-purple"><span id="rule-other">0</span><label>Other Rules</label></div>
+          </div>
+          <ul id="rules-list" class="feed-list"></ul>
+          <p class="empty-state" id="rules-empty">Waiting for rule triggers from M12…</p>
+        </section>
+
+        <!-- ══════════════ ZERO-TRUST M04 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-zero-trust">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-blue">M04</span>
+              <h2>Zero-Trust Fabric</h2>
+              <span class="panel-subtitle">Device trust · geo-policy · MFA · risk scoring</span>
+            </div>
+            <span class="owner-tag">Dev 4</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-ok"><span id="zt-allow">0</span><label>Allowed</label></div>
+            <div class="mini-stat mini-stat-critical"><span id="zt-deny">0</span><label>Denied</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="zt-challenge">0</span><label>Challenged</label></div>
+            <div class="mini-stat mini-stat-info"><span id="zt-avg-risk">—</span><label>Avg Risk</label></div>
+          </div>
+          <ul id="zt-list" class="feed-list"></ul>
+          <p class="empty-state" id="zt-empty">Waiting for zero-trust evaluations from M04…</p>
+        </section>
+
+        <!-- ══════════════ CREDENTIALS M06 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-credentials">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-amber">M06</span>
+              <h2>Credential Vault</h2>
+              <span class="panel-subtitle">Lifecycle · rotation · issuance · revocation</span>
+            </div>
+            <span class="owner-tag">Dev 4</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-ok"><span id="cred-issued">0</span><label>Issued</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="cred-rotated">0</span><label>Rotated</label></div>
+            <div class="mini-stat mini-stat-critical"><span id="cred-revoked">0</span><label>Revoked</label></div>
+          </div>
+          <ul id="cred-list" class="feed-list"></ul>
+          <p class="empty-state" id="cred-empty">Waiting for credential vault events from M06…</p>
+        </section>
+
+        <!-- ══════════════ CLOUD M15 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-cloud">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-pink">M15</span>
+              <h2>Multi-Cloud ISPM</h2>
+              <span class="panel-subtitle">AWS · GCP · Azure · identity &amp; secrets posture</span>
+            </div>
+            <span class="owner-tag">Dev 4</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-critical"><span id="cloud-critical">0</span><label>Critical</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="cloud-high">0</span><label>High Risk</label></div>
+            <div class="mini-stat mini-stat-info"><span id="cloud-aws">0</span><label>AWS</label></div>
+            <div class="mini-stat mini-stat-info"><span id="cloud-gcp">0</span><label>GCP</label></div>
+            <div class="mini-stat mini-stat-info"><span id="cloud-azure">0</span><label>Azure</label></div>
+          </div>
+          <ul id="cloud-list" class="feed-list"></ul>
+          <p class="empty-state" id="cloud-empty">Waiting for cloud posture findings from M15…</p>
+        </section>
+
+        <!-- ══════════════ MODULE STREAM STATUS ══════════════ -->
+        <section class="panel module-health-section">
           <div class="panel-title-row">
-            <h2>Audit Log</h2>
-            <span class="panel-subtitle">All modules · immutable trail · last 60</span>
+            <h2>Module Stream Status</h2>
+            <span class="panel-subtitle" id="stream-last-updated">—</span>
           </div>
-          <select id="audit-module-filter">
-            <option value="all">All modules</option>
-            <option value="m01-api-gateway-shield">M01 — Gateway</option>
-            <option value="m04-zero-trust-fabric">M04 — Zero-Trust</option>
-            <option value="m05-sap-mcp-suite">M05 — SAP MCP</option>
-            <option value="m06-credential-vault">M06 — Credentials</option>
-            <option value="m07-compliance-autopilot">M07 — Compliance</option>
-            <option value="m08-anomaly-detection">M08 — Anomaly</option>
-            <option value="m09-dlp">M09 — DLP</option>
-            <option value="m10-incident-response">M10 — Incidents</option>
-            <option value="m11-shadow-integration">M11 — Shadow</option>
-            <option value="m12-rules-engine">M12 — Rules</option>
-            <option value="m13-sbom-scanner">M13 — SBOM</option>
-            <option value="m15-multicloud-ispm">M15 — Cloud</option>
-          </select>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Module</th><th>Status</th></tr></thead>
-            <tbody id="audit-body"></tbody>
-          </table>
-        </div>
-        <p class="empty-state hidden" id="audit-empty">No audit entries match filter.</p>
-      </section>
+          <div class="module-grid" id="module-grid"></div>
+        </section>
 
-      <!-- ══════════════ GATEWAY M01 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-gateway">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-default">M01</span>
-            <h2>API Gateway Shield</h2>
-            <span class="panel-subtitle">RFC proxy · request inspection · event publishing</span>
-          </div>
-          <span class="owner-tag">Dev 1</span>
-        </div>
-        <div class="mini-stats">
-          <div class="mini-stat"><span id="gw-total">0</span><label>Total Calls</label></div>
-          <div class="mini-stat mini-stat-warn"><span id="gw-off-hours">0</span><label>Off-Hours</label></div>
-          <div class="mini-stat mini-stat-critical"><span id="gw-bulk">0</span><label>Bulk Extractions</label></div>
-          <div class="mini-stat mini-stat-info"><span id="gw-velocity">0</span><label>Velocity Alerts</label></div>
-        </div>
-        <ul id="gateway-list" class="feed-list"></ul>
-        <p class="empty-state" id="gateway-empty">Waiting for API call events from M01 stream…</p>
-      </section>
+      </main>
 
-      <!-- ══════════════ ANOMALY M08 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-anomalies">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-purple">M08</span>
-            <h2>Anomaly Detection</h2>
-            <span class="panel-subtitle">Isolation Forest · baseline deviation · ML scoring</span>
-          </div>
-          <span class="owner-tag">Dev 2</span>
-        </div>
-        <div class="mini-stats">
-          <div class="mini-stat mini-stat-purple"><span id="anom-total">0</span><label>Scored</label></div>
-          <div class="mini-stat mini-stat-critical"><span id="anom-high">0</span><label>High (&gt;0.7)</label></div>
-          <div class="mini-stat mini-stat-info"><span id="anom-new-ep">0</span><label>New Endpoints</label></div>
-        </div>
-        <ul id="anomaly-list" class="feed-list"></ul>
-        <p class="empty-state" id="anomaly-empty">Waiting for anomaly scores from M08…</p>
-      </section>
+    </div><!-- /app-shell -->
 
-      <!-- ══════════════ DLP M09 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-dlp">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-teal">M09</span>
-            <h2>Data Loss Prevention</h2>
-            <span class="panel-subtitle">Bulk extraction · data staging · blocklist violations</span>
-          </div>
-          <span class="owner-tag">Dev 2</span>
+    <!-- ══════════════════ COMMAND PALETTE ══════════════════ -->
+    <div class="command-palette hidden" id="command-palette">
+      <div class="palette-dialog">
+        <div class="palette-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" id="palette-input" placeholder="Search modules, views…" autocomplete="off" spellcheck="false" />
+          <kbd class="palette-esc">ESC</kbd>
         </div>
-        <div class="mini-stats">
-          <div class="mini-stat mini-stat-critical"><span id="dlp-bulk">0</span><label>Bulk Extractions</label></div>
-          <div class="mini-stat mini-stat-warn"><span id="dlp-staging">0</span><label>Data Staging</label></div>
-          <div class="mini-stat mini-stat-teal"><span id="dlp-blocklist">0</span><label>Blocklist Hits</label></div>
-        </div>
-        <ul id="dlp-list" class="feed-list"></ul>
-        <p class="empty-state" id="dlp-empty">No DLP violations from M09 yet.</p>
-      </section>
+        <div class="palette-results" id="palette-results"></div>
+      </div>
+    </div>
 
-      <!-- ══════════════ SHADOW M11 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-shadow">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-orange">M11</span>
-            <h2>Shadow Integration Detector</h2>
-            <span class="panel-subtitle">Unknown endpoints · unregistered SaaS · unauthorized connectors</span>
-          </div>
-          <span class="owner-tag">Dev 2</span>
-        </div>
-        <div class="mini-stats">
-          <div class="mini-stat mini-stat-warn"><span id="shadow-total">0</span><label>Detections</label></div>
-          <div class="mini-stat mini-stat-critical"><span id="shadow-unique">0</span><label>Unique Hosts</label></div>
-        </div>
-        <ul id="shadow-list" class="feed-list"></ul>
-        <p class="empty-state" id="shadow-empty">No shadow endpoints from M11 yet.</p>
-      </section>
-
-      <!-- ══════════════ SAP MCP M05 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-sap">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-cyan">M05</span>
-            <h2>SAP MCP Suite</h2>
-            <span class="panel-subtitle">MCP tool registry · multi-stream consumer · event caching</span>
-          </div>
-          <span class="owner-tag">Dev 3</span>
-        </div>
-        <div class="mini-stats">
-          <div class="mini-stat mini-stat-cyan"><span id="sap-total">0</span><label>Tool Invocations</label></div>
-          <div class="mini-stat mini-stat-warn"><span id="sap-anomalous">0</span><label>Anomalous</label></div>
-        </div>
-        <ul id="sap-list" class="feed-list"></ul>
-        <p class="empty-state" id="sap-empty">Waiting for SAP MCP events from M05…</p>
-      </section>
-
-      <!-- ══════════════ COMPLIANCE M07 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-compliance">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-cyan">M07</span>
-            <h2>Compliance Autopilot</h2>
-            <span class="panel-subtitle">SOX · SOC2 · ISO 27001 · GDPR · continuous evidence collection</span>
-          </div>
-          <span class="owner-tag">Dev 3</span>
-        </div>
-        <div class="mini-stats">
-          <div class="mini-stat mini-stat-critical"><span id="comp-violations">0</span><label>Violations</label></div>
-          <div class="mini-stat mini-stat-warn"><span id="comp-warnings">0</span><label>Warnings</label></div>
-          <div class="mini-stat mini-stat-ok"><span id="comp-passed">0</span><label>Passed</label></div>
-          <div class="mini-stat mini-stat-info"><span id="comp-frameworks">0</span><label>Frameworks</label></div>
-        </div>
-        <ul id="compliance-list" class="feed-list"></ul>
-        <p class="empty-state" id="compliance-empty">Waiting for compliance findings from M07…</p>
-      </section>
-
-      <!-- ══════════════ INCIDENTS M10 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-incidents">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-cyan">M10</span>
-            <h2>Incident Response</h2>
-            <span class="panel-subtitle">Playbook engine · alert correlation · automated containment</span>
-          </div>
-          <span class="owner-tag">Dev 3</span>
-        </div>
-        <div class="mini-stats">
-          <div class="mini-stat mini-stat-critical"><span id="inc-open">0</span><label>Open</label></div>
-          <div class="mini-stat mini-stat-warn"><span id="inc-investigating">0</span><label>Investigating</label></div>
-          <div class="mini-stat mini-stat-ok"><span id="inc-resolved">0</span><label>Resolved</label></div>
-          <div class="mini-stat mini-stat-purple"><span id="inc-playbooks">0</span><label>Playbooks Run</label></div>
-        </div>
-        <ul id="incidents-list" class="feed-list"></ul>
-        <p class="empty-state" id="incidents-empty">Waiting for incident events from M10…</p>
-      </section>
-
-      <!-- ══════════════ SBOM M13 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-sbom">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-cyan">M13</span>
-            <h2>SBOM Scanner</h2>
-            <span class="panel-subtitle">CycloneDX 1.4 · CVE detection · SAP ABAP static analysis</span>
-          </div>
-          <span class="owner-tag">Dev 3</span>
-        </div>
-        <div class="mini-stats">
-          <div class="mini-stat mini-stat-info"><span id="sbom-total">0</span><label>Scans</label></div>
-          <div class="mini-stat mini-stat-critical"><span id="sbom-cve">0</span><label>CVEs Found</label></div>
-          <div class="mini-stat mini-stat-warn"><span id="sbom-insecure">0</span><label>Insecure RFC</label></div>
-          <div class="mini-stat mini-stat-ok"><span id="sbom-clean">0</span><label>Clean</label></div>
-        </div>
-        <ul id="sbom-list" class="feed-list"></ul>
-        <p class="empty-state" id="sbom-empty">Waiting for SBOM scan results from M13…</p>
-      </section>
-
-      <!-- ══════════════ RULES M12 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-rules">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-blue">M12</span>
-            <h2>Rules Engine</h2>
-            <span class="panel-subtitle">8 security rules · stateful counters · real-time evaluation</span>
-          </div>
-          <span class="owner-tag">Dev 4</span>
-        </div>
-        <div class="mini-stats">
-          <div class="mini-stat mini-stat-critical"><span id="rule-bulk">0</span><label>Bulk Extraction</label></div>
-          <div class="mini-stat mini-stat-warn"><span id="rule-off-hours">0</span><label>Off-Hours RFC</label></div>
-          <div class="mini-stat mini-stat-warn"><span id="rule-shadow">0</span><label>Shadow Endpoint</label></div>
-          <div class="mini-stat mini-stat-info"><span id="rule-velocity">0</span><label>Velocity</label></div>
-          <div class="mini-stat mini-stat-purple"><span id="rule-other">0</span><label>Other Rules</label></div>
-        </div>
-        <ul id="rules-list" class="feed-list"></ul>
-        <p class="empty-state" id="rules-empty">Waiting for rule triggers from M12…</p>
-      </section>
-
-      <!-- ══════════════ ZERO-TRUST M04 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-zero-trust">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-blue">M04</span>
-            <h2>Zero-Trust Fabric</h2>
-            <span class="panel-subtitle">Device trust · geo-policy · MFA · risk scoring</span>
-          </div>
-          <span class="owner-tag">Dev 4</span>
-        </div>
-        <div class="mini-stats">
-          <div class="mini-stat mini-stat-ok"><span id="zt-allow">0</span><label>Allowed</label></div>
-          <div class="mini-stat mini-stat-critical"><span id="zt-deny">0</span><label>Denied</label></div>
-          <div class="mini-stat mini-stat-warn"><span id="zt-challenge">0</span><label>Challenged</label></div>
-          <div class="mini-stat mini-stat-info"><span id="zt-avg-risk">—</span><label>Avg Risk</label></div>
-        </div>
-        <ul id="zt-list" class="feed-list"></ul>
-        <p class="empty-state" id="zt-empty">Waiting for zero-trust evaluations from M04…</p>
-      </section>
-
-      <!-- ══════════════ CREDENTIALS M06 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-credentials">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-amber">M06</span>
-            <h2>Credential Vault</h2>
-            <span class="panel-subtitle">Lifecycle · rotation · issuance · revocation</span>
-          </div>
-          <span class="owner-tag">Dev 4</span>
-        </div>
-        <div class="mini-stats">
-          <div class="mini-stat mini-stat-ok"><span id="cred-issued">0</span><label>Issued</label></div>
-          <div class="mini-stat mini-stat-warn"><span id="cred-rotated">0</span><label>Rotated</label></div>
-          <div class="mini-stat mini-stat-critical"><span id="cred-revoked">0</span><label>Revoked</label></div>
-        </div>
-        <ul id="cred-list" class="feed-list"></ul>
-        <p class="empty-state" id="cred-empty">Waiting for credential vault events from M06…</p>
-      </section>
-
-      <!-- ══════════════ CLOUD M15 ══════════════ -->
-      <section class="panel tab-content hidden" id="tab-cloud">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <span class="module-chip chip-pink">M15</span>
-            <h2>Multi-Cloud ISPM</h2>
-            <span class="panel-subtitle">AWS · GCP · Azure · identity &amp; secrets posture</span>
-          </div>
-          <span class="owner-tag">Dev 4</span>
-        </div>
-        <div class="mini-stats">
-          <div class="mini-stat mini-stat-critical"><span id="cloud-critical">0</span><label>Critical</label></div>
-          <div class="mini-stat mini-stat-warn"><span id="cloud-high">0</span><label>High Risk</label></div>
-          <div class="mini-stat mini-stat-info"><span id="cloud-aws">0</span><label>AWS</label></div>
-          <div class="mini-stat mini-stat-info"><span id="cloud-gcp">0</span><label>GCP</label></div>
-          <div class="mini-stat mini-stat-info"><span id="cloud-azure">0</span><label>Azure</label></div>
-        </div>
-        <ul id="cloud-list" class="feed-list"></ul>
-        <p class="empty-state" id="cloud-empty">Waiting for cloud posture findings from M15…</p>
-      </section>
-
-      <!-- ══════════════ MODULE STREAM STATUS ══════════════ -->
-      <section class="panel module-health-section">
-        <div class="panel-title-row">
-          <h2>Module Stream Status</h2>
-          <span class="panel-subtitle" id="stream-last-updated">—</span>
-        </div>
-        <div class="module-grid" id="module-grid"></div>
-      </section>
-
-    </main>
+    <!-- ══════════════════ TOAST NOTIFICATIONS ══════════════════ -->
+    <div class="toast-container" id="toast-container"></div>
 
     <script src="./app.js" defer></script>
   </body>

@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════
    IntegriShield SOC Dashboard — app.js
    13 modules · Dev 1–4 · All streams wired
+   Premium UI with sidebar navigation
    ═══════════════════════════════════════════════════════════ */
 
 const API_BASE = "http://localhost:8787";
@@ -101,6 +102,9 @@ const ui = {
   ruleShadow:       document.getElementById("rule-shadow"),
   ruleVelocity:     document.getElementById("rule-velocity"),
   ruleOther:        document.getElementById("rule-other"),
+  sidebar:          document.getElementById("sidebar"),
+  sidebarToggle:    document.getElementById("sidebar-toggle"),
+  sidebarOverlay:   document.getElementById("sidebar-overlay"),
 };
 
 // ── State ────────────────────────────────────────────────────
@@ -108,33 +112,182 @@ let alerts=[], auditRows=[], anomalies=[], sapEvents=[], compEvents=[],
     dlpEvents=[], incEvents=[], shadowEvents=[], sbomEvents=[],
     ztEvents=[], credEvents=[], cloudEvents=[], prevAlertCount=0;
 
+// ── Animated counter ─────────────────────────────────────────
+const counterCache = new Map();
+function animateValue(el, newVal) {
+  if (!el) return;
+  const key = el.id || el;
+  const from = counterCache.get(key) || 0;
+  const to = parseInt(newVal) || 0;
+  if (from === to) { el.textContent = to; return; }
+  counterCache.set(key, to);
+
+  const duration = 400;
+  const start = performance.now();
+  const step = (now) => {
+    const progress = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+    el.textContent = Math.round(from + (to - from) * eased);
+    if (progress < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 // ── Charts ───────────────────────────────────────────────────
 let alertChart=null, severityChart=null, rulesChart=null;
 const alertTimeline=[];
 
 function initCharts() {
-  const grid="#1c2a4080", tick="#4d6480";
-  alertChart = new Chart(document.getElementById("alert-chart").getContext("2d"), {
-    type:"line", data:{labels:[],datasets:[{label:"Alerts",data:[],borderColor:"#3b82f6",
-      backgroundColor:"rgba(59,130,246,0.08)",borderWidth:2,fill:true,tension:0.4,pointRadius:0}]},
-    options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},
-      scales:{x:{display:true,grid:{color:grid},ticks:{color:tick,font:{size:10},maxTicksLimit:8}},
-              y:{display:true,beginAtZero:true,grid:{color:grid},ticks:{color:tick,font:{size:10},precision:0}}},
-      plugins:{legend:{display:false}}}});
+  const gridColor = "rgba(40, 58, 90, 0.2)";
+  const tickColor = "#4a6080";
 
+  // Line chart with gradient fill
+  const alertCtx = document.getElementById("alert-chart").getContext("2d");
+  const alertGradient = alertCtx.createLinearGradient(0, 0, 0, 190);
+  alertGradient.addColorStop(0, "rgba(91, 141, 239, 0.15)");
+  alertGradient.addColorStop(1, "rgba(91, 141, 239, 0.0)");
+
+  alertChart = new Chart(alertCtx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [{
+        label: "Alerts",
+        data: [],
+        borderColor: "#5b8def",
+        backgroundColor: alertGradient,
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: "#5b8def",
+        pointHoverBorderColor: "#fff",
+        pointHoverBorderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 500, easing: "easeOutQuart" },
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          display: true,
+          grid: { color: gridColor, drawBorder: false },
+          ticks: { color: tickColor, font: { size: 10, family: "Inter" }, maxTicksLimit: 8 },
+          border: { display: false },
+        },
+        y: {
+          display: true,
+          beginAtZero: true,
+          grid: { color: gridColor, drawBorder: false },
+          ticks: { color: tickColor, font: { size: 10, family: "Inter" }, precision: 0, maxTicksLimit: 5 },
+          border: { display: false },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "rgba(14, 22, 38, 0.9)",
+          titleColor: "#eaf0f7",
+          bodyColor: "#b0c4de",
+          borderColor: "rgba(91, 141, 239, 0.3)",
+          borderWidth: 1,
+          cornerRadius: 8,
+          padding: 10,
+          titleFont: { weight: "600" },
+          displayColors: false,
+        },
+      },
+    },
+  });
+
+  // Severity donut
   severityChart = new Chart(document.getElementById("severity-chart").getContext("2d"), {
-    type:"doughnut", data:{labels:["Critical","High","Medium","Low"],
-      datasets:[{data:[0,0,0,0],backgroundColor:["#ef4444","#f97316","#f59e0b","#22c55e"],
-        borderColor:"#0f1829",borderWidth:3}]},
-    options:{responsive:true,maintainAspectRatio:false,animation:{duration:400},cutout:"68%",
-      plugins:{legend:{position:"bottom",labels:{color:"#8fa3bf",font:{size:10},padding:10,usePointStyle:true,boxWidth:8}}}}});
+    type: "doughnut",
+    data: {
+      labels: ["Critical", "High", "Medium", "Low"],
+      datasets: [{
+        data: [0, 0, 0, 0],
+        backgroundColor: ["#ff4757", "#ff8b3d", "#ffa502", "#2ed573"],
+        borderColor: "rgba(14, 22, 38, 0.8)",
+        borderWidth: 3,
+        hoverBorderColor: "rgba(14, 22, 38, 1)",
+        hoverOffset: 8,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600, easing: "easeOutQuart" },
+      cutout: "70%",
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            color: "#7a93b4",
+            font: { size: 10, family: "Inter" },
+            padding: 12,
+            usePointStyle: true,
+            pointStyleWidth: 8,
+          },
+        },
+        tooltip: {
+          backgroundColor: "rgba(14, 22, 38, 0.9)",
+          titleColor: "#eaf0f7",
+          bodyColor: "#b0c4de",
+          borderColor: "rgba(91, 141, 239, 0.3)",
+          borderWidth: 1,
+          cornerRadius: 8,
+          padding: 10,
+        },
+      },
+    },
+  });
 
+  // Rules donut
   rulesChart = new Chart(document.getElementById("rules-chart").getContext("2d"), {
-    type:"doughnut", data:{labels:["Bulk Extract","Off-Hours","Shadow EP","Velocity","Other"],
-      datasets:[{data:[0,0,0,0,0],backgroundColor:["#ef4444","#f59e0b","#f97316","#3b82f6","#a855f7"],
-        borderColor:"#0f1829",borderWidth:3}]},
-    options:{responsive:true,maintainAspectRatio:false,animation:{duration:400},cutout:"68%",
-      plugins:{legend:{position:"bottom",labels:{color:"#8fa3bf",font:{size:10},padding:8,usePointStyle:true,boxWidth:8}}}}});
+    type: "doughnut",
+    data: {
+      labels: ["Bulk Extract", "Off-Hours", "Shadow EP", "Velocity", "Other"],
+      datasets: [{
+        data: [0, 0, 0, 0, 0],
+        backgroundColor: ["#ff4757", "#ffa502", "#ff8b3d", "#5b8def", "#a17fe0"],
+        borderColor: "rgba(14, 22, 38, 0.8)",
+        borderWidth: 3,
+        hoverBorderColor: "rgba(14, 22, 38, 1)",
+        hoverOffset: 8,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600, easing: "easeOutQuart" },
+      cutout: "70%",
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            color: "#7a93b4",
+            font: { size: 10, family: "Inter" },
+            padding: 10,
+            usePointStyle: true,
+            pointStyleWidth: 8,
+          },
+        },
+        tooltip: {
+          backgroundColor: "rgba(14, 22, 38, 0.9)",
+          titleColor: "#eaf0f7",
+          bodyColor: "#b0c4de",
+          borderColor: "rgba(91, 141, 239, 0.3)",
+          borderWidth: 1,
+          cornerRadius: 8,
+          padding: 10,
+        },
+      },
+    },
+  });
 }
 
 // ── Fetch ────────────────────────────────────────────────────
@@ -168,19 +321,19 @@ async function syncData() {
     ui.streamUpdated.textContent  = `updated ${new Date().toLocaleTimeString()}`;
 
     const cur = stR.total_alerts||0;
-    ui.totalAlerts.textContent    = cur;
-    ui.criticalAlerts.textContent = stR.critical_alerts||0;
+    animateValue(ui.totalAlerts, cur);
+    animateValue(ui.criticalAlerts, stR.critical_alerts||0);
     ui.avgLatency.textContent     = `${((stR.avg_latency_ms||0)/1000).toFixed(1)}s`;
-    ui.anomalyCount.textContent   = stR.anomalies_count||0;
-    ui.dlpCount.textContent       = stR.dlp_violations||0;
-    ui.shadowCount.textContent    = stR.shadow_detections||0;
-    ui.sapCount.textContent       = stR.sap_events_count||0;
-    ui.complianceCount.textContent= stR.compliance_findings||0;
-    ui.incidentCount.textContent  = stR.incident_count||0;
-    ui.sbomCount.textContent      = stR.sbom_scans||0;
-    ui.ztCount.textContent        = stR.zero_trust_evals||0;
-    ui.credCount.textContent      = stR.credential_events||0;
-    ui.cloudCount.textContent     = stR.cloud_findings||0;
+    animateValue(ui.anomalyCount, stR.anomalies_count||0);
+    animateValue(ui.dlpCount, stR.dlp_violations||0);
+    animateValue(ui.shadowCount, stR.shadow_detections||0);
+    animateValue(ui.sapCount, stR.sap_events_count||0);
+    animateValue(ui.complianceCount, stR.compliance_findings||0);
+    animateValue(ui.incidentCount, stR.incident_count||0);
+    animateValue(ui.sbomCount, stR.sbom_scans||0);
+    animateValue(ui.ztCount, stR.zero_trust_evals||0);
+    animateValue(ui.credCount, stR.credential_events||0);
+    animateValue(ui.cloudCount, stR.cloud_findings||0);
 
     if (prevAlertCount>0) {
       const d=cur-prevAlertCount;
@@ -245,23 +398,23 @@ function updatePills(modules) {
 
 // ── Tab router ───────────────────────────────────────────────
 function renderActiveTab(){
-  const tab=document.querySelector(".tab.active");
-  if(!tab) return;
+  const btn=document.querySelector(".nav-btn.active");
+  if(!btn) return;
   ({alerts:renderAlerts,audit:renderAudit,gateway:renderGateway,
     anomalies:renderAnomaly,dlp:renderDlp,shadow:renderShadow,
     sap:renderSap,compliance:renderCompliance,incidents:renderIncidents,
     sbom:renderSbom,rules:renderRules,"zero-trust":renderZeroTrust,
-    credentials:renderCredentials,cloud:renderCloud}[tab.dataset.tab]||(_=>{}))();
+    credentials:renderCredentials,cloud:renderCloud}[btn.dataset.tab]||(_=>{}))();
 }
 
 // ── Render helpers ────────────────────────────────────────────
 const ts  = v=>{if(!v)return"—";try{return new Date(v).toLocaleTimeString();}catch{return v;}};
 const ms  = v=>v==null?"—":v<1000?`${v}ms`:`${(v/1000).toFixed(2)}s`;
 const byt = v=>{if(!v)return"—";if(v<1048576)return`${(v/1024).toFixed(1)} KB`;return`${(v/1048576).toFixed(1)} MB`;};
-const scl = s=>({bulk_extraction:"Bulk Extraction",off_hours_rfc:"Off-Hours RFC",
-  shadow_endpoint:"Shadow Endpoint",velocity_anomaly:"Velocity Anomaly",
-  credential_abuse:"Credential Abuse",privilege_escalation:"Privilege Escalation",
-  data_staging:"Data Staging",geo_anomaly:"Geo Anomaly"})[s]||(s||"").replace(/_/g," ");
+const scl = s=>({"bulk_extraction":"Bulk Extraction","off_hours_rfc":"Off-Hours RFC",
+  "shadow_endpoint":"Shadow Endpoint","velocity_anomaly":"Velocity Anomaly",
+  "credential_abuse":"Credential Abuse","privilege_escalation":"Privilege Escalation",
+  "data_staging":"Data Staging","geo_anomaly":"Geo Anomaly"})[s]||(s||"").replace(/_/g," ");
 
 function item(cls,...rows){
   return`<li class="alert-item ${cls}"><div class="alert-item-row">${rows[0]}</div>${
@@ -286,10 +439,10 @@ function renderAlerts(){
 
 // ── Gateway M01 ──────────────────────────────────────────────
 function renderGateway(){
-  ui.gwTotal.textContent=alerts.length;
-  ui.gwOffHours.textContent=alerts.filter(a=>a.scenario==="off_hours_rfc").length;
-  ui.gwBulk.textContent=alerts.filter(a=>a.scenario==="bulk_extraction").length;
-  ui.gwVelocity.textContent=alerts.filter(a=>a.scenario==="velocity_anomaly").length;
+  animateValue(ui.gwTotal, alerts.length);
+  animateValue(ui.gwOffHours, alerts.filter(a=>a.scenario==="off_hours_rfc").length);
+  animateValue(ui.gwBulk, alerts.filter(a=>a.scenario==="bulk_extraction").length);
+  animateValue(ui.gwVelocity, alerts.filter(a=>a.scenario==="velocity_anomaly").length);
   setEmpty(ui.gatewayList,ui.gatewayEmpty,alerts);
   ui.gatewayList.innerHTML=alerts.map(a=>item("ev-gateway",
     `<strong>RFC CALL</strong> <span class="panel-subtitle">${scl(a.scenario)}</span><span class="panel-subtitle" style="margin-left:auto">${ts(a.ts)}</span>`,
@@ -301,7 +454,9 @@ function renderGateway(){
 function renderAnomaly(){
   const hi=anomalies.filter(a=>parseFloat(a.anomaly_score||a.score||0)>0.7);
   const ep=anomalies.filter(a=>(a.classification||a.type||"")==="new_endpoint");
-  ui.anomTotal.textContent=anomalies.length; ui.anomHigh.textContent=hi.length; ui.anomNewEp.textContent=ep.length;
+  animateValue(ui.anomTotal, anomalies.length);
+  animateValue(ui.anomHigh, hi.length);
+  animateValue(ui.anomNewEp, ep.length);
   setEmpty(ui.anomalyList,ui.anomalyEmpty,anomalies);
   ui.anomalyList.innerHTML=anomalies.map(a=>{
     const sc=parseFloat(a.anomaly_score||a.score||0);
@@ -315,9 +470,9 @@ function renderAnomaly(){
 
 // ── DLP M09 ─────────────────────────────────────────────────
 function renderDlp(){
-  ui.dlpBulk.textContent=dlpEvents.filter(e=>(e.rule||e.scenario||"").includes("bulk")).length;
-  ui.dlpStaging.textContent=dlpEvents.filter(e=>(e.rule||e.scenario||"").includes("staging")).length;
-  ui.dlpBlocklist.textContent=dlpEvents.filter(e=>(e.rule||e.scenario||"").includes("blocklist")).length;
+  animateValue(ui.dlpBulk, dlpEvents.filter(e=>(e.rule||e.scenario||"").includes("bulk")).length);
+  animateValue(ui.dlpStaging, dlpEvents.filter(e=>(e.rule||e.scenario||"").includes("staging")).length);
+  animateValue(ui.dlpBlocklist, dlpEvents.filter(e=>(e.rule||e.scenario||"").includes("blocklist")).length);
   setEmpty(ui.dlpList,ui.dlpEmpty,dlpEvents);
   ui.dlpList.innerHTML=dlpEvents.map(e=>item(`ev-dlp sev-${(e.severity||"high").toLowerCase()}`,
     `<strong>${e.rule||"DLP VIOLATION"}</strong> <span class="panel-subtitle">${(e.severity||"").toUpperCase()}</span><span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>`,
@@ -328,7 +483,8 @@ function renderDlp(){
 // ── Shadow M11 ──────────────────────────────────────────────
 function renderShadow(){
   const hosts=new Set(shadowEvents.map(e=>e.endpoint||"").filter(Boolean)).size;
-  ui.shadowTotal.textContent=shadowEvents.length; ui.shadowUnique.textContent=hosts;
+  animateValue(ui.shadowTotal, shadowEvents.length);
+  animateValue(ui.shadowUnique, hosts);
   setEmpty(ui.shadowList,ui.shadowEmpty,shadowEvents);
   ui.shadowList.innerHTML=shadowEvents.map(e=>item(`ev-shadow sev-${(e.severity||"high").toLowerCase()}`,
     `<strong>SHADOW ENDPOINT</strong> <span class="panel-subtitle">${(e.severity||"").toUpperCase()}</span><span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>`,
@@ -338,8 +494,8 @@ function renderShadow(){
 
 // ── SAP MCP M05 ─────────────────────────────────────────────
 function renderSap(){
-  ui.sapTotal.textContent=sapEvents.length;
-  ui.sapAnomalous.textContent=sapEvents.filter(e=>e.anomalous||e.flagged).length;
+  animateValue(ui.sapTotal, sapEvents.length);
+  animateValue(ui.sapAnomalous, sapEvents.filter(e=>e.anomalous||e.flagged).length);
   setEmpty(ui.sapList,ui.sapEmpty,sapEvents);
   ui.sapList.innerHTML=sapEvents.map(e=>item("ev-sap",
     `<strong>SAP MCP</strong> <span class="panel-subtitle">${e.tool_name||e.action||"tool invocation"}</span><span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>`,
@@ -350,10 +506,10 @@ function renderSap(){
 
 // ── Compliance M07 ──────────────────────────────────────────
 function renderCompliance(){
-  ui.compViolations.textContent=compEvents.filter(e=>(e.result||e.status||"")==="violation").length;
-  ui.compWarnings.textContent=compEvents.filter(e=>(e.result||e.status||"")==="warning").length;
-  ui.compPassed.textContent=compEvents.filter(e=>(e.result||e.status||"")==="pass").length;
-  ui.compFrameworks.textContent=new Set(compEvents.map(e=>e.framework||"").filter(Boolean)).size;
+  animateValue(ui.compViolations, compEvents.filter(e=>(e.result||e.status||"")==="violation").length);
+  animateValue(ui.compWarnings, compEvents.filter(e=>(e.result||e.status||"")==="warning").length);
+  animateValue(ui.compPassed, compEvents.filter(e=>(e.result||e.status||"")==="pass").length);
+  animateValue(ui.compFrameworks, new Set(compEvents.map(e=>e.framework||"").filter(Boolean)).size);
   setEmpty(ui.complianceList,ui.complianceEmpty,compEvents);
   ui.complianceList.innerHTML=compEvents.map(e=>{
     const res=(e.result||e.status||"unknown").toLowerCase();
@@ -370,9 +526,10 @@ function renderIncidents(){
   const open=incEvents.filter(e=>(e.status||e.state||"").toLowerCase()==="open");
   const inv=incEvents.filter(e=>["investigating","in_progress","active"].includes((e.status||e.state||"").toLowerCase()));
   const res=incEvents.filter(e=>["resolved","closed","contained"].includes((e.status||e.state||"").toLowerCase()));
-  ui.incOpen.textContent=open.length; ui.incInvestigating.textContent=inv.length;
-  ui.incResolved.textContent=res.length;
-  ui.incPlaybooks.textContent=incEvents.filter(e=>e.playbook_run||e.playbook_id).length;
+  animateValue(ui.incOpen, open.length);
+  animateValue(ui.incInvestigating, inv.length);
+  animateValue(ui.incResolved, res.length);
+  animateValue(ui.incPlaybooks, incEvents.filter(e=>e.playbook_run||e.playbook_id).length);
   setEmpty(ui.incidentsList,ui.incidentsEmpty,incEvents);
   ui.incidentsList.innerHTML=incEvents.map(e=>{
     const st=(e.status||e.state||"unknown").toLowerCase();
@@ -389,8 +546,10 @@ function renderSbom(){
   const cve=sbomEvents.reduce((n,e)=>n+parseInt(e.cve_count||e.vulnerabilities||0),0);
   const ins=sbomEvents.reduce((n,e)=>n+parseInt(e.insecure_rfc_count||0),0);
   const clean=sbomEvents.filter(e=>!parseInt(e.cve_count||0)&&!parseInt(e.insecure_rfc_count||0)).length;
-  ui.sbomTotal.textContent=sbomEvents.length; ui.sbomCve.textContent=cve;
-  ui.sbomInsecure.textContent=ins; ui.sbomClean.textContent=clean;
+  animateValue(ui.sbomTotal, sbomEvents.length);
+  animateValue(ui.sbomCve, cve);
+  animateValue(ui.sbomInsecure, ins);
+  animateValue(ui.sbomClean, clean);
   setEmpty(ui.sbomList,ui.sbomEmpty,sbomEvents);
   ui.sbomList.innerHTML=sbomEvents.map(e=>{
     const hasCve=parseInt(e.cve_count||0)>0,hasIns=parseInt(e.insecure_rfc_count||0)>0;
@@ -404,11 +563,11 @@ function renderSbom(){
 
 // ── Rules M12 ───────────────────────────────────────────────
 function renderRules(){
-  ui.ruleBulk.textContent=alerts.filter(a=>a.scenario==="bulk_extraction").length;
-  ui.ruleOffHours.textContent=alerts.filter(a=>a.scenario==="off_hours_rfc").length;
-  ui.ruleShadow.textContent=alerts.filter(a=>a.scenario==="shadow_endpoint").length;
-  ui.ruleVelocity.textContent=alerts.filter(a=>a.scenario==="velocity_anomaly").length;
-  ui.ruleOther.textContent=alerts.filter(a=>!["bulk_extraction","off_hours_rfc","shadow_endpoint","velocity_anomaly"].includes(a.scenario)).length;
+  animateValue(ui.ruleBulk, alerts.filter(a=>a.scenario==="bulk_extraction").length);
+  animateValue(ui.ruleOffHours, alerts.filter(a=>a.scenario==="off_hours_rfc").length);
+  animateValue(ui.ruleShadow, alerts.filter(a=>a.scenario==="shadow_endpoint").length);
+  animateValue(ui.ruleVelocity, alerts.filter(a=>a.scenario==="velocity_anomaly").length);
+  animateValue(ui.ruleOther, alerts.filter(a=>!["bulk_extraction","off_hours_rfc","shadow_endpoint","velocity_anomaly"].includes(a.scenario)).length);
   setEmpty(ui.rulesList,ui.rulesEmpty,alerts);
   ui.rulesList.innerHTML=alerts.map(a=>item(`ev-rules sev-${(a.severity||"medium").toLowerCase()}`,
     `<strong>${(a.scenario||"RULE").toUpperCase().replace(/_/g," ")}</strong> <span class="panel-subtitle">${(a.severity||"").toUpperCase()}</span><span class="panel-subtitle" style="margin-left:auto">${ts(a.ts)}</span>`,
@@ -422,8 +581,9 @@ function renderZeroTrust(){
   const deny=ztEvents.filter(e=>(e.decision||"").toLowerCase()==="deny");
   const chal=ztEvents.filter(e=>!["allow","deny"].includes((e.decision||"").toLowerCase()));
   const risks=ztEvents.map(e=>parseFloat(e.risk_score||0)).filter(n=>!isNaN(n));
-  ui.ztAllow.textContent=allow.length; ui.ztDeny.textContent=deny.length;
-  ui.ztChallenge.textContent=chal.length;
+  animateValue(ui.ztAllow, allow.length);
+  animateValue(ui.ztDeny, deny.length);
+  animateValue(ui.ztChallenge, chal.length);
   ui.ztAvgRisk.textContent=risks.length?(risks.reduce((a,b)=>a+b,0)/risks.length).toFixed(1):"—";
   setEmpty(ui.ztList,ui.ztEmpty,ztEvents);
   ui.ztList.innerHTML=ztEvents.map(e=>{
@@ -438,9 +598,9 @@ function renderZeroTrust(){
 
 // ── Credentials M06 ─────────────────────────────────────────
 function renderCredentials(){
-  ui.credIssued.textContent=credEvents.filter(e=>(e.action||"").includes("issu")).length;
-  ui.credRotated.textContent=credEvents.filter(e=>(e.action||"").includes("rotat")).length;
-  ui.credRevoked.textContent=credEvents.filter(e=>(e.action||"").includes("revok")).length;
+  animateValue(ui.credIssued, credEvents.filter(e=>(e.action||"").includes("issu")).length);
+  animateValue(ui.credRotated, credEvents.filter(e=>(e.action||"").includes("rotat")).length);
+  animateValue(ui.credRevoked, credEvents.filter(e=>(e.action||"").includes("revok")).length);
   setEmpty(ui.credList,ui.credEmpty,credEvents);
   ui.credList.innerHTML=credEvents.map(e=>item("ev-credential",
     `<strong>${(e.action||"EVENT").toUpperCase()}</strong> <span class="panel-subtitle">${e.key||"—"}</span><span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>`,
@@ -450,11 +610,11 @@ function renderCredentials(){
 
 // ── Cloud M15 ───────────────────────────────────────────────
 function renderCloud(){
-  ui.cloudCritical.textContent=cloudEvents.filter(e=>(e.raw_severity||e.severity||"").toLowerCase()==="critical").length;
-  ui.cloudHigh.textContent=cloudEvents.filter(e=>(e.raw_severity||e.severity||"").toLowerCase()==="high").length;
-  ui.cloudAws.textContent=cloudEvents.filter(e=>(e.provider||"").toLowerCase()==="aws").length;
-  ui.cloudGcp.textContent=cloudEvents.filter(e=>(e.provider||"").toLowerCase()==="gcp").length;
-  ui.cloudAzure.textContent=cloudEvents.filter(e=>(e.provider||"").toLowerCase()==="azure").length;
+  animateValue(ui.cloudCritical, cloudEvents.filter(e=>(e.raw_severity||e.severity||"").toLowerCase()==="critical").length);
+  animateValue(ui.cloudHigh, cloudEvents.filter(e=>(e.raw_severity||e.severity||"").toLowerCase()==="high").length);
+  animateValue(ui.cloudAws, cloudEvents.filter(e=>(e.provider||"").toLowerCase()==="aws").length);
+  animateValue(ui.cloudGcp, cloudEvents.filter(e=>(e.provider||"").toLowerCase()==="gcp").length);
+  animateValue(ui.cloudAzure, cloudEvents.filter(e=>(e.provider||"").toLowerCase()==="azure").length);
   setEmpty(ui.cloudList,ui.cloudEmpty,cloudEvents);
   ui.cloudList.innerHTML=cloudEvents.map(e=>item(`ev-cloud sev-${(e.raw_severity||e.severity||"medium").toLowerCase()}`,
     `<strong>${(e.provider||"CLOUD").toUpperCase()}</strong> <span class="panel-subtitle">${e.control_id||"—"}</span><span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>`,
@@ -501,22 +661,248 @@ function renderModuleGrid(modules){
   }).join("");
 }
 
-// ── Tab switching ─────────────────────────────────────────────
-document.querySelectorAll(".tab").forEach(tab=>{
-  tab.addEventListener("click",()=>{
-    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-    document.querySelectorAll(".tab-content").forEach(c=>c.classList.add("hidden"));
-    tab.classList.add("active");
-    document.getElementById(`tab-${tab.dataset.tab}`)?.classList.remove("hidden");
-    renderActiveTab();
-  });
+// ── Navigate to tab ──────────────────────────────────────────
+function navigateToTab(tabName) {
+  const btn = document.querySelector(`.nav-btn[data-tab="${tabName}"]`);
+  if (!btn) return;
+
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+
+  document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
+  const target = document.getElementById(`tab-${tabName}`);
+  if (target) target.classList.remove("hidden");
+
+  // Scroll main content to top
+  document.querySelector(".main-content")?.scrollTo({ top: 0, behavior: "smooth" });
+
+  renderActiveTab();
+  closeSidebar();
+
+  // Close command palette if open
+  closeCommandPalette();
+}
+
+// ── Sidebar navigation ───────────────────────────────────────
+document.querySelectorAll(".nav-btn").forEach(btn => {
+  btn.addEventListener("click", () => navigateToTab(btn.dataset.tab));
 });
 
-ui.scenarioFilter.addEventListener("change",renderAlerts);
-ui.severityFilter.addEventListener("change",renderAlerts);
-ui.auditFilter.addEventListener("change",renderAudit);
+// ── Mobile sidebar toggle ────────────────────────────────────
+function openSidebar() {
+  ui.sidebar.classList.add("open");
+  ui.sidebarOverlay.classList.add("active", "visible");
+}
+function closeSidebar() {
+  ui.sidebar.classList.remove("open");
+  ui.sidebarOverlay.classList.remove("visible");
+  setTimeout(() => ui.sidebarOverlay.classList.remove("active"), 400);
+}
+
+if (ui.sidebarToggle) {
+  ui.sidebarToggle.addEventListener("click", () => {
+    if (ui.sidebar.classList.contains("open")) closeSidebar();
+    else openSidebar();
+  });
+}
+if (ui.sidebarOverlay) {
+  ui.sidebarOverlay.addEventListener("click", closeSidebar);
+}
+
+// ── Filter listeners ─────────────────────────────────────────
+ui.scenarioFilter.addEventListener("change", renderAlerts);
+ui.severityFilter.addEventListener("change", renderAlerts);
+ui.auditFilter.addEventListener("change", renderAudit);
+
+// ── Live clock ───────────────────────────────────────────────
+const clockEl = document.getElementById("live-clock");
+function updateClock() {
+  if (!clockEl) return;
+  const now = new Date();
+  clockEl.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── Command Palette (Ctrl+K / ⌘K) ──────────────────────────
+const palette = document.getElementById("command-palette");
+const paletteInput = document.getElementById("palette-input");
+const paletteResults = document.getElementById("palette-results");
+
+const COMMAND_ITEMS = [
+  { label: "Alerts Feed",    tab: "alerts",      icon: "🔔", keywords: "alerts feed overview" },
+  { label: "Audit Log",      tab: "audit",       icon: "📋", keywords: "audit log trail" },
+  { label: "M01 Gateway",    tab: "gateway",     icon: "🛡️", keywords: "m01 gateway api rfc" },
+  { label: "M08 Anomaly",    tab: "anomalies",   icon: "🧠", keywords: "m08 anomaly ml detection" },
+  { label: "M09 DLP",        tab: "dlp",         icon: "🔒", keywords: "m09 dlp data loss prevention" },
+  { label: "M11 Shadow",     tab: "shadow",      icon: "👁️", keywords: "m11 shadow integration" },
+  { label: "M05 SAP MCP",    tab: "sap",         icon: "⚙️", keywords: "m05 sap mcp tool" },
+  { label: "M07 Compliance", tab: "compliance",  icon: "✅", keywords: "m07 compliance sox gdpr" },
+  { label: "M10 Incidents",  tab: "incidents",   icon: "🚨", keywords: "m10 incident response playbook" },
+  { label: "M13 SBOM",       tab: "sbom",        icon: "📦", keywords: "m13 sbom scanner cve" },
+  { label: "M12 Rules",      tab: "rules",       icon: "📏", keywords: "m12 rules engine" },
+  { label: "M04 Zero-Trust", tab: "zero-trust",  icon: "🔐", keywords: "m04 zero trust fabric" },
+  { label: "M06 Credentials",tab: "credentials", icon: "🔑", keywords: "m06 credential vault" },
+  { label: "M15 Cloud",      tab: "cloud",       icon: "☁️", keywords: "m15 cloud ispm aws gcp azure" },
+];
+
+let paletteIndex = 0;
+let filteredItems = [...COMMAND_ITEMS];
+
+function openCommandPalette() {
+  if (!palette) return;
+  palette.classList.remove("hidden");
+  paletteInput.value = "";
+  filteredItems = [...COMMAND_ITEMS];
+  paletteIndex = 0;
+  renderPaletteResults();
+  requestAnimationFrame(() => paletteInput.focus());
+}
+
+function closeCommandPalette() {
+  if (!palette) return;
+  palette.classList.add("hidden");
+}
+
+function renderPaletteResults() {
+  if (!paletteResults) return;
+  paletteResults.innerHTML = filteredItems.map((item, i) =>
+    `<div class="palette-item ${i === paletteIndex ? 'active' : ''}" data-tab="${item.tab}">
+      <span class="palette-icon">${item.icon}</span>
+      <span class="palette-label">${item.label}</span>
+      <span class="palette-shortcut">${i < 9 ? i + 1 : ''}</span>
+    </div>`
+  ).join("");
+
+  // Click handlers
+  paletteResults.querySelectorAll(".palette-item").forEach(el => {
+    el.addEventListener("click", () => {
+      navigateToTab(el.dataset.tab);
+    });
+  });
+}
+
+if (paletteInput) {
+  paletteInput.addEventListener("input", () => {
+    const q = paletteInput.value.toLowerCase().trim();
+    filteredItems = q
+      ? COMMAND_ITEMS.filter(it => it.label.toLowerCase().includes(q) || it.keywords.includes(q))
+      : [...COMMAND_ITEMS];
+    paletteIndex = 0;
+    renderPaletteResults();
+  });
+
+  paletteInput.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      paletteIndex = (paletteIndex + 1) % filteredItems.length;
+      renderPaletteResults();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      paletteIndex = (paletteIndex - 1 + filteredItems.length) % filteredItems.length;
+      renderPaletteResults();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (filteredItems[paletteIndex]) {
+        navigateToTab(filteredItems[paletteIndex].tab);
+      }
+    } else if (e.key === "Escape") {
+      closeCommandPalette();
+    }
+  });
+}
+
+// Palette overlay click
+if (palette) {
+  palette.addEventListener("click", (e) => {
+    if (e.target === palette) closeCommandPalette();
+  });
+}
+
+// ── Keyboard shortcuts ──────────────────────────────────────
+document.addEventListener("keydown", (e) => {
+  // Ctrl/Cmd + K → command palette
+  if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+    e.preventDefault();
+    if (palette?.classList.contains("hidden")) openCommandPalette();
+    else closeCommandPalette();
+    return;
+  }
+
+  // Escape → close palette
+  if (e.key === "Escape" && palette && !palette.classList.contains("hidden")) {
+    closeCommandPalette();
+    return;
+  }
+
+  // Don't trigger shortcuts when typing in inputs
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+
+  // Number keys 1-9 for quick nav (when palette is closed)
+  if (palette?.classList.contains("hidden") && e.key >= "1" && e.key <= "9") {
+    const idx = parseInt(e.key) - 1;
+    const tabs = ["alerts","audit","gateway","anomalies","dlp","shadow","sap","compliance","incidents"];
+    if (tabs[idx]) navigateToTab(tabs[idx]);
+  }
+});
+
+// ── Toast notification system ────────────────────────────────
+const toastContainer = document.getElementById("toast-container");
+function showToast(message, type = "info", duration = 4000) {
+  if (!toastContainer) return;
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `
+    <span class="toast-icon">${type === "critical" ? "🔴" : type === "warning" ? "🟡" : type === "success" ? "🟢" : "🔵"}</span>
+    <span class="toast-message">${message}</span>
+    <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+  `;
+  toastContainer.prepend(toast);
+  requestAnimationFrame(() => toast.classList.add("toast-visible"));
+  setTimeout(() => {
+    toast.classList.remove("toast-visible");
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+// Show a welcome toast on load
+setTimeout(() => showToast("IntegriShield SOC dashboard loaded · Press ⌘K to navigate", "info", 5000), 800);
+
+// ── Card stagger animation on load ──────────────────────────
+function staggerCards() {
+  const cards = document.querySelectorAll(".card");
+  cards.forEach((card, i) => {
+    card.style.opacity = "0";
+    card.style.transform = "translateY(12px)";
+    card.style.transition = `opacity 400ms ${i * 50}ms cubic-bezier(0.4, 0, 0.2, 1), transform 400ms ${i * 50}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        card.style.opacity = "1";
+        card.style.transform = "translateY(0)";
+      });
+    });
+  });
+}
+
+// ── Chart section stagger  ──────────────────────────────────
+function staggerCharts() {
+  const panels = document.querySelectorAll(".chart-panel");
+  panels.forEach((panel, i) => {
+    panel.style.opacity = "0";
+    panel.style.transform = "translateY(10px) scale(0.98)";
+    panel.style.transition = `opacity 500ms ${600 + i * 120}ms cubic-bezier(0.4, 0, 0.2, 1), transform 500ms ${600 + i * 120}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        panel.style.opacity = "1";
+        panel.style.transform = "translateY(0) scale(1)";
+      });
+    });
+  });
+}
 
 // ── Boot ──────────────────────────────────────────────────────
+staggerCards();
+staggerCharts();
 initCharts();
 syncData();
-setInterval(syncData,POLL_MS);
+setInterval(syncData, POLL_MS);
