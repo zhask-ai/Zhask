@@ -689,6 +689,10 @@ function navigateToTab(tabName) {
   // Scroll main content to top
   document.querySelector(".main-content")?.scrollTo({ top: 0, behavior: "smooth" });
 
+  // Hide overview sections (stat cards + charts) when on launcher tab
+  const overviewSections = document.querySelectorAll("#stat-cards, .chart-row");
+  overviewSections.forEach(el => el.classList.toggle("hidden", tabName === "launcher"));
+
   if (tabName === "launcher") {
     startLauncherPolling();
   } else {
