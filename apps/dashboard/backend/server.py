@@ -473,7 +473,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ── Module Processes ────────────────────────────────────
         if path == "/api/modules/processes":
-            self._json(200, {"modules": all_module_statuses()}); return
+            self._json(200, {"processes": all_module_statuses(), "modules": all_module_statuses()}); return
 
         # ── Health ──────────────────────────────────────────────
         if path == "/api/health":
@@ -598,21 +598,35 @@ LAUNCH_CONFIGS: list[dict] = _load_launch_configs()
 LAUNCH_MAP: dict[str, dict] = {c["name"]: c for c in LAUNCH_CONFIGS}
 
 def _proc_status(name: str) -> dict:
+    import time as _time
     with _PROC_LOCK:
         entry = _PROCESSES.get(name)
     if not entry:
-        return {"name": name, "status": "stopped", "pid": None, "port": LAUNCH_MAP.get(name, {}).get("port"), "started_at": None}
+        return {"name": name, "label": name, "status": "stopped", "pid": None,
+                "port": LAUNCH_MAP.get(name, {}).get("port"), "started_at": None,
+                "log_lines": [], "uptime_s": None}
     proc = entry["proc"]
     rc   = proc.poll()
     status = "stopped" if rc is not None else "running"
+    started = entry["started_at"]
+    uptime = None
+    if status == "running" and started:
+        try:
+            from datetime import datetime, timezone
+            dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
+            uptime = round((datetime.now(timezone.utc) - dt).total_seconds())
+        except Exception:
+            pass
     return {
         "name":       name,
+        "label":      name,
         "status":     status,
         "pid":        proc.pid if rc is None else None,
         "port":       entry["config"].get("port"),
-        "started_at": entry["started_at"],
+        "started_at": started,
         "exit_code":  rc,
-        "log":        entry.get("log", [])[-20:],
+        "log_lines":  entry.get("log", [])[-50:],
+        "uptime_s":   uptime,
     }
 
 def start_module(name: str) -> dict:

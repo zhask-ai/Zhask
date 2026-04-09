@@ -689,9 +689,10 @@ function navigateToTab(tabName) {
   // Scroll main content to top
   document.querySelector(".main-content")?.scrollTo({ top: 0, behavior: "smooth" });
 
-  // Hide overview sections (stat cards + charts) when on launcher tab
-  const overviewSections = document.querySelectorAll("#stat-cards, .chart-row");
-  overviewSections.forEach(el => el.classList.toggle("hidden", tabName === "launcher"));
+  // Hide overview sections when on launcher tab; hide module-health on all non-overview tabs
+  const onLauncher = tabName === "launcher";
+  document.querySelectorAll("#stat-cards, .chart-row, .module-health-section")
+    .forEach(el => el.classList.toggle("hidden", onLauncher));
 
   if (tabName === "launcher") {
     startLauncherPolling();
@@ -947,7 +948,8 @@ function renderLauncher(processes) {
 
   // Show/hide offline notice
   if (notice) {
-    const isOnline = ui.backendStatus?.textContent === "online";
+    const status = ui.backendStatus?.textContent || "";
+    const isOnline = status === "online" || status === "connected";
     notice.style.display = isOnline ? "none" : "block";
   }
 
