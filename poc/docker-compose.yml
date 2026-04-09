@@ -1,6 +1,37 @@
 # IntegriShield POC — Full Stack
-# Combines Dev2 ML pipeline + Dev4 dashboard + infrastructure
-# Usage: docker compose -f poc/docker-compose.yml up --build
+# Owned by Dev 1.  Combines all active POC services.
+#
+# Services            Owner   Port
+# ─────────────────────────────────────────────
+# redis               infra   6379
+# postgres            infra   5432
+# mock-sap            Dev 1   8080
+# m01-api-gateway     Dev 1   8000   ← entry point for RFC calls
+# m03-traffic-anlzr   Dev 2   (internal)
+# m08-anomaly-det     Dev 2   (internal)
+# m09-dlp             Dev 2   (internal)
+# m11-shadow-integ    Dev 2   (internal)
+# mlflow              Dev 2   5001
+# seed-injector       Dev 1   (one-shot)
+#
+# Quick start (Dev 1 — no ML model required):
+#   docker-compose up --build mock-sap m01-api-gateway-shield redis postgres
+#
+# Full POC demo (all services):
+#   1. python ml/training/train_model.py   ← Dev 2 step, needed for M08
+#   2. docker-compose up --build
+#   3. Endpoints:
+#        M01 proxy:   http://localhost:8000/rfc/proxy
+#        M01 docs:    http://localhost:8000/docs
+#        Mock SAP:    http://localhost:8080/health
+#        MLflow:      http://localhost:5001
+#   4. Inspect streams:
+#        docker exec integrishield-redis redis-cli XRANGE rfc_events - +
+#        docker exec integrishield-redis redis-cli XRANGE anomaly_events - +
+#        docker exec integrishield-redis redis-cli XRANGE shadow_alerts - +
+#
+# Continuous demo (slower injection for live walkthrough):
+#   docker-compose --profile demo up --build
 
 x-common-env: &common-env
   REDIS_URL: redis://redis:6379
@@ -281,6 +312,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      m01-api-gateway-shield:
+        condition: service_healthy
       m03-traffic-analyzer:
         condition: service_started
       m08-anomaly-detection:
@@ -291,7 +324,106 @@ services:
         condition: service_started
     restart: "no"
 
-  # ═══════════ Demo Event Producer (Dev4) ═══════════
+  # ═══════════ Dev1 — Mock SAP Backend ═══════════
+
+  mock-sap:
+    build:
+      context: ..
+      dockerfile: poc/mock-sap/Dockerfile
+    container_name: integrishield-mock-sap
+    environment:
+      MOCK_SAP_BULK_ROWS: "80000"
+      MOCK_SAP_NORMAL_ROWS: "500"
+      MOCK_SAP_LATENCY_MS: "120"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health')\""]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ═══════════ Dev1 — M01 API Gateway Shield ═══════════
+
+  m01-api-gateway-shield:
+    build:
+      context: ..
+      dockerfile: modules/m01-api-gateway-shield/Dockerfile
+    container_name: integrishield-m01
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql://integrishield:integrishield_dev@postgres:5432/integrishield
+      SAP_BACKEND_URL: http://mock-sap:8080
+      INTEGRISHIELD_API_KEYS: poc-dev-key-abc123
+      BULK_ROW_THRESHOLD: "10000"
+      SAP_TIMEOUT_S: "30"
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mock-sap:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ═══════════ Dev3 — M05 SAP MCP Suite ═══════════
+  # Uncomment when Dev3's Dockerfile is ready
+  # m05-sap-mcp-suite:
+  #   build:
+  #     context: ../modules/m05-sap-mcp-suite
+  #   container_name: integrishield-m05
+  #   environment:
+  #     REDIS_URL: redis://redis:6379
+  #     PUBLISH_STREAM: sap_mcp_events
+  #   ports:
+  #     - "8005:8005"
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+
+  # ═══════════ Dev4 — Dashboard Backend ═══════════
+  # Uncomment when Dev4's Dockerfile is ready
+  # dashboard-backend:
+  #   build:
+  #     context: ..
+  #     dockerfile: apps/dashboard/backend/Dockerfile
+  #   container_name: integrishield-dashboard-backend
+  #   environment:
+  #     REDIS_URL: redis://redis:6379
+  #     DATABASE_URL: postgresql://integrishield:integrishield_dev@postgres:5432/integrishield
+  #     STREAM_API_CALLS: rfc_events
+  #     STREAM_ANOMALIES: anomaly_events
+  #     STREAM_DLP: dlp_alerts
+  #     STREAM_SHADOW: shadow_alerts
+  #   ports:
+  #     - "8787:8787"
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     postgres:
+  #       condition: service_healthy
+
+  # ═══════════ Dev4 — Dashboard UI ═══════════
+  # Uncomment when Dev4's UI build is ready
+  # dashboard-ui:
+  #   image: nginx:alpine
+  #   container_name: integrishield-dashboard-ui
+  #   ports:
+  #     - "4173:80"
+  #   volumes:
+  #     - ../apps/dashboard:/usr/share/nginx/html:ro
+  #   depends_on:
+  #     - dashboard-backend
+
+  # ═══════════ Demo producer (run with --profile demo) ═══════════
+
   demo-producer:
     build:
       context: ..
