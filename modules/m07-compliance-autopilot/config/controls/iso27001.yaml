@@ -1,0 +1,58 @@
+framework: iso27001
+controls:
+  - control_id: A.12.4.1
+    title: Event Logging
+    description: >
+      Event logs recording user activities, exceptions, faults and information
+      security events shall be produced, kept and regularly reviewed.
+      SAP API call events from M01 are the primary evidence for this control.
+    evidence_streams:
+      - integrishield:api_call_events
+    violation_streams: []
+    remediation_guidance: >
+      Ensure M01 API Gateway is logging all RFC calls. Verify log retention policy
+      meets ISO 27001 requirement (minimum 90 days). Archive logs to secure storage.
+
+  - control_id: A.12.4.3
+    title: Administrator and Operator Logs
+    description: >
+      System administrator and system operator activities shall be logged and
+      the logs protected and regularly reviewed. Off-hours and privileged-user
+      RFC calls are key evidence.
+    evidence_streams:
+      - integrishield:api_call_events
+      - integrishield:alert_events
+    violation_streams:
+      - integrishield:alert_events
+    remediation_guidance: >
+      Separate admin activity logs from regular user logs. Review privilege-escalation
+      and credential-abuse alerts as indicators of admin log gaps.
+
+  - control_id: A.16.1.2
+    title: Reporting Information Security Events
+    description: >
+      Information security events shall be reported through appropriate management
+      channels as quickly as possible. IntegriShield alerts and incidents are
+      the mechanism for this control.
+    evidence_streams:
+      - integrishield:alert_events
+      - integrishield:anomaly_events
+    violation_streams: []
+    remediation_guidance: >
+      Ensure all CRITICAL alerts generate incident reports within 1 hour.
+      Integrate M10 incident response notifications with your ITSM system.
+
+  - control_id: A.18.1.3
+    title: Protection of Records
+    description: >
+      Records shall be protected from loss, destruction, falsification,
+      unauthorised access and unauthorised release. DLP violations and
+      bulk extraction alerts directly threaten this control.
+    evidence_streams:
+      - integrishield:dlp_alerts
+      - integrishield:alert_events
+    violation_streams:
+      - integrishield:dlp_alerts
+    remediation_guidance: >
+      Implement DLP rules to block unauthorised bulk exports. Ensure audit logs
+      are write-once. Review RFC_READ_TABLE access permissions quarterly.

@@ -1,0 +1,50 @@
+framework: gdpr
+controls:
+  - control_id: GDPR-Art25
+    title: Data Protection by Design and by Default
+    description: >
+      The controller shall implement appropriate technical and organisational
+      measures designed to implement data-protection principles. Zero-trust
+      access evaluation and least-privilege RFC controls are key evidence.
+    evidence_streams:
+      - integrishield:api_call_events
+      - integrishield:anomaly_events
+    violation_streams:
+      - integrishield:alert_events
+    remediation_guidance: >
+      Ensure SAP data fields containing personal data have field-level authorisation
+      checks. Review M04 Zero-Trust access policies for data minimisation compliance.
+
+  - control_id: GDPR-Art32
+    title: Security of Processing
+    description: >
+      The controller and processor shall implement appropriate technical and
+      organisational measures to ensure a level of security appropriate to the risk.
+      DLP violations and anomaly scores are direct evidence of security gaps.
+    evidence_streams:
+      - integrishield:dlp_alerts
+      - integrishield:anomaly_events
+      - integrishield:alert_events
+    violation_streams:
+      - integrishield:dlp_alerts
+      - integrishield:alert_events
+    remediation_guidance: >
+      DLP violations involving personal data (names, emails, IBANs) require
+      immediate investigation. Ensure encryption at rest for personal data tables.
+      Review access to HR and customer data tables.
+
+  - control_id: GDPR-Art33
+    title: Notification of a Personal Data Breach
+    description: >
+      In case of a personal data breach, the controller shall notify the supervisory
+      authority within 72 hours. Bulk extraction alerts and DLP violations
+      involving personal data are potential breach indicators.
+    evidence_streams:
+      - integrishield:dlp_alerts
+      - integrishield:alert_events
+    violation_streams:
+      - integrishield:dlp_alerts
+    remediation_guidance: >
+      Configure M10 incident response to auto-escalate any DLP violation involving
+      personal data fields (KUNNR, PERNR, BANKA fields). Maintain a breach log.
+      Ensure legal team is notified within 24 hours of a confirmed breach incident.

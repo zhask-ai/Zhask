@@ -1,0 +1,26 @@
+services:
+  # ── Dashboard Backend ──────────────────────────────────────────
+  - type: web
+    name: integrishield-backend
+    runtime: docker
+    dockerfilePath: apps/dashboard/backend/Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: integrishield-redis
+          property: connectionString
+      - key: PORT
+        value: 8787
+      - key: ALLOWED_ORIGINS
+        value: https://zhask.io,https://www.zhask.io
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+  # ── Redis ──────────────────────────────────────────────────────
+  - type: redis
+    name: integrishield-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru

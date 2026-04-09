@@ -1,0 +1,59 @@
+framework: sox
+controls:
+  - control_id: SOX-ITGC-01
+    title: Logical Access Controls
+    description: >
+      Ensure that access to SAP systems and sensitive data is restricted to authorised
+      users via appropriate authentication, authorisation, and access controls.
+    evidence_streams:
+      - integrishield:api_call_events
+      - integrishield:alert_events
+    violation_streams:
+      - integrishield:alert_events
+    remediation_guidance: >
+      Review user access assignments. Enforce least-privilege. Implement periodic
+      access reviews. Ensure MFA is enabled for privileged accounts.
+
+  - control_id: SOX-ITGC-02
+    title: Change Management
+    description: >
+      All changes to SAP systems must go through an authorised change management
+      process. Unauthorised or undocumented changes are a control failure.
+    evidence_streams:
+      - integrishield:shadow_alerts
+      - integrishield:alert_events
+    violation_streams:
+      - integrishield:shadow_alerts
+    remediation_guidance: >
+      Investigate any shadow endpoint detections as potential unauthorised changes.
+      Enforce change tickets for all RFC endpoint registrations.
+
+  - control_id: SOX-ITGC-03
+    title: Computer Operations — After-Hours Activity
+    description: >
+      SAP system activity outside of authorised business hours must be monitored
+      and investigated. Off-hours RFC calls may indicate unauthorised access.
+    evidence_streams:
+      - integrishield:api_call_events
+      - integrishield:alert_events
+    violation_streams:
+      - integrishield:alert_events
+    remediation_guidance: >
+      Restrict off-hours system access to approved batch jobs. Investigate any
+      interactive user sessions outside business hours. Review off-hours-rfc alerts.
+
+  - control_id: SOX-ITGC-04
+    title: Data Integrity — Bulk Extraction Prevention
+    description: >
+      Controls must be in place to prevent unauthorised bulk extraction of financial
+      and sensitive data from SAP systems. DLP alerts and anomaly scores are evidence.
+    evidence_streams:
+      - integrishield:dlp_alerts
+      - integrishield:anomaly_events
+      - integrishield:alert_events
+    violation_streams:
+      - integrishield:dlp_alerts
+      - integrishield:alert_events
+    remediation_guidance: >
+      Block RFC_READ_TABLE for non-admin users. Implement data loss prevention rules.
+      Alert on any transfer exceeding 10MB. Review bulk-extraction alerts immediately.

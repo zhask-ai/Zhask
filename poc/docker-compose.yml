@@ -40,7 +40,6 @@ x-common-env: &common-env
 services:
 
   # ═══════════ Infrastructure ═══════════
-
   redis:
     image: redis:7-alpine
     container_name: integrishield-redis
@@ -62,6 +61,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
+      - ../infrastructure/sql/audit_events.sql:/docker-entrypoint-initdb.d/01-audit-events.sql:ro
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U integrishield"]
@@ -87,8 +87,22 @@ services:
     volumes:
       - ../ml/mlruns:/mlflow
 
-  # ═══════════ Dev2 — M03 Traffic Analyzer ═══════════
+  # ═══════════ Dev1 — M01 API Gateway Shield ═══════════
+  # Uncomment when Dev1's M01 Dockerfile is ready
+  # m01-api-gateway-shield:
+  #   build:
+  #     context: ../modules/m01-api-gateway-shield
+  #   container_name: integrishield-m01
+  #   environment:
+  #     REDIS_URL: redis://redis:6379/0
+  #     PUBLISH_STREAM: integrishield:api_call_events
+  #   ports:
+  #     - "8001:8001"
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
 
+  # ═══════════ Dev2 — ML Pipeline Modules ═══════════
   m03-traffic-analyzer:
     build:
       context: ..
@@ -161,8 +175,132 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ═══════════ Dev2 — Seed Injector (one-shot demo events) ═══════════
+  # ═══════════ Dev3 — M05 SAP MCP Suite ═══════════
+  m05-sap-mcp-suite:
+    build:
+      context: ..
+      dockerfile: modules/m05-sap-mcp-suite/Dockerfile
+    container_name: integrishield-m05
+    environment:
+      <<: *common-env
+      M05_REDIS_URL: redis://redis:6379/0
+      M05_CONSUME_STREAMS: "integrishield:api_call_events,integrishield:anomaly_events,integrishield:dlp_alerts,integrishield:alert_events"
+      M05_PUBLISH_STREAM: integrishield:mcp_query_events
+      M05_AUTH_POC_MODE: "true"
+    ports:
+      - "8005:8005"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
+  # ═══════════ Dev3 — M07 Compliance Autopilot ═══════════
+  m07-compliance-autopilot:
+    build:
+      context: ..
+      dockerfile: modules/m07-compliance-autopilot/Dockerfile
+    container_name: integrishield-m07
+    environment:
+      <<: *common-env
+      M07_REDIS_URL: redis://redis:6379/0
+      M07_DATABASE_URL: postgresql://integrishield:integrishield_dev@postgres:5432/integrishield
+      M07_CONSUME_STREAMS: "integrishield:api_call_events,integrishield:anomaly_events,integrishield:dlp_alerts,integrishield:shadow_alerts,integrishield:alert_events"
+      M07_PUBLISH_EVIDENCE_STREAM: integrishield:compliance_evidence
+      M07_PUBLISH_ALERT_STREAM: integrishield:compliance_alerts
+      M07_CONTROLS_CONFIG_PATH: /app/config/controls
+      M07_AUTH_POC_MODE: "true"
+    ports:
+      - "8007:8007"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ═══════════ Dev3 — M10 Incident Response ═══════════
+  m10-incident-response:
+    build:
+      context: ..
+      dockerfile: modules/m10-incident-response/Dockerfile
+    container_name: integrishield-m10
+    environment:
+      <<: *common-env
+      M10_REDIS_URL: redis://redis:6379/0
+      M10_DATABASE_URL: postgresql://integrishield:integrishield_dev@postgres:5432/integrishield
+      M10_CONSUME_ALERT_STREAM: integrishield:alert_events
+      M10_CONSUME_ANOMALY_STREAM: integrishield:anomaly_events
+      M10_CONSUME_DLP_STREAM: integrishield:dlp_alerts
+      M10_PUBLISH_STREAM: integrishield:incident_events
+      M10_SLACK_WEBHOOK_URL: ""
+      M10_PAGERDUTY_ROUTING_KEY: ""
+      M10_SIEM_ENDPOINT: ""
+      M10_AUTH_POC_MODE: "true"
+    ports:
+      - "8010:8010"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ═══════════ Dev3 — M13 SBOM Scanner ═══════════
+  m13-sbom-scanner:
+    build:
+      context: ..
+      dockerfile: modules/m13-sbom-scanner/Dockerfile
+    container_name: integrishield-m13
+    environment:
+      <<: *common-env
+      M13_REDIS_URL: redis://redis:6379/0
+      M13_PUBLISH_STREAM: integrishield:sbom_scan_events
+      M13_CVE_STUBS_PATH: /app/config/cve_stubs.json
+      M13_AUTH_POC_MODE: "true"
+    ports:
+      - "8013:8013"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ═══════════ Dev4 — Dashboard Backend ═══════════
+  dashboard-backend:
+    build:
+      context: ..
+      dockerfile: apps/dashboard/backend/Dockerfile
+    container_name: integrishield-dashboard-backend
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql://integrishield:integrishield_dev@postgres:5432/integrishield
+      STREAM_API_CALLS: integrishield:api_call_events
+      STREAM_ANOMALIES: integrishield:anomaly_scores
+      STREAM_SAP_MCP: integrishield:sap_mcp_events
+      STREAM_ALERTS: integrishield:alert_events
+      STREAM_ZERO_TRUST: integrishield:zero_trust_events
+      STREAM_CREDENTIALS: integrishield:credential_events
+      STREAM_CLOUD_POSTURE: integrishield:cloud_posture_events
+      REDIS_START_ID: "$"
+    ports:
+      - "8787:8787"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  # ═══════════ Dev4 — Dashboard UI ═══════════
+  dashboard-ui:
+    image: nginx:alpine
+    container_name: integrishield-dashboard-ui
+    ports:
+      - "4173:80"
+    volumes:
+      - ../apps/dashboard:/usr/share/nginx/html:ro
+    depends_on:
+      - dashboard-backend
+
+  # ═══════════ One-shot: Seed Injector (Dev2) ═══════════
   seed-injector:
     build:
       context: ..
@@ -289,17 +427,14 @@ services:
   demo-producer:
     build:
       context: ..
-      dockerfile: poc/seed-injector/Dockerfile
+      dockerfile: apps/dashboard/backend/Dockerfile
     container_name: integrishield-demo-producer
-    environment:
-      REDIS_URL: redis://redis:6379
-      INJECT_DELAY_MS: "1500"
+    command: ["python", "scripts/demo_event_producer.py", "--redis-url", "redis://redis:6379/0", "--interval", "1.5", "--count", "0"]
     depends_on:
       redis:
         condition: service_healthy
     profiles:
       - demo
-    restart: "no"
 
 volumes:
   pgdata:

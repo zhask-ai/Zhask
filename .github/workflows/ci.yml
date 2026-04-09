@@ -1,0 +1,145 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, Dev-4, Dev-3, Dev-2, Dev-1]
+  pull_request:
+    branches: [main, Dev-4]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint & Type Check
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install lint tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Install project dependencies
+        run: |
+          # Collect all requirements.txt files and install them
+          find . -name requirements.txt | xargs -I{} pip install -r {} || true
+
+      - name: Lint with Ruff
+        run: ruff check modules/ apps/ shared/ --select E,F,W,I --ignore E501
+        continue-on-error: true
+
+  test:
+    runs-on: ubuntu-latest
+    name: Run Tests
+    continue-on-error: true
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov
+          find . -name requirements.txt | xargs -I{} pip install -r {} || true
+
+      - name: Run tests
+        env:
+          REDIS_URL: redis://localhost:6379
+        run: |
+          if [ -d "tests" ] && [ -n "$(find tests/ -name '*.py' 2>/dev/null)" ]; then
+            pytest tests/ -v --tb=short
+          else
+            echo "No tests found yet — skipping. Add tests to tests/ to enable this step."
+          fi
+
+  security:
+    runs-on: ubuntu-latest
+    name: Security Scan
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install bandit
+        run: pip install bandit
+
+      - name: Security scan
+        run: bandit -r modules/ apps/ shared/ -ll -f json -o bandit-report.json
+        continue-on-error: true
+
+  build-docker:
+    needs: [lint, test, security]
+    runs-on: ubuntu-latest
+    name: Build Dashboard Docker Image
+    if: always() && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dashboard backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/dashboard/backend/Dockerfile
+          push: false
+          tags: integrishield-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: [build-docker]
+    runs-on: ubuntu-latest
+    name: Deploy to zhask.io
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to zhask.io
+        env:
+          ZHASK_DEPLOY_KEY: ${{ secrets.ZHASK_DEPLOY_KEY }}
+          ZHASK_ENV: production
+        run: |
+          if [ -n "$ZHASK_DEPLOY_KEY" ]; then
+            mkdir -p ~/.ssh
+            echo "$ZHASK_DEPLOY_KEY" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+            ssh-keyscan -H zhask.io >> ~/.ssh/known_hosts 2>/dev/null || true
+            bash ./scripts/deploy-to-zhask.sh
+          else
+            echo "ZHASK_DEPLOY_KEY secret not set — skipping deploy"
+            echo "Add it in: GitHub repo → Settings → Secrets → Actions"
+          fi
+        continue-on-error: true
+
+      - name: Deployment summary
+        run: echo "✅ Pipeline complete. Set ZHASK_DEPLOY_KEY secret to enable auto-deploy."
