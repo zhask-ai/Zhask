@@ -1,0 +1,104 @@
+name: Deploy to zhask.io
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  # ── Deploy Frontend to GitHub Pages → zhask.io ────────────────
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    name: Frontend → GitHub Pages → zhask.io
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inject production backend URL into config.js
+        run: |
+          # Replace config.js with production backend URL from GitHub secret
+          # BACKEND_URL should be set in repo Settings → Secrets → Actions
+          BACKEND_URL="${{ secrets.BACKEND_URL }}"
+
+          if [ -z "$BACKEND_URL" ]; then
+            echo "⚠️  BACKEND_URL secret not set — dashboard will show offline"
+            echo "window.__INTEGRISHIELD_API = null;" > apps/dashboard/config.js
+          else
+            echo "✅ Injecting backend URL: $BACKEND_URL"
+            echo "window.__INTEGRISHIELD_API = \"${BACKEND_URL}\";" > apps/dashboard/config.js
+          fi
+
+      - name: Prepare gh-pages folder
+        run: |
+          mkdir -p gh-pages-dist
+          cp apps/dashboard/index.html  gh-pages-dist/
+          cp apps/dashboard/app.js      gh-pages-dist/
+          cp apps/dashboard/styles.css  gh-pages-dist/
+          cp apps/dashboard/config.js   gh-pages-dist/
+          cp apps/dashboard/CNAME       gh-pages-dist/
+          # Prevent Jekyll processing
+          touch gh-pages-dist/.nojekyll
+
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./gh-pages-dist
+          publish_branch: gh-pages
+          cname: zhask.io
+          commit_message: "deploy: update dashboard [skip ci]"
+
+  # ── Deploy Backend to Render.com ──────────────────────────────
+  deploy-backend:
+    runs-on: ubuntu-latest
+    name: Backend → Render.com
+    needs: deploy-frontend
+
+    steps:
+      - name: Trigger Render deploy hook
+        run: |
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
+            curl -s "${{ secrets.RENDER_DEPLOY_HOOK }}" \
+              -X POST \
+              -H "Content-Type: application/json"
+            echo "✅ Render deploy triggered"
+          else
+            echo "⚠️  RENDER_DEPLOY_HOOK secret not set — skipping backend deploy"
+            echo "    Set it in: GitHub repo → Settings → Secrets → Actions"
+          fi
+
+  # ── Post-deploy Health Check ───────────────────────────────────
+  health-check:
+    runs-on: ubuntu-latest
+    name: Verify zhask.io is live
+    needs: [deploy-frontend, deploy-backend]
+    if: always()
+
+    steps:
+      - name: Wait for deployment propagation
+        run: sleep 30
+
+      - name: Check frontend (zhask.io)
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://zhask.io || echo "000")
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Frontend https://zhask.io → HTTP $STATUS"
+          else
+            echo "⚠️  Frontend https://zhask.io → HTTP $STATUS (may still be propagating)"
+          fi
+
+      - name: Check backend health
+        run: |
+          if [ -n "${{ secrets.BACKEND_URL }}" ]; then
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.BACKEND_URL }}/api/health" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Backend ${{ secrets.BACKEND_URL }}/api/health → HTTP $STATUS"
+            else
+              echo "⚠️  Backend → HTTP $STATUS"
+            fi
+          fi
