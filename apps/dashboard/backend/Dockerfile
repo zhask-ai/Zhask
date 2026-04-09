@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.12-slim
 
 WORKDIR /workspace
 
@@ -7,6 +7,11 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY . /workspace
 
+ENV PYTHONPATH=/workspace/shared/src
+
 EXPOSE 8787
 
-CMD ["python", "apps/dashboard/backend/server.py"]
+# Allow PORT override from hosting platform (Render, Railway, etc.)
+ENV PORT=8787
+
+CMD ["python3", "apps/dashboard/backend/server.py"]

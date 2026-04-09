@@ -4,7 +4,15 @@
    Premium UI with sidebar navigation
    ═══════════════════════════════════════════════════════════ */
 
-const API_BASE = "http://localhost:8787";
+// Auto-detect backend URL: use env config injected at build time,
+// fall back to same-origin /api (nginx proxy in production),
+// or localhost for local dev.
+const API_BASE = (
+  (typeof window.__INTEGRISHIELD_API !== "undefined" && window.__INTEGRISHIELD_API) ||
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://localhost:8787"
+    : window.location.origin + "/api-proxy")
+);
 const POLL_MS  = 2500;
 
 // ── DOM refs ─────────────────────────────────────────────────
@@ -26,6 +34,8 @@ const ui = {
   ztCount:          document.getElementById("zt-count"),
   credCount:        document.getElementById("cred-count"),
   cloudCount:       document.getElementById("cloud-count"),
+  gwTotalCount:     document.getElementById("gw-total-count"),
+  rulesCount:       document.getElementById("rules-count"),
   trendAlerts:      document.getElementById("trend-alerts"),
   alertsList:       document.getElementById("alerts-list"),
   alertsEmpty:      document.getElementById("alerts-empty"),
@@ -334,6 +344,8 @@ async function syncData() {
     animateValue(ui.ztCount, stR.zero_trust_evals||0);
     animateValue(ui.credCount, stR.credential_events||0);
     animateValue(ui.cloudCount, stR.cloud_findings||0);
+    if (ui.gwTotalCount) animateValue(ui.gwTotalCount, stR.api_calls_count||stR.total_alerts||0);
+    if (ui.rulesCount)   animateValue(ui.rulesCount,   stR.rule_triggers||stR.alert_events||0);
 
     if (prevAlertCount>0) {
       const d=cur-prevAlertCount;

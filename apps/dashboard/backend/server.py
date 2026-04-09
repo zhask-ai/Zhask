@@ -37,6 +37,7 @@ RULES_ENGINE_PATH = ROOT / "modules" / "m12-rules-engine" / "service.py"
 REDIS_URL       = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 REDIS_START_ID  = os.getenv("REDIS_START_ID", "$")
 DATABASE_URL    = os.getenv("DATABASE_URL", "")
+SERVER_PORT     = int(os.getenv("PORT", "8787"))
 
 # All module streams — matches each module's publish stream
 STREAM_KEYS = {
@@ -544,11 +545,11 @@ def main() -> None:
     t = threading.Thread(target=stream_consumer_loop, daemon=True)
     t.start()
 
-    server = ThreadingHTTPServer(("0.0.0.0", 8787), Handler)
+    server = ThreadingHTTPServer(("0.0.0.0", SERVER_PORT), Handler)
     print("=" * 64)
     print("  IntegriShield SOC Dashboard Backend")
     print("=" * 64)
-    print(f"  Listening  : http://localhost:8787")
+    print(f"  Listening  : http://0.0.0.0:{SERVER_PORT}")
     print(f"  Redis      : {REDIS_URL}")
     print(f"  Postgres   : {'configured' if DATABASE_URL else 'disabled'}")
     print(f"  Streams    : {len(STREAM_KEYS)}")

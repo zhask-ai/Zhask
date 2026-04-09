@@ -384,6 +384,7 @@ body::after {
   color: var(--accent);
 }
 
+.nav-chip.chip-red     { background: rgba(255, 80, 80, 0.1);  color: #ff5050;  border-color: rgba(255,80,80,0.2); }
 .nav-chip.chip-purple  { background: var(--purple-bg); color: var(--purple); border-color: rgba(161,127,224,0.2); }
 .nav-chip.chip-teal    { background: var(--teal-bg);   color: var(--teal);   border-color: rgba(56,217,169,0.2); }
 .nav-chip.chip-orange  { background: var(--orange-bg); color: var(--orange); border-color: rgba(255,139,61,0.2); }
@@ -409,7 +410,7 @@ body::after {
 /* ═══════════════════ STAT CARDS ═══════════════════ */
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
   gap: 0.65rem;
   margin-bottom: 1.25rem;
 }
@@ -489,6 +490,8 @@ body::after {
 .card-zt           { border-left: 3px solid var(--accent); }   .card-zt p        { color: var(--accent); }
 .card-vault        { border-left: 3px solid var(--amber); }    .card-vault p     { color: var(--amber); }
 .card-cloud        { border-left: 3px solid var(--pink); }     .card-cloud p     { color: var(--pink); }
+.card-gateway      { border-left: 3px solid #ff5050; }         .card-gateway p   { color: #ff5050; }
+.card-rules        { border-left: 3px solid var(--accent); }   .card-rules p     { color: var(--accent); }
 
 /* ═══════════════════ CHART ROW ═══════════════════ */
 .chart-row {
