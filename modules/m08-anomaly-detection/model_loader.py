@@ -21,7 +21,10 @@ def load_model(model_path: str) -> tuple:
     with open(path, "rb") as f:
         artifact = pickle.load(f)
 
-    model = artifact["model"]
-    scaler = artifact["scaler"]
+    if isinstance(artifact, tuple):
+        model, scaler = artifact
+    else:
+        model = artifact["model"]
+        scaler = artifact["scaler"]
     logger.info("Loaded IsolationForest model from %s", path)
     return model, scaler

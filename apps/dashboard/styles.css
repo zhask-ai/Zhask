@@ -911,6 +911,92 @@ tbody tr:hover {
   opacity: 1;
 }
 
+/* ═══════════════════ LAUNCHER ═══════════════════ */
+.launcher-notice {
+  display: flex; gap: 0.6rem; align-items: center;
+  background: rgba(255,192,72,0.08); border: 1px solid rgba(255,192,72,0.2);
+  border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem;
+  color: var(--amber); font-size: 0.82rem;
+}
+.launcher-notice code {
+  background: rgba(0,0,0,0.3); padding: 0.15rem 0.4rem;
+  border-radius: 4px; font-family: monospace; color: var(--text-dim);
+}
+.launcher-notice.hidden { display: none; }
+
+.launcher-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.launcher-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 0.9rem 1rem;
+  display: flex; flex-direction: column; gap: 0.55rem;
+  transition: border-color 0.2s;
+}
+.launcher-card.running  { border-color: rgba(56,217,169,0.4); }
+.launcher-card.stopped  { border-color: var(--border); }
+.launcher-card.starting { border-color: rgba(255,192,72,0.4); }
+
+.launcher-card-header {
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.launcher-mod-chip {
+  font-size: 0.62rem; font-weight: 700; padding: 0.18rem 0.45rem;
+  border-radius: 4px; letter-spacing: 0.03em;
+  background: var(--accent-bg); color: var(--accent);
+}
+.launcher-card-name { font-size: 0.85rem; font-weight: 600; color: var(--text); flex: 1; }
+.launcher-port { font-size: 0.72rem; color: var(--text-dim); }
+
+.launcher-status {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-size: 0.75rem;
+}
+.launcher-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.launcher-dot.running  { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+.launcher-dot.stopped  { background: var(--text-dim); }
+.launcher-dot.starting { background: var(--amber); animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.launcher-actions { display: flex; gap: 0.4rem; margin-top: 0.2rem; }
+
+.launch-btn {
+  padding: 0.35rem 0.9rem; border-radius: 6px; font-size: 0.78rem;
+  font-weight: 600; border: none; cursor: pointer; transition: opacity 0.15s;
+}
+.launch-btn:hover { opacity: 0.85; }
+.launch-btn-start { background: rgba(56,217,169,0.15); color: var(--ok); border: 1px solid rgba(56,217,169,0.3); }
+.launch-btn-stop  { background: rgba(255,80,80,0.12);  color: #ff5050;  border: 1px solid rgba(255,80,80,0.25); }
+.launch-btn-logs  { background: rgba(91,141,239,0.1);  color: var(--accent); border: 1px solid rgba(91,141,239,0.25); }
+.launch-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.launch-btn-sm {
+  padding: 0.2rem 0.6rem; border-radius: 5px; font-size: 0.72rem;
+  font-weight: 600; border: 1px solid var(--border); background: transparent;
+  color: var(--text-dim); cursor: pointer;
+}
+.launch-btn-sm:hover { color: var(--text); }
+
+.launcher-log-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 0.4rem;
+}
+#launcher-log-title { font-size: 0.78rem; color: var(--text-dim); }
+
+.launcher-log {
+  background: rgba(0,0,0,0.35); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.85rem 1rem; font-size: 0.72rem;
+  font-family: monospace; color: var(--text-dim);
+  line-height: 1.6; max-height: 200px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-all;
+}
+
 /* ═══════════════════ RESPONSIVE ═══════════════════ */
 @media (max-width: 1100px) {
   .chart-row { grid-template-columns: 1fr 1fr; }
