@@ -4,117 +4,271 @@
     {
       "name": "Dashboard UI",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "5173", "--directory", "apps/dashboard"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5173",
+        "--directory",
+        "apps/dashboard"
+      ],
       "port": 5173
     },
     {
       "name": "Dashboard Backend",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["apps/dashboard/backend/server.py"],
-      "env": { "PYTHONPATH": "shared" },
+      "runtimeArgs": [
+        "apps/dashboard/backend/server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "shared"
+      },
       "port": 8787
     },
     {
-      "name": "M01 — API Gateway Shield",
+      "name": "M01 \u2014 API Gateway Shield",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "integrishield.m01.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "modules/m01-api-gateway-shield/src"],
-      "env": { "PYTHONPATH": "modules/m01-api-gateway-shield/src:shared" },
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m01.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+        "--reload-dir",
+        "modules/m01-api-gateway-shield/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m01-api-gateway-shield/src:shared"
+      },
       "port": 8000
     },
     {
-      "name": "M03 — Traffic Analyzer (worker)",
+      "name": "M03 \u2014 Traffic Analyzer (worker)",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["modules/m03-traffic-analyzer/main.py"],
-      "env": { "PYTHONPATH": "shared" },
+      "runtimeArgs": [
+        "modules/m03-traffic-analyzer/main.py"
+      ],
+      "env": {
+        "PYTHONPATH": "shared"
+      },
       "port": 8003
     },
     {
-      "name": "M04 — Zero-Trust Fabric",
+      "name": "M04 \u2014 Zero-Trust Fabric",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "integrishield.m04.main:app", "--host", "0.0.0.0", "--port", "8004", "--reload", "--reload-dir", "modules/m04-zero-trust-fabric/src"],
-      "env": { "PYTHONPATH": "modules/m04-zero-trust-fabric/src:shared" },
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m04.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8004",
+        "--reload",
+        "--reload-dir",
+        "modules/m04-zero-trust-fabric/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m04-zero-trust-fabric/src:shared"
+      },
       "port": 8004
     },
     {
-      "name": "M05 — SAP MCP Suite",
+      "name": "M05 \u2014 SAP MCP Suite",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "integrishield.m05.main:app", "--host", "0.0.0.0", "--port", "8005", "--reload", "--reload-dir", "modules/m05-sap-mcp-suite/src"],
-      "env": { "PYTHONPATH": "modules/m05-sap-mcp-suite/src:shared" },
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m05.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8005",
+        "--reload",
+        "--reload-dir",
+        "modules/m05-sap-mcp-suite/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m05-sap-mcp-suite/src:shared"
+      },
       "port": 8005
     },
     {
-      "name": "M06 — Credential Vault",
+      "name": "M06 \u2014 Credential Vault",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "integrishield.m06.main:app", "--host", "0.0.0.0", "--port", "8006", "--reload", "--reload-dir", "modules/m06-credential-vault/src"],
-      "env": { "PYTHONPATH": "modules/m06-credential-vault/src:shared" },
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m06.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8006",
+        "--reload",
+        "--reload-dir",
+        "modules/m06-credential-vault/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m06-credential-vault/src:shared"
+      },
       "port": 8006
     },
     {
-      "name": "M07 — Compliance Autopilot",
+      "name": "M07 \u2014 Compliance Autopilot",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "integrishield.m07.main:app", "--host", "0.0.0.0", "--port", "8007", "--reload", "--reload-dir", "modules/m07-compliance-autopilot/src"],
-      "env": { "PYTHONPATH": "modules/m07-compliance-autopilot/src:shared" },
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m07.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8007",
+        "--reload",
+        "--reload-dir",
+        "modules/m07-compliance-autopilot/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m07-compliance-autopilot/src:shared"
+      },
       "port": 8007
     },
     {
-      "name": "M08 — Anomaly Detection (worker)",
+      "name": "M08 \u2014 Anomaly Detection (worker)",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["modules/m08-anomaly-detection/main.py"],
-      "env": { "PYTHONPATH": "shared" },
+      "runtimeArgs": [
+        "modules/m08-anomaly-detection/main.py"
+      ],
+      "env": {
+        "PYTHONPATH": "shared",
+        "MODEL_PATH": "ml/models/isolation_forest_v1.pkl"
+      },
       "port": 8008
     },
     {
-      "name": "M09 — DLP (worker)",
+      "name": "M09 \u2014 DLP (worker)",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["modules/m09-dlp/main.py"],
-      "env": { "PYTHONPATH": "shared" },
+      "runtimeArgs": [
+        "modules/m09-dlp/main.py"
+      ],
+      "env": {
+        "PYTHONPATH": "shared"
+      },
       "port": 8009
     },
     {
-      "name": "M10 — Incident Response",
+      "name": "M10 \u2014 Incident Response",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "integrishield.m10.main:app", "--host", "0.0.0.0", "--port", "8010", "--reload", "--reload-dir", "modules/m10-incident-response/src"],
-      "env": { "PYTHONPATH": "modules/m10-incident-response/src:shared" },
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m10.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8010",
+        "--reload",
+        "--reload-dir",
+        "modules/m10-incident-response/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m10-incident-response/src:shared"
+      },
       "port": 8010
     },
     {
-      "name": "M11 — Shadow Integration (worker)",
+      "name": "M11 \u2014 Shadow Integration (worker)",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["modules/m11-shadow-integration/main.py"],
-      "env": { "PYTHONPATH": "shared" },
+      "runtimeArgs": [
+        "modules/m11-shadow-integration/main.py"
+      ],
+      "env": {
+        "PYTHONPATH": "shared"
+      },
       "port": 8011
     },
     {
-      "name": "M12 — Rules Engine",
+      "name": "M12 \u2014 Rules Engine",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "integrishield.m12.main:app", "--host", "0.0.0.0", "--port", "8012", "--reload", "--reload-dir", "modules/m12-rules-engine/src"],
-      "env": { "PYTHONPATH": "modules/m12-rules-engine/src:shared" },
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m12.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8012",
+        "--reload",
+        "--reload-dir",
+        "modules/m12-rules-engine/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m12-rules-engine/src:shared"
+      },
       "port": 8012
     },
     {
-      "name": "M13 — SBOM Scanner",
+      "name": "M13 \u2014 SBOM Scanner",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "integrishield.m13.main:app", "--host", "0.0.0.0", "--port", "8013", "--reload", "--reload-dir", "modules/m13-sbom-scanner/src"],
-      "env": { "PYTHONPATH": "modules/m13-sbom-scanner/src:shared" },
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m13.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8013",
+        "--reload",
+        "--reload-dir",
+        "modules/m13-sbom-scanner/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m13-sbom-scanner/src:shared"
+      },
       "port": 8013
     },
     {
-      "name": "M15 — Multi-Cloud ISPM",
+      "name": "M15 \u2014 Multi-Cloud ISPM",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "integrishield.m15.main:app", "--host", "0.0.0.0", "--port", "8015", "--reload", "--reload-dir", "modules/m15-multicloud-ispm/src"],
-      "env": { "PYTHONPATH": "modules/m15-multicloud-ispm/src:shared" },
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m15.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8015",
+        "--reload",
+        "--reload-dir",
+        "modules/m15-multicloud-ispm/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m15-multicloud-ispm/src:shared"
+      },
       "port": 8015
     },
     {
       "name": "POC Full Stack (Docker Compose)",
       "runtimeExecutable": "docker",
-      "runtimeArgs": ["compose", "-f", "poc/docker-compose.yml", "up"],
+      "runtimeArgs": [
+        "compose",
+        "-f",
+        "poc/docker-compose.yml",
+        "up"
+      ],
       "port": 6379
     },
     {
       "name": "POC Dev4 Stack (Dashboard + Redis)",
       "runtimeExecutable": "docker",
-      "runtimeArgs": ["compose", "-f", "poc/docker-compose.dev4.yml", "up"],
+      "runtimeArgs": [
+        "compose",
+        "-f",
+        "poc/docker-compose.dev4.yml",
+        "up"
+      ],
       "port": 8787
     }
   ]
