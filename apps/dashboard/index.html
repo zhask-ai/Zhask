@@ -54,6 +54,10 @@
       <!-- ══════════════════ SIDEBAR NAVIGATION ══════════════════ -->
       <nav class="sidebar" id="sidebar" aria-label="Module navigation">
         <span class="nav-group-label">Overview</span>
+        <button class="nav-btn" data-tab="launcher" id="nav-launcher">
+          <span class="nav-icon">⚡</span>
+          Launcher
+        </button>
         <button class="nav-btn active" data-tab="alerts" id="nav-alerts">
           <span class="nav-icon">🔔</span>
           Alerts Feed
@@ -216,6 +220,40 @@
             <div class="panel-title-row"><h2>Rules Breakdown</h2></div>
             <div class="chart-wrap chart-donut-wrap"><canvas id="rules-chart"></canvas></div>
           </div>
+        </section>
+
+        <!-- ══════════════ LAUNCHER ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-launcher">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <h2>⚡ Module Launcher</h2>
+              <span class="panel-subtitle">Start and stop individual modules — requires local backend running</span>
+            </div>
+            <div style="display:flex;gap:0.5rem">
+              <button class="launch-btn launch-btn-start" onclick="startAll()">▶ Start All</button>
+              <button class="launch-btn launch-btn-stop"  onclick="stopAll()">■ Stop All</button>
+            </div>
+          </div>
+
+          <!-- Quick start: Redis first -->
+          <div class="launcher-notice" id="launcher-notice">
+            <span>⚠️</span>
+            <span>Backend not connected — start the backend first:
+              <code>python3 apps/dashboard/backend/server.py</code>
+            </span>
+          </div>
+
+          <!-- Module cards grid -->
+          <div class="launcher-grid" id="launcher-grid">
+            <!-- populated by renderLauncher() in app.js -->
+          </div>
+
+          <!-- Log viewer -->
+          <div class="launcher-log-header">
+            <span id="launcher-log-title">Select a module to view logs</span>
+            <button class="launch-btn-sm" onclick="clearLauncherLog()">Clear</button>
+          </div>
+          <pre class="launcher-log" id="launcher-log">No logs yet.</pre>
         </section>
 
         <!-- ══════════════ ALERTS ══════════════ -->

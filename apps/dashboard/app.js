@@ -416,7 +416,8 @@ function renderActiveTab(){
     anomalies:renderAnomaly,dlp:renderDlp,shadow:renderShadow,
     sap:renderSap,compliance:renderCompliance,incidents:renderIncidents,
     sbom:renderSbom,rules:renderRules,"zero-trust":renderZeroTrust,
-    credentials:renderCredentials,cloud:renderCloud}[btn.dataset.tab]||(_=>{}))();
+    credentials:renderCredentials,cloud:renderCloud,
+    launcher:()=>renderLauncher(launcherProcesses)}[btn.dataset.tab]||(_=>{}))();
 }
 
 // ── Render helpers ────────────────────────────────────────────
@@ -688,6 +689,12 @@ function navigateToTab(tabName) {
   // Scroll main content to top
   document.querySelector(".main-content")?.scrollTo({ top: 0, behavior: "smooth" });
 
+  if (tabName === "launcher") {
+    startLauncherPolling();
+  } else {
+    stopLauncherPolling();
+  }
+
   renderActiveTab();
   closeSidebar();
 
@@ -756,6 +763,7 @@ const COMMAND_ITEMS = [
   { label: "M04 Zero-Trust", tab: "zero-trust",  icon: "🔐", keywords: "m04 zero trust fabric" },
   { label: "M06 Credentials",tab: "credentials", icon: "🔑", keywords: "m06 credential vault" },
   { label: "M15 Cloud",      tab: "cloud",       icon: "☁️", keywords: "m15 cloud ispm aws gcp azure" },
+  { label: "⚡ Launcher",    tab: "launcher",    icon: "⚡", keywords: "launcher start stop module process run" },
 ];
 
 let paletteIndex = 0;
@@ -910,6 +918,144 @@ function staggerCharts() {
       });
     });
   });
+}
+
+// ── Module Launcher ──────────────────────────────────────────
+let launcherProcesses = [];
+let launcherPolling = null;
+
+function logLauncher(msg) {
+  const log = document.getElementById("launcher-log");
+  if (!log) return;
+  const time = new Date().toLocaleTimeString();
+  log.textContent = `[${time}] ${msg}\n` + (log.textContent === "No logs yet." ? "" : log.textContent);
+}
+
+function clearLauncherLog() {
+  const log = document.getElementById("launcher-log");
+  if (log) log.textContent = "No logs yet.";
+}
+
+function renderLauncher(processes) {
+  const grid = document.getElementById("launcher-grid");
+  const notice = document.getElementById("launcher-notice");
+  if (!grid) return;
+
+  // Show/hide offline notice
+  if (notice) {
+    const isOnline = ui.backendStatus?.textContent === "online";
+    notice.style.display = isOnline ? "none" : "block";
+  }
+
+  if (!processes || processes.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--text-dim);padding:2rem;">
+      No modules available. Backend may be offline or no launch configs found.</div>`;
+    return;
+  }
+
+  grid.innerHTML = processes.map(p => {
+    const running = p.status === "running";
+    const statusLabel = running ? "Running" : (p.status === "starting" ? "Starting…" : "Stopped");
+    const dotClass = running ? "launcher-dot dot-running" : (p.status === "starting" ? "launcher-dot dot-starting" : "launcher-dot dot-stopped");
+    const pid = p.pid ? `PID ${p.pid}` : "";
+    const uptime = p.uptime_s ? `${Math.round(p.uptime_s)}s` : "";
+
+    return `<div class="launcher-card" id="lcard-${p.name.replace(/[^a-z0-9]/gi,'-')}">
+      <div class="launcher-card-header">
+        <span class="${dotClass}"></span>
+        <span class="launcher-mod-name">${p.label || p.name}</span>
+        <span class="launcher-status-text">${statusLabel}</span>
+      </div>
+      <div class="launcher-card-meta">${[pid, uptime].filter(Boolean).join(" · ") || "Not running"}</div>
+      <div class="launcher-card-actions">
+        <button class="launch-btn launch-btn-start" ${running ? "disabled" : ""}
+          onclick="moduleAction('start','${p.name}')">▶ Start</button>
+        <button class="launch-btn launch-btn-stop" ${!running ? "disabled" : ""}
+          onclick="moduleAction('stop','${p.name}')">■ Stop</button>
+        <button class="launch-btn launch-btn-logs"
+          onclick="showModuleLogs('${p.name}')">📋 Logs</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function moduleAction(action, name) {
+  logLauncher(`${action === "start" ? "Starting" : "Stopping"} ${name}…`);
+  try {
+    const res = await fetch(`${API_BASE}/api/modules/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    logLauncher(`${name}: ${data.message || data.status || "done"}`);
+    await fetchLauncherStatus();
+  } catch (e) {
+    logLauncher(`Error: ${e.message}`);
+  }
+}
+
+async function startAll() {
+  logLauncher("Starting all modules…");
+  try {
+    const res = await fetch(`${API_BASE}/api/modules/start-all`, { method: "POST" });
+    const data = await res.json();
+    logLauncher(`Start all: ${data.started || 0} started, ${data.failed || 0} failed`);
+    await fetchLauncherStatus();
+  } catch (e) {
+    logLauncher(`Error: ${e.message}`);
+  }
+}
+
+async function stopAll() {
+  logLauncher("Stopping all modules…");
+  try {
+    const res = await fetch(`${API_BASE}/api/modules/stop-all`, { method: "POST" });
+    const data = await res.json();
+    logLauncher(`Stop all: ${data.stopped || 0} stopped`);
+    await fetchLauncherStatus();
+  } catch (e) {
+    logLauncher(`Error: ${e.message}`);
+  }
+}
+
+async function showModuleLogs(name) {
+  try {
+    const res = await fetch(`${API_BASE}/api/modules/processes`);
+    const data = await res.json();
+    const proc = (data.processes || []).find(p => p.name === name);
+    const log = document.getElementById("launcher-log");
+    if (!log) return;
+    if (proc && proc.log_lines && proc.log_lines.length) {
+      log.textContent = `=== ${name} logs ===\n` + proc.log_lines.join("\n");
+    } else {
+      log.textContent = `=== ${name} ===\nNo log output captured yet.`;
+    }
+  } catch (e) {
+    logLauncher(`Could not fetch logs: ${e.message}`);
+  }
+}
+
+async function fetchLauncherStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/api/modules/processes`);
+    if (!res.ok) return;
+    const data = await res.json();
+    launcherProcesses = data.processes || [];
+    renderLauncher(launcherProcesses);
+  } catch {
+    // backend offline — leave grid as-is
+  }
+}
+
+function startLauncherPolling() {
+  if (launcherPolling) return;
+  fetchLauncherStatus();
+  launcherPolling = setInterval(fetchLauncherStatus, POLL_MS);
+}
+
+function stopLauncherPolling() {
+  if (launcherPolling) { clearInterval(launcherPolling); launcherPolling = null; }
 }
 
 // ── Boot ──────────────────────────────────────────────────────

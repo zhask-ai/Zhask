@@ -19,6 +19,8 @@ Subscribes to ALL 12 module Redis streams:
 import importlib.util
 import json
 import os
+import subprocess
+import sys
 import threading
 import time
 from collections import deque
@@ -411,7 +413,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type",  "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin",  "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(body)
@@ -419,9 +421,42 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self) -> None:
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin",  "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
+
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        length = int(self.headers.get("Content-Length", 0))
+        body   = json.loads(self.rfile.read(length) or b"{}") if length else {}
+        name   = body.get("name", "")
+
+        if parsed.path == "/api/modules/start":
+            if not name:
+                self._json(400, {"error": "name required"}); return
+            self._json(200, start_module(name))
+
+        elif parsed.path == "/api/modules/stop":
+            if not name:
+                self._json(400, {"error": "name required"}); return
+            self._json(200, stop_module(name))
+
+        elif parsed.path == "/api/modules/start-all":
+            results = []
+            for cfg in LAUNCH_CONFIGS:
+                results.append(start_module(cfg["name"]))
+            self._json(200, {"results": results})
+
+        elif parsed.path == "/api/modules/stop-all":
+            results = []
+            for cfg in LAUNCH_CONFIGS:
+                s = _proc_status(cfg["name"])
+                if s["status"] == "running":
+                    results.append(stop_module(cfg["name"]))
+            self._json(200, {"results": results})
+
+        else:
+            self._json(404, {"error": "not found"})
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -435,6 +470,10 @@ class Handler(BaseHTTPRequestHandler):
             state = dict(BACKEND_STATE)
 
         path = parsed.path
+
+        # ── Module Processes ────────────────────────────────────
+        if path == "/api/modules/processes":
+            self._json(200, {"modules": all_module_statuses()}); return
 
         # ── Health ──────────────────────────────────────────────
         if path == "/api/health":
@@ -535,6 +574,103 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *_):
         pass
+
+
+# ──────────────────────────────────────────────────────────────
+# Process Manager — start/stop modules via launch.json configs
+# ──────────────────────────────────────────────────────────────
+
+_LAUNCH_JSON = ROOT / ".claude" / "launch.json"
+_PROC_LOCK   = threading.Lock()
+_PROCESSES: dict[str, dict] = {}   # name → {proc, config, started_at, log}
+
+def _load_launch_configs() -> list[dict]:
+    try:
+        with open(_LAUNCH_JSON) as f:
+            data = json.load(f)
+        # Exclude docker/compose entries and Dashboard Backend itself
+        skip = {"POC Full Stack (Docker Compose)", "POC Dev4 Stack (Dashboard + Redis)", "Dashboard Backend"}
+        return [c for c in data.get("configurations", []) if c["name"] not in skip]
+    except Exception:
+        return []
+
+LAUNCH_CONFIGS: list[dict] = _load_launch_configs()
+LAUNCH_MAP: dict[str, dict] = {c["name"]: c for c in LAUNCH_CONFIGS}
+
+def _proc_status(name: str) -> dict:
+    with _PROC_LOCK:
+        entry = _PROCESSES.get(name)
+    if not entry:
+        return {"name": name, "status": "stopped", "pid": None, "port": LAUNCH_MAP.get(name, {}).get("port"), "started_at": None}
+    proc = entry["proc"]
+    rc   = proc.poll()
+    status = "stopped" if rc is not None else "running"
+    return {
+        "name":       name,
+        "status":     status,
+        "pid":        proc.pid if rc is None else None,
+        "port":       entry["config"].get("port"),
+        "started_at": entry["started_at"],
+        "exit_code":  rc,
+        "log":        entry.get("log", [])[-20:],
+    }
+
+def start_module(name: str) -> dict:
+    cfg = LAUNCH_MAP.get(name)
+    if not cfg:
+        return {"error": f"unknown module: {name}"}
+    with _PROC_LOCK:
+        # Kill stale process if present
+        entry = _PROCESSES.get(name)
+        if entry and entry["proc"].poll() is None:
+            return {"error": f"{name} already running", "pid": entry["proc"].pid}
+
+    env = {**os.environ, **(cfg.get("env") or {})}
+    # Resolve PYTHONPATH relative to repo root
+    if "PYTHONPATH" in env:
+        parts = [str(ROOT / p) for p in env["PYTHONPATH"].split(":")]
+        env["PYTHONPATH"] = ":".join(parts)
+
+    cmd = [cfg["runtimeExecutable"]] + cfg.get("runtimeArgs", [])
+    try:
+        log_lines: list[str] = []
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(ROOT),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        # Background thread to capture output
+        def _read_logs():
+            for line in proc.stdout:
+                log_lines.append(line.rstrip())
+                if len(log_lines) > 200:
+                    log_lines.pop(0)
+        threading.Thread(target=_read_logs, daemon=True).start()
+
+        with _PROC_LOCK:
+            _PROCESSES[name] = {"proc": proc, "config": cfg, "started_at": _now_iso(), "log": log_lines}
+        return {"started": name, "pid": proc.pid, "cmd": cmd}
+    except Exception as e:
+        return {"error": str(e)}
+
+def stop_module(name: str) -> dict:
+    with _PROC_LOCK:
+        entry = _PROCESSES.pop(name, None)
+    if not entry:
+        return {"error": f"{name} not running"}
+    proc = entry["proc"]
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    return {"stopped": name, "exit_code": proc.returncode}
+
+def all_module_statuses() -> list[dict]:
+    return [_proc_status(c["name"]) for c in LAUNCH_CONFIGS]
 
 
 # ──────────────────────────────────────────────────────────────
