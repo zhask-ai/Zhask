@@ -4,7 +4,15 @@
    Premium UI with sidebar navigation
    ═══════════════════════════════════════════════════════════ */
 
-const API_BASE = "http://localhost:8787";
+// Auto-detect backend URL: use env config injected at build time,
+// fall back to same-origin /api (nginx proxy in production),
+// or localhost for local dev.
+const API_BASE = (
+  (typeof window.__INTEGRISHIELD_API !== "undefined" && window.__INTEGRISHIELD_API) ||
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://localhost:8787"
+    : window.location.origin + "/api-proxy")
+);
 const POLL_MS  = 2500;
 
 // ── DOM refs ─────────────────────────────────────────────────
