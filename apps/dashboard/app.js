@@ -605,7 +605,7 @@ function renderZeroTrust(){
     return item(cls,
       `<strong>${dec.toUpperCase()}</strong> <span class="panel-subtitle">risk ${e.risk_score||0}</span><span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>`,
       `user:${e.user_id||"—"} · IP:${e.source_ip||"—"}`,
-      `failed:(${(e.failed_controls||[]).join(",")||"none"})`);
+      `failed:(${(()=>{try{const f=e.failed_controls;return(Array.isArray(f)?f:JSON.parse(f||"[]")).join(",")||"none";}catch{return"none";}})()})`);
   }).join("");
 }
 
@@ -689,10 +689,11 @@ function navigateToTab(tabName) {
   // Scroll main content to top
   document.querySelector(".main-content")?.scrollTo({ top: 0, behavior: "smooth" });
 
-  // Hide overview sections when on launcher tab; hide module-health on all non-overview tabs
-  const onLauncher = tabName === "launcher";
+  // Overview sections (stat cards, charts, module health) only show on the main alerts tab
+  const overviewTabs = new Set(["alerts"]);
+  const hideOverview = !overviewTabs.has(tabName);
   document.querySelectorAll("#stat-cards, .chart-row, .module-health-section")
-    .forEach(el => el.classList.toggle("hidden", onLauncher));
+    .forEach(el => el.classList.toggle("hidden", hideOverview));
 
   if (tabName === "launcher") {
     startLauncherPolling();

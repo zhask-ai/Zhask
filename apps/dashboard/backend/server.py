@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[3]
 RULES_ENGINE_PATH = ROOT / "modules" / "m12-rules-engine" / "service.py"
 
 REDIS_URL       = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-REDIS_START_ID  = os.getenv("REDIS_START_ID", "$")
+REDIS_START_ID  = os.getenv("REDIS_START_ID", "0")
 DATABASE_URL    = os.getenv("DATABASE_URL", "")
 SERVER_PORT     = int(os.getenv("PORT", "8787"))
 
@@ -426,6 +426,14 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self) -> None:
+        try:
+            self._do_POST_inner()
+        except Exception as exc:
+            import traceback; traceback.print_exc()
+            try: self._json(500, {"error": str(exc)})
+            except Exception: pass
+
+    def _do_POST_inner(self) -> None:
         parsed = urlparse(self.path)
         length = int(self.headers.get("Content-Length", 0))
         body   = json.loads(self.rfile.read(length) or b"{}") if length else {}
@@ -459,6 +467,14 @@ class Handler(BaseHTTPRequestHandler):
             self._json(404, {"error": "not found"})
 
     def do_GET(self) -> None:
+        try:
+            self._do_GET_inner()
+        except Exception as exc:
+            import traceback; traceback.print_exc()
+            try: self._json(500, {"error": str(exc)})
+            except Exception: pass
+
+    def _do_GET_inner(self) -> None:
         parsed = urlparse(self.path)
         params = parse_qs(parsed.query)
         try:
@@ -547,26 +563,35 @@ class Handler(BaseHTTPRequestHandler):
         # ── Aggregate stats ─────────────────────────────────────
         if path == "/api/stats":
             with LOCK:
-                all_alerts = list(ALERTS)
-            critical   = sum(1 for a in all_alerts if a.get("severity") == "critical")
-            latencies  = [a["latencyMs"] for a in all_alerts if "latencyMs" in a]
-            avg_lat    = round(sum(latencies) / len(latencies), 1) if latencies else 0
-            with LOCK:
-                counts = dict(BACKEND_STATE["counts"])
+                all_alerts  = list(ALERTS)
+                n_anomalies = len(ANOMALIES)
+                n_sap       = len(SAP_EVENTS)
+                n_zt        = len(ZERO_TRUST)
+                n_cred      = len(CREDENTIALS)
+                n_comp      = len(COMPLIANCE)
+                n_dlp       = len(DLP_ALERTS)
+                n_inc       = len(INCIDENTS)
+                n_shadow    = len(SHADOW)
+                n_sbom      = len(SBOM_SCANS)
+                n_cloud     = len(CLOUD)
+                counts      = dict(BACKEND_STATE["counts"])
+            critical  = sum(1 for a in all_alerts if a.get("severity") == "critical")
+            latencies = [int(a["latencyMs"]) for a in all_alerts if "latencyMs" in a]
+            avg_lat   = round(sum(latencies) / len(latencies), 1) if latencies else 0
             self._json(200, {
-                "total_alerts":       len(list(ALERTS)),
+                "total_alerts":       len(all_alerts),
                 "critical_alerts":    critical,
                 "avg_latency_ms":     avg_lat,
-                "anomalies_count":    len(list(ANOMALIES)),
-                "sap_events_count":   len(list(SAP_EVENTS)),
-                "zero_trust_evals":   len(list(ZERO_TRUST)),
-                "credential_events":  len(list(CREDENTIALS)),
-                "compliance_findings":len(list(COMPLIANCE)),
-                "dlp_violations":     len(list(DLP_ALERTS)),
-                "incident_count":     len(list(INCIDENTS)),
-                "shadow_detections":  len(list(SHADOW)),
-                "sbom_scans":         len(list(SBOM_SCANS)),
-                "cloud_findings":     len(list(CLOUD)),
+                "anomalies_count":    n_anomalies,
+                "sap_events_count":   n_sap,
+                "zero_trust_evals":   n_zt,
+                "credential_events":  n_cred,
+                "compliance_findings":n_comp,
+                "dlp_violations":     n_dlp,
+                "incident_count":     n_inc,
+                "shadow_detections":  n_shadow,
+                "sbom_scans":         n_sbom,
+                "cloud_findings":     n_cloud,
                 "stream_counts":      counts,
             }); return
 
