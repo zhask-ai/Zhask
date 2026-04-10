@@ -115,12 +115,28 @@ const ui = {
   sidebar:          document.getElementById("sidebar"),
   sidebarToggle:    document.getElementById("sidebar-toggle"),
   sidebarOverlay:   document.getElementById("sidebar-overlay"),
+  kpiBlocked:    document.getElementById("kpi-blocked"),
+  kpiSaved:      document.getElementById("kpi-saved"),
+  kpiCompliance: document.getElementById("kpi-compliance"),
+  kpiMttd:       document.getElementById("kpi-mttd"),
+  scenarioBanner:document.getElementById("scenario-banner"),
+  scenarioBadge: document.getElementById("scenario-badge"),
+  scenarioName:  document.getElementById("scenario-name"),
+  scenarioPhase: document.getElementById("scenario-phase-text"),
+  scenarioProgress:document.getElementById("scenario-progress-fill"),
+  scenarioIp:    document.getElementById("scenario-attacker-ip"),
+  scenarioUser:  document.getElementById("scenario-attacker-user"),
+  riskLabel:     document.getElementById("risk-label"),
+  compScorecard: document.getElementById("compliance-scorecard"),
+  playbookTracker:document.getElementById("active-playbook-tracker"),
 };
 
 // ── State ────────────────────────────────────────────────────
 let alerts=[], auditRows=[], anomalies=[], sapEvents=[], compEvents=[],
     dlpEvents=[], incEvents=[], shadowEvents=[], sbomEvents=[],
     ztEvents=[], credEvents=[], cloudEvents=[], prevAlertCount=0;
+let _kpiBlocked = 2847, _kpiSaved = 4200000, _kpiMttdMs = 3200;
+const _frameworkScores = { "SOX": 94, "GDPR": 87, "PCI-DSS": 91, "NIST-CSF": 96, "ISO27001": 89, "HIPAA": 93 };
 
 // ── Animated counter ─────────────────────────────────────────
 const counterCache = new Map();
@@ -144,7 +160,7 @@ function animateValue(el, newVal) {
 }
 
 // ── Charts ───────────────────────────────────────────────────
-let alertChart=null, severityChart=null, rulesChart=null;
+let alertChart=null, severityChart=null, rulesChart=null, riskGaugeChart=null;
 const alertTimeline=[];
 
 function initCharts() {
@@ -256,6 +272,27 @@ function initCharts() {
     },
   });
 
+  // Risk gauge (doughnut styled as gauge)
+  riskGaugeChart = new Chart(document.getElementById("risk-gauge-chart").getContext("2d"), {
+    type: "doughnut",
+    data: {
+      datasets: [{
+        data: [0, 100],
+        backgroundColor: ["#2ed573", "rgba(40,58,90,0.3)"],
+        borderWidth: 0,
+        circumference: 180,
+        rotation: 270,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "75%",
+      animation: { duration: 800, easing: "easeOutQuart" },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    },
+  });
+
   // Rules donut
   rulesChart = new Chart(document.getElementById("rules-chart").getContext("2d"), {
     type: "doughnut",
@@ -305,6 +342,207 @@ async function get(path) {
   const r = await fetch(`${API_BASE}${path}`);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
+}
+
+// ── Executive KPIs ────────────────────────────────────────────────────────────
+function updateExecKPIs() {
+  if(ui.kpiBlocked){
+    _kpiBlocked += Math.floor(Math.random()*3)+1;
+    animateValue(ui.kpiBlocked, _kpiBlocked);
+  }
+  if(ui.kpiSaved){
+    const saved = Math.round(_kpiBlocked * 1558); // avg cost per prevented breach event
+    ui.kpiSaved.textContent = saved >= 1e6 ? `$${(saved/1e6).toFixed(1)}M` : `$${(saved/1e3).toFixed(0)}K`;
+  }
+  if(ui.kpiCompliance){
+    const scores = Object.values(_frameworkScores);
+    const avg = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+    ui.kpiCompliance.textContent = `${avg}%`;
+  }
+  if(ui.kpiMttd){
+    const v = (_kpiMttdMs/1000).toFixed(1);
+    ui.kpiMttd.textContent = `${v}s`;
+  }
+}
+
+// ── Scenario Banner ───────────────────────────────────────────────────────────
+function renderScenarioBanner() {
+  if(!ui.scenarioBanner) return;
+  const sc = SCENARIOS[demoMode.currentScenario % SCENARIOS.length];
+  const phaseIdx = Math.floor(demoMode.scenarioTick / 1) % sc.phases.length;
+  const phase = sc.phases[phaseIdx];
+  const progress = Math.round(((demoMode.scenarioTick % sc.phases.length) / sc.phases.length) * 100);
+  const ctx = demoMode.ctx;
+
+  ui.scenarioBanner.classList.remove("hidden");
+  ui.scenarioBadge.textContent = phase.label.includes("Normal") || phase.label.includes("Resolved") || phase.label.includes("Recovery") || phase.label.includes("Containment") ? "MONITORING" : "ACTIVE THREAT";
+  ui.scenarioBadge.className = "scenario-badge " + (ui.scenarioBadge.textContent === "ACTIVE THREAT" ? "badge-threat" : "badge-monitoring");
+  ui.scenarioName.textContent = `${sc.name} · ${phase.label}`;
+  ui.scenarioPhase.textContent = `${phaseIdx+1}/${sc.phases.length}`;
+  if(ui.scenarioProgress) ui.scenarioProgress.style.width = `${progress}%`;
+  if(ctx){
+    if(ui.scenarioIp) ui.scenarioIp.textContent = ctx.ip||"—";
+    if(ui.scenarioUser) ui.scenarioUser.textContent = ctx.user||"—";
+  }
+}
+
+// ── Risk Gauge ────────────────────────────────────────────────────────────────
+function updateRiskGauge() {
+  if(!riskGaugeChart) return;
+  const critCount = alerts.filter(a=>a.severity==="critical").length;
+  const maxAnomScore = anomalies.length ? Math.max(...anomalies.map(a=>parseFloat(a.anomaly_score||0))) : 0;
+  const rawRisk = Math.min(100, Math.round((critCount / Math.max(alerts.length,1)) * 60 + maxAnomScore * 40));
+
+  const colors = rawRisk>75 ? ["#ff4757","rgba(255,71,87,0.15)"] : rawRisk>50 ? ["#ff8b3d","rgba(255,139,61,0.15)"] : rawRisk>25 ? ["#ffa502","rgba(255,165,2,0.15)"] : ["#2ed573","rgba(46,213,115,0.15)"];
+  const label = rawRisk>75 ? "CRITICAL" : rawRisk>50 ? "HIGH" : rawRisk>25 ? "MEDIUM" : "LOW";
+  riskGaugeChart.data.datasets[0].data = [rawRisk, 100-rawRisk];
+  riskGaugeChart.data.datasets[0].backgroundColor = colors;
+  riskGaugeChart.update("none");
+  if(ui.riskLabel){ ui.riskLabel.textContent = `${label} · ${rawRisk}%`; ui.riskLabel.style.color = colors[0]; }
+}
+
+// ── Compliance Scorecard ──────────────────────────────────────────────────────
+function renderComplianceScorecard() {
+  if(!ui.compScorecard) return;
+  const fws = Object.entries(_frameworkScores);
+  ui.compScorecard.innerHTML = fws.map(([fw, score])=>{
+    const viol = compEvents.filter(e=>e.framework===fw && (e.result||"").toLowerCase()==="violation").length;
+    const adj = Math.max(60, score - viol*3);
+    const color = adj>90?"#2ed573":adj>80?"#5b8def":adj>70?"#ffa502":"#ff4757";
+    return `<div class="scorecard-row">
+      <span class="scorecard-fw">${fw}</span>
+      <div class="scorecard-bar-track">
+        <div class="scorecard-bar-fill" style="width:${adj}%;background:${color}"></div>
+      </div>
+      <span class="scorecard-score" style="color:${color}">${adj}%</span>
+      ${viol>0?`<span class="scorecard-viol">${viol} violation${viol>1?"s":""}</span>`:"<span class='scorecard-ok'>✓ Clean</span>"}
+    </div>`;
+  }).join("");
+}
+
+// ── Playbook Tracker ──────────────────────────────────────────────────────────
+const PLAYBOOK_STEPS = {
+  "PB-DATA-EXFIL":    ["Isolate session","Block source IP","Revoke credentials","Notify DLP team","Preserve forensics","Regulatory review"],
+  "PB-PRIV-ESC":      ["Terminate session","Reset privileges","Audit auth changes","Notify security","Review MFA status","Post-incident report"],
+  "PB-SHADOW-API":    ["Block RFC endpoint","Alert SAP admin","Scan for variants","Update firewall","Document findings","Patch validation"],
+  "PB-CLOUD-BREACH":  ["Revoke cloud keys","Remediate misconfiguration","Enable CloudTrail","Notify CISO","Scan all IAM roles","Compliance review"],
+  "PB-ACCOUNT-TAKEOVER":["Lock account","Force password reset","Review audit trail","Notify user","Check for lateral movement","Enable enhanced monitoring"],
+};
+function renderPlaybookTracker() {
+  if(!ui.playbookTracker) return;
+  const activeInc = incEvents.find(e=>["open","investigating"].includes((e.status||"").toLowerCase()) && e.playbook_id && PLAYBOOK_STEPS[e.playbook_id]);
+  if(!activeInc){ ui.playbookTracker.classList.add("hidden"); return; }
+  ui.playbookTracker.classList.remove("hidden");
+  const steps = PLAYBOOK_STEPS[activeInc.playbook_id] || [];
+  const completedSteps = activeInc.status==="resolved"||activeInc.status==="closed" ? steps.length : Math.min(steps.length, Math.floor(demoMode.tick/2) % (steps.length+1));
+  ui.playbookTracker.innerHTML = `
+    <div class="playbook-header">
+      <span class="playbook-badge">🎯 Playbook Running</span>
+      <strong>${activeInc.playbook_id}</strong>
+      <span class="playbook-inc">→ ${activeInc.incident_id||"INC-?"}: ${activeInc.title||"Incident"}</span>
+    </div>
+    <div class="playbook-steps">
+      ${steps.map((s,i)=>`<div class="playbook-step ${i<completedSteps?"step-done":i===completedSteps?"step-active":"step-pending"}">
+        <span class="step-icon">${i<completedSteps?"✓":i===completedSteps?"▶":"○"}</span>
+        <span class="step-label">${s}</span>
+      </div>`).join("")}
+    </div>
+  `;
+}
+
+// ── Alert Detail Drawer ───────────────────────────────────────────────────────
+let _detailOpen = false;
+function showAlertDetail(alert) {
+  const overlay = document.getElementById("detail-overlay");
+  const body = document.getElementById("drawer-body");
+  const actions = document.getElementById("drawer-actions");
+  const badge = document.getElementById("drawer-badge");
+  const title = document.getElementById("drawer-title");
+  if(!overlay||!body) return;
+
+  const sev = (alert.severity||"medium").toLowerCase();
+  badge.textContent = sev.toUpperCase();
+  badge.className = `drawer-badge sev-badge-${sev}`;
+  title.textContent = alert.message || "Security Alert";
+
+  // Find correlated events
+  const corrAlerts = alerts.filter(a=>a.source_ip===alert.source_ip && a!==alert).slice(0,3);
+  const corrAnom = anomalies.filter(a=>a.source_ip===alert.source_ip||a.user_id===alert.user_id).slice(0,2);
+  const corrDlp = dlpEvents.filter(e=>e.user_id===alert.user_id).slice(0,2);
+  const corrZT = ztEvents.filter(e=>e.source_ip===alert.source_ip||e.user_id===alert.user_id).slice(0,2);
+
+  body.innerHTML = `
+    <div class="drawer-section">
+      <div class="drawer-field-grid">
+        <div class="drawer-field"><label>Timestamp</label><span>${new Date(alert.ts).toLocaleString()}</span></div>
+        <div class="drawer-field"><label>Severity</label><span class="sev-badge sev-badge-${sev}">${sev.toUpperCase()}</span></div>
+        <div class="drawer-field"><label>Scenario</label><span>${scl(alert.scenario)}</span></div>
+        <div class="drawer-field"><label>Source IP</label><code>${alert.source_ip||"—"}</code></div>
+        <div class="drawer-field"><label>User</label><code>${alert.user_id||"—"}</code></div>
+        <div class="drawer-field"><label>Latency</label><span>${ms(alert.latencyMs)}</span></div>
+      </div>
+    </div>
+    <div class="drawer-section">
+      <div class="drawer-section-title">🧠 AI Analysis</div>
+      <div class="drawer-ai-box">
+        ${_aiExplain(alert)}
+      </div>
+    </div>
+    ${corrAlerts.length||corrAnom.length ? `
+    <div class="drawer-section">
+      <div class="drawer-section-title">🔗 Correlated Events (${corrAlerts.length+corrAnom.length+corrDlp.length+corrZT.length})</div>
+      ${corrAlerts.map(a=>`<div class="corr-event corr-alert">⚠️ ALERT: ${a.message||a.scenario} — ${ts(a.ts)}</div>`).join("")}
+      ${corrAnom.map(a=>`<div class="corr-event corr-anomaly">🧠 ANOMALY: score ${a.anomaly_score} · ${a.classification} — ${ts(a.ts)}</div>`).join("")}
+      ${corrDlp.map(e=>`<div class="corr-event corr-dlp">🔒 DLP: ${e.rule} · ${byt(e.bytes_out)} — ${ts(e.ts)}</div>`).join("")}
+      ${corrZT.map(e=>`<div class="corr-event corr-zt">🔐 ZT: ${e.decision?.toUpperCase()} · risk ${e.risk_score} — ${ts(e.ts)}</div>`).join("")}
+    </div>` : ""}
+  `;
+
+  actions.innerHTML = `
+    <button class="action-btn action-block" onclick="demoAction('block_ip','${alert.source_ip}')">🚫 Block IP ${alert.source_ip||""}</button>
+    <button class="action-btn action-revoke" onclick="demoAction('revoke_user','${alert.user_id}')">🔑 Revoke ${alert.user_id||"User"}</button>
+    <button class="action-btn action-incident" onclick="demoAction('create_incident','${alert.scenario}')">🚨 Create Incident</button>
+    <button class="action-btn action-export" onclick="demoAction('export','')">📄 Export Report</button>
+  `;
+
+  overlay.classList.remove("hidden");
+  _detailOpen = true;
+}
+
+function closeDetailDrawer(e) {
+  if(e && e.target !== document.getElementById("detail-overlay")) return;
+  document.getElementById("detail-overlay")?.classList.add("hidden");
+  _detailOpen = false;
+}
+
+function demoAction(action, param) {
+  const msgs = {
+    block_ip: `🚫 IP ${param} blocked at perimeter firewall — rule applied across all zones`,
+    revoke_user: `🔑 All credentials for ${param} revoked — re-authentication required`,
+    create_incident: `🚨 Incident INC-${_demoIncID+1} created — playbook PB-${(param||"GENERIC").toUpperCase().replace(/_/g,"-")} triggered`,
+    export: `📄 Incident report exported — PDF sent to SOC team & CISO`,
+  };
+  showToast(msgs[action]||"Action executed", "success", 4000);
+  closeDetailDrawer();
+}
+
+function _aiExplain(alert) {
+  const sev = alert.severity||"medium";
+  const sc = alert.scenario||"";
+  if(sc.includes("bulk_extraction")) return `<strong>High-confidence data exfiltration detected.</strong> User <code>${alert.user_id}</code> invoked RFC_READ_TABLE at anomalous velocity (${_int(50,200)}K rows). Isolation Forest anomaly score: <strong>0.94</strong>. Cross-referenced with 3 prior off-hours sessions from same IP. <strong>Recommended: immediate credential revocation + forensic capture.</strong>`;
+  if(sc.includes("privilege_escalation")) return `<strong>Unauthorized privilege escalation pathway identified.</strong> SUSR_USER_AUTH_FOR_OBJ_GET called outside change window. Zero-Trust fabric denied request (risk score: 0.97). SOX AC-2 and NIST IA-2 controls violated. <strong>Recommended: terminate session, audit all recent auth changes.</strong>`;
+  if(sc.includes("shadow_endpoint")) return `<strong>Unknown RFC endpoint invoked from external IP.</strong> Function <code>${alert.message&&alert.message.match(/SHADOW ENDPOINT: (\S+)/)?alert.message.match(/SHADOW ENDPOINT: (\S+)/)[1]:"ZRFC_UNKNOWN"}</code> has no registered business owner. External origin suggests supply chain or insider threat vector. <strong>Recommended: block endpoint, full SAP system scan.</strong>`;
+  if(sc.includes("credential_abuse")) return `<strong>Credential used concurrently from multiple geolocations.</strong> Simultaneous sessions detected from ${_int(3,8)} distinct IPs — indicative of credential sharing or compromise. <strong>Recommended: force re-auth with MFA, review recent access logs.</strong>`;
+  if(sc.includes("geo_anomaly")) return `<strong>Access from high-risk geolocation.</strong> IP block ${alert.source_ip} maps to region outside corporate policy. No prior sessions from this location. Zero-Trust score: 0.68. <strong>Recommended: challenge with MFA, geo-block if unapproved.</strong>`;
+  return `<strong>Anomalous activity pattern detected.</strong> Behaviour deviation from user baseline exceeds threshold (score: ${(Math.random()*0.4+0.55).toFixed(2)}). Correlated with ${_int(2,5)} recent events from same source. <strong>Recommended: investigate and monitor for escalation.</strong>`;
+}
+
+function _alertClick(idx) {
+  const sc=ui.scenarioFilter.value, sv=ui.severityFilter.value;
+  let v=alerts;
+  if(sc!=="all") v=v.filter(a=>a.scenario===sc);
+  if(sv!=="all") v=v.filter(a=>a.severity===sv);
+  if(v[idx]) showAlertDetail(v[idx]);
 }
 
 // ── Main sync ────────────────────────────────────────────────
@@ -707,6 +945,9 @@ function _demoTick(){
   if(ui.moduleGrid) renderModuleGrid(modStatus);
 
   renderActiveTab();
+  updateExecKPIs();
+  renderScenarioBanner();
+  updateRiskGauge();
 }
 
 function startDemoMode(){
@@ -776,11 +1017,13 @@ function renderAlerts(){
   if(sc!=="all") v=v.filter(a=>a.scenario===sc);
   if(sv!=="all") v=v.filter(a=>a.severity===sv);
   setEmpty(ui.alertsList,ui.alertsEmpty,v);
-  ui.alertsList.innerHTML=v.map(a=>{
+  ui.alertsList.innerHTML=v.map((a,i)=>{
     const sev=(a.severity||"low").toLowerCase();
-    return item(`sev-${sev}`,
-      `<strong>${sev.toUpperCase()}</strong> <span class="panel-subtitle">${scl(a.scenario)}</span><span class="panel-subtitle" style="margin-left:auto">${ts(a.ts)}</span>`,
-      a.message||"—",`IP:${a.source_ip||"—"} · user:${a.user_id||"—"} · ${ms(a.latencyMs)}`);
+    return `<li class="alert-item sev-${sev} clickable-item" onclick="_alertClick(${i})">
+      <div class="alert-item-row"><strong>${sev.toUpperCase()}</strong> <span class="panel-subtitle">${scl(a.scenario)}</span><span class="panel-subtitle" style="margin-left:auto">${ts(a.ts)}</span></div>
+      <div class="alert-item-meta">${a.message||"—"}</div>
+      <div class="alert-item-meta">IP:${a.source_ip||"—"} · user:${a.user_id||"—"} · ${ms(a.latencyMs)} <span class="item-detail-hint">→ click for detail</span></div>
+    </li>`;
   }).join("");
 }
 
@@ -866,6 +1109,7 @@ function renderCompliance(){
       `${e.framework||"—"} · ${e.description||e.message||"—"}`,
       `evidence:${e.evidence_ref||"—"} · actor:${e.actor||"—"}`);
   }).join("");
+  renderComplianceScorecard();
 }
 
 // ── Incidents M10 ───────────────────────────────────────────
@@ -886,6 +1130,7 @@ function renderIncidents(){
       `status:${st} · severity:${e.severity||"—"}`,
       `playbook:${e.playbook_id||"none"} · source:${e.source_module||"—"}`);
   }).join("");
+  renderPlaybookTracker();
 }
 
 // ── SBOM M13 ────────────────────────────────────────────────
