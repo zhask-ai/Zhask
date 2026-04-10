@@ -7,6 +7,102 @@
     <title>IntegriShield SOC — Security Operations Center</title>
     <link rel="stylesheet" href="./styles.css?v=4" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.88em' font-size='85'>◆</text></svg>" />
+    <style>
+      /* ── Scenario Banner ── */
+      .scenario-banner{display:flex;align-items:center;gap:1.5rem;padding:0.6rem 1.25rem;background:linear-gradient(90deg,rgba(255,71,87,0.12),rgba(91,141,239,0.08));border:1px solid rgba(255,71,87,0.3);border-radius:8px;margin-bottom:0.75rem;flex-wrap:wrap}
+      .scenario-live-dot{width:8px;height:8px;border-radius:50%;background:#ff4757;animation:pulse-dot 1.2s infinite;flex-shrink:0}
+      @keyframes pulse-dot{0%,100%{box-shadow:0 0 0 0 rgba(255,71,87,0.7)}70%{box-shadow:0 0 0 6px rgba(255,71,87,0)}}
+      .scenario-badge{font-size:0.65rem;font-weight:700;letter-spacing:0.08em;padding:2px 8px;border-radius:4px}
+      .badge-threat{background:rgba(255,71,87,0.25);color:#ff4757}
+      .badge-monitoring{background:rgba(46,213,115,0.2);color:#2ed573}
+      .scenario-name{font-weight:600;color:var(--text-hi);font-size:0.85rem}
+      .scenario-banner-center{display:flex;align-items:center;gap:0.75rem;flex:1;min-width:200px}
+      .scenario-phase-label{font-size:0.7rem;color:var(--text-dim)}
+      .scenario-phase-text{font-size:0.75rem;font-weight:600;color:var(--accent)}
+      .scenario-progress-track{flex:1;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden}
+      .scenario-progress-fill{height:100%;background:linear-gradient(90deg,#5b8def,#ff4757);border-radius:2px;transition:width 0.5s ease}
+      .scenario-banner-right{display:flex;align-items:center;gap:0.5rem;font-size:0.75rem}
+      .scenario-meta{color:var(--text-dim)}
+      .scenario-attacker-ip,.scenario-attacker-user{background:rgba(255,255,255,0.06);padding:1px 6px;border-radius:3px;font-size:0.72rem;color:#ff8b3d}
+
+      /* ── Executive KPIs ── */
+      .exec-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1rem}
+      @media(max-width:900px){.exec-kpi-row{grid-template-columns:repeat(2,1fr)}}
+      @media(max-width:500px){.exec-kpi-row{grid-template-columns:1fr}}
+      .exec-kpi-card{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;position:relative;overflow:hidden}
+      .exec-kpi-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px}
+      .exec-kpi-blocked::before{background:linear-gradient(90deg,#ff4757,#ff8b3d)}
+      .exec-kpi-money::before{background:linear-gradient(90deg,#2ed573,#5b8def)}
+      .exec-kpi-score::before{background:linear-gradient(90deg,#5b8def,#a17fe0)}
+      .exec-kpi-mttd::before{background:linear-gradient(90deg,#ffa502,#ff8b3d)}
+      .exec-kpi-value{font-size:2rem;font-weight:800;color:var(--text-hi);line-height:1;margin-bottom:0.25rem;font-variant-numeric:tabular-nums}
+      .exec-kpi-label{font-size:0.75rem;font-weight:600;color:var(--text-mid);text-transform:uppercase;letter-spacing:0.05em}
+      .exec-kpi-sub{font-size:0.68rem;color:var(--text-dim);margin-top:0.25rem}
+
+      /* ── Compliance Scorecard ── */
+      .compliance-scorecard{margin:0.5rem 0 1rem;display:flex;flex-direction:column;gap:0.4rem}
+      .scorecard-row{display:flex;align-items:center;gap:0.75rem;font-size:0.8rem}
+      .scorecard-fw{width:70px;font-weight:600;color:var(--text-mid);flex-shrink:0}
+      .scorecard-bar-track{flex:1;height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden}
+      .scorecard-bar-fill{height:100%;border-radius:3px;transition:width 0.8s ease}
+      .scorecard-score{width:36px;font-weight:700;text-align:right;flex-shrink:0}
+      .scorecard-viol{font-size:0.68rem;color:#ff4757;background:rgba(255,71,87,0.12);padding:1px 6px;border-radius:3px}
+      .scorecard-ok{font-size:0.68rem;color:#2ed573}
+
+      /* ── Playbook Tracker ── */
+      .playbook-tracker{background:rgba(91,141,239,0.07);border:1px solid rgba(91,141,239,0.2);border-radius:8px;padding:1rem;margin-bottom:1rem}
+      .playbook-header{display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;flex-wrap:wrap}
+      .playbook-badge{font-size:0.68rem;font-weight:700;background:rgba(91,141,239,0.2);color:#5b8def;padding:2px 8px;border-radius:4px}
+      .playbook-inc{font-size:0.75rem;color:var(--text-dim)}
+      .playbook-steps{display:flex;gap:0.5rem;flex-wrap:wrap}
+      .playbook-step{display:flex;align-items:center;gap:0.35rem;font-size:0.72rem;padding:3px 10px;border-radius:4px;border:1px solid transparent}
+      .step-done{background:rgba(46,213,115,0.12);border-color:rgba(46,213,115,0.3);color:#2ed573}
+      .step-active{background:rgba(255,165,2,0.15);border-color:rgba(255,165,2,0.4);color:#ffa502;animation:pulse-bg 1.5s infinite}
+      @keyframes pulse-bg{0%,100%{opacity:1}50%{opacity:0.7}}
+      .step-pending{background:rgba(255,255,255,0.03);border-color:rgba(255,255,255,0.08);color:var(--text-dim)}
+      .step-icon{font-size:0.7rem;font-weight:700}
+
+      /* ── Alert Detail Drawer ── */
+      .detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;display:flex;justify-content:flex-end;backdrop-filter:blur(4px)}
+      .detail-drawer{width:min(520px,95vw);height:100%;background:var(--card-bg);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;animation:slideIn 0.25s ease}
+      @keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+      .drawer-header{padding:1.25rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start}
+      .drawer-title{font-size:0.95rem;font-weight:700;color:var(--text-hi);margin:0.25rem 0 0}
+      .drawer-close{background:none;border:none;color:var(--text-dim);font-size:1.2rem;cursor:pointer;padding:0.25rem 0.5rem;border-radius:4px;line-height:1}
+      .drawer-close:hover{background:rgba(255,255,255,0.07);color:var(--text-hi)}
+      .drawer-body{flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1rem}
+      .drawer-section-title{font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.5rem}
+      .drawer-field-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
+      .drawer-field{display:flex;flex-direction:column;gap:0.15rem}
+      .drawer-field label{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase}
+      .drawer-field span,.drawer-field code{font-size:0.8rem;color:var(--text-hi)}
+      .drawer-field code{background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:3px}
+      .drawer-ai-box{background:rgba(91,141,239,0.07);border:1px solid rgba(91,141,239,0.2);border-radius:6px;padding:0.75rem;font-size:0.8rem;color:var(--text-mid);line-height:1.6}
+      .drawer-ai-box strong{color:var(--text-hi)}
+      .drawer-ai-box code{background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:3px;font-size:0.75rem}
+      .corr-event{font-size:0.75rem;padding:4px 8px;border-radius:4px;margin-bottom:3px}
+      .corr-alert{background:rgba(255,71,87,0.08);color:#ff8b8b}
+      .corr-anomaly{background:rgba(161,127,224,0.1);color:#c4a5f5}
+      .corr-dlp{background:rgba(0,210,211,0.08);color:#67e8f9}
+      .corr-zt{background:rgba(91,141,239,0.1);color:#93bbff}
+      .drawer-actions{padding:1rem 1.25rem;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:0.5rem}
+      .action-btn{flex:1;min-width:120px;padding:0.55rem 0.75rem;border:none;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;transition:opacity 0.15s}
+      .action-btn:hover{opacity:0.85}
+      .action-block{background:rgba(255,71,87,0.2);color:#ff4757;border:1px solid rgba(255,71,87,0.3)}
+      .action-revoke{background:rgba(255,165,2,0.2);color:#ffa502;border:1px solid rgba(255,165,2,0.3)}
+      .action-incident{background:rgba(91,141,239,0.2);color:#5b8def;border:1px solid rgba(91,141,239,0.3)}
+      .action-export{background:rgba(46,213,115,0.15);color:#2ed573;border:1px solid rgba(46,213,115,0.25)}
+      .sev-badge{font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:3px}
+      .sev-badge-critical{background:rgba(255,71,87,0.2);color:#ff4757}
+      .sev-badge-high{background:rgba(255,139,61,0.2);color:#ff8b3d}
+      .sev-badge-medium{background:rgba(255,165,2,0.2);color:#ffa502}
+      .sev-badge-low{background:rgba(46,213,115,0.15);color:#2ed573}
+
+      /* ── Clickable items ── */
+      .clickable-item{cursor:pointer;transition:background 0.15s}
+      .clickable-item:hover{background:rgba(91,141,239,0.08)!important}
+      .item-detail-hint{font-size:0.68rem;color:var(--text-dim);font-style:italic;margin-left:0.5rem}
+    </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <!-- Backend API URL — overridden by GitHub Actions deploy for production -->
     <script src="./config.js" onerror="window.__INTEGRISHIELD_API=null"></script>
@@ -139,6 +235,52 @@
       <!-- ══════════════════ MAIN CONTENT ══════════════════ -->
       <main class="main-content">
 
+        <!-- ══════════════ SCENARIO BANNER ══════════════ -->
+        <div id="scenario-banner" class="scenario-banner hidden">
+          <div class="scenario-banner-left">
+            <span class="scenario-live-dot"></span>
+            <span class="scenario-badge" id="scenario-badge">ACTIVE THREAT</span>
+            <span class="scenario-name" id="scenario-name">—</span>
+          </div>
+          <div class="scenario-banner-center">
+            <span class="scenario-phase-label">Phase:</span>
+            <span class="scenario-phase-text" id="scenario-phase-text">—</span>
+            <div class="scenario-progress-track">
+              <div class="scenario-progress-fill" id="scenario-progress-fill" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="scenario-banner-right">
+            <span class="scenario-meta" id="scenario-attacker-label">Attacker:</span>
+            <code class="scenario-attacker-ip" id="scenario-attacker-ip">—</code>
+            <span class="scenario-meta">User:</span>
+            <code class="scenario-attacker-user" id="scenario-attacker-user">—</code>
+          </div>
+        </div>
+
+        <!-- ══════════════ EXECUTIVE KPIs ══════════════ -->
+        <section id="exec-kpis" class="exec-kpi-row">
+          <div class="exec-kpi-card exec-kpi-blocked">
+            <div class="exec-kpi-value" id="kpi-blocked">0</div>
+            <div class="exec-kpi-label">Threats Blocked</div>
+            <div class="exec-kpi-sub">↑ 12% vs last week</div>
+          </div>
+          <div class="exec-kpi-card exec-kpi-money">
+            <div class="exec-kpi-value" id="kpi-saved">$0</div>
+            <div class="exec-kpi-label">Breach Cost Averted</div>
+            <div class="exec-kpi-sub">avg $4.45M per breach</div>
+          </div>
+          <div class="exec-kpi-card exec-kpi-score">
+            <div class="exec-kpi-value" id="kpi-compliance">0%</div>
+            <div class="exec-kpi-label">Compliance Score</div>
+            <div class="exec-kpi-sub">SOX · GDPR · PCI-DSS · NIST</div>
+          </div>
+          <div class="exec-kpi-card exec-kpi-mttd">
+            <div class="exec-kpi-value" id="kpi-mttd">—</div>
+            <div class="exec-kpi-label">Mean Time to Detect</div>
+            <div class="exec-kpi-sub">industry avg: 204 days</div>
+          </div>
+        </section>
+
         <!-- ══════════════════ STAT CARDS ══════════════════ -->
         <section class="cards" id="stat-cards">
           <article class="card card-critical">
@@ -219,6 +361,13 @@
           <div class="chart-panel">
             <div class="panel-title-row"><h2>Rules Breakdown</h2></div>
             <div class="chart-wrap chart-donut-wrap"><canvas id="rules-chart"></canvas></div>
+          </div>
+          <div class="chart-panel">
+            <div class="panel-title-row"><h2>Threat Risk Level</h2></div>
+            <div class="chart-wrap chart-donut-wrap"><canvas id="risk-gauge-chart"></canvas></div>
+            <div style="text-align:center;margin-top:-0.5rem">
+              <span class="risk-label" id="risk-label" style="font-size:1.1rem;font-weight:700;color:var(--text-dim)">—</span>
+            </div>
           </div>
         </section>
 
@@ -430,6 +579,7 @@
             <div class="mini-stat mini-stat-ok"><span id="comp-passed">0</span><label>Passed</label></div>
             <div class="mini-stat mini-stat-info"><span id="comp-frameworks">0</span><label>Frameworks</label></div>
           </div>
+          <div class="compliance-scorecard" id="compliance-scorecard"></div>
           <ul id="compliance-list" class="feed-list"></ul>
           <p class="empty-state" id="compliance-empty">Waiting for compliance findings from M07…</p>
         </section>
@@ -450,6 +600,7 @@
             <div class="mini-stat mini-stat-ok"><span id="inc-resolved">0</span><label>Resolved</label></div>
             <div class="mini-stat mini-stat-purple"><span id="inc-playbooks">0</span><label>Playbooks Run</label></div>
           </div>
+          <div id="active-playbook-tracker" class="playbook-tracker hidden"></div>
           <ul id="incidents-list" class="feed-list"></ul>
           <p class="empty-state" id="incidents-empty">Waiting for incident events from M10…</p>
         </section>
@@ -580,9 +731,28 @@
       </div>
     </div>
 
+    <!-- ══════════════════ ALERT DETAIL DRAWER ══════════════════ -->
+    <div class="detail-overlay hidden" id="detail-overlay">
+      <div class="detail-drawer" id="detail-drawer">
+        <div class="drawer-header">
+          <div>
+            <span class="drawer-badge" id="drawer-badge">CRITICAL</span>
+            <h3 class="drawer-title" id="drawer-title">Alert Detail</h3>
+          </div>
+          <button class="drawer-close" onclick="closeDetailDrawer()">✕</button>
+        </div>
+        <div class="drawer-body" id="drawer-body">
+          <!-- populated by showAlertDetail() -->
+        </div>
+        <div class="drawer-actions" id="drawer-actions">
+          <!-- action buttons populated dynamically -->
+        </div>
+      </div>
+    </div>
+
     <!-- ══════════════════ TOAST NOTIFICATIONS ══════════════════ -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="./app.js?v=8" defer></script>
+    <script src="./app.js?v=9" defer></script>
   </body>
 </html>
