@@ -383,13 +383,280 @@ async function syncData() {
     renderActiveTab();
 
   } catch {
-    ui.backendStatus.textContent="offline";
-    ui.statusDot.className="status-dot offline";
-    ["m01","m04","m05","m06","m07","m08","m09","m10","m11","m12","m13","m15"].forEach(id=>{
-      const el=document.getElementById(`pill-${id}`);
-      if(el) el.className="pill pill-offline";
-    });
+    // Backend offline → switch to demo mode
+    if (!demoMode.active) startDemoMode();
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// DEMO MODE — self-contained live mock engine
+// Fires when backend is unreachable (GitHub Pages / offline)
+// ══════════════════════════════════════════════════════════════
+const demoMode = { active: false, tick: 0, totalEvents: 0 };
+
+const _D = {
+  users:      ["USR001","USR002","USR007","USR013","SVCACCT","ADMIN","jsmith","agarwal","lchen","mrodriguez"],
+  privUsers:  ["ROOT","SYSADMIN","SEC_ADMIN","BATCHJOB","INT_USER"],
+  ipsInt:     ["10.42.0.15","10.42.1.34","10.42.2.82","10.42.3.61","10.42.5.60","10.42.0.74","10.42.2.26"],
+  ipsExt:     ["185.193.67.170","185.116.29.233","185.137.69.31","185.196.2.78","45.77.200.1","91.108.4.1"],
+  rfcNormal:  ["BAPI_CUSTOMER_GETLIST","BAPI_MATERIAL_GETLIST","RFC_GET_LOCAL_DESTINATIONS","BAPI_USER_GET_DETAIL","BAPI_SALESORDER_GETLIST"],
+  rfcRisky:   ["RFC_READ_TABLE","BAPI_USER_GETLIST","SUSR_USER_AUTH_FOR_OBJ_GET"],
+  rfcShadow:  ["ZRFC_EXFIL_DATA","ZTEST_BACKDOOR","Z_HIDDEN_EXTRACT","ZRFC_DUMP_PAYROLL"],
+  sapTools:   ["read_table","execute_bapi","get_system_info","list_users","get_auth_objects","run_report","change_user_auth","export_payroll_data"],
+  frameworks: ["SOX","GDPR","ISO27001","PCI-DSS","NIST-CSF","HIPAA"],
+  controls:   ["AC-2","AC-6","AU-2","IA-2","SC-7","SI-3","CM-2","RA-5","SA-9","IR-4"],
+  providers:  ["aws","gcp","azure"],
+  resources:  ["arn:aws:s3:::prod-payroll","projects/prod/db-main","subscriptions/prod/vm-app01","arn:aws:iam:::role/AdminRole"],
+  findings:   ["PUBLIC_BUCKET","UNENCRYPTED_DB","OVERPRIVILEGED_ROLE","OPEN_SECURITY_GROUP","MFA_DISABLED","ROOT_ACCESS_USED"],
+  sbomTargets:["m01-api-gateway-shield","m05-sap-mcp-suite","shared-libs","fastapi","redis-client"],
+  scenarios:  ["bulk_extraction","off_hours_rfc","shadow_endpoint","velocity_anomaly","credential_abuse","privilege_escalation","data_staging","geo_anomaly"],
+  severities: ["critical","critical","high","high","medium","medium","low"],
+  incTitles:  ["Bulk data exfiltration detected","Off-hours privileged access","Shadow RFC endpoint invoked","Anomalous SAP query pattern","Credential rotation overdue","Cloud misconfiguration exploited","Zero-trust policy violated"],
+  dlpRules:   ["bulk_export_detected","staging_area_write","blocklist_destination","pii_exfiltration","mass_download","large_file_transfer"],
+  playbooks:  ["PB-RANSOMWARE","PB-DATA-EXFIL","PB-PRIV-ESC","PB-ACCOUNT-TAKEOVER","PB-SHADOW-API"],
+  anonClass:  ["velocity_spike","new_endpoint","off_hours_pattern","geo_anomaly","baseline_deviation","privilege_escalation"],
+};
+
+let _demoIncCounter = 1000;
+
+function _rnd(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function _int(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function _flt(a,b){ return +(Math.random()*(b-a)+a).toFixed(3); }
+function _uid(){ return Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,6); }
+function _now(){ return new Date().toISOString(); }
+function _offhours(){ const d=new Date(); d.setHours(2,_int(0,59),_int(0,59)); return d.toISOString(); }
+
+// --- generators ---
+function _genAlert(){
+  const sc = _rnd(_D.scenarios);
+  const sv = sc==="shadow_endpoint"||sc==="credential_abuse"||sc==="privilege_escalation" ? "critical"
+           : sc==="bulk_extraction"||sc==="data_staging" ? _rnd(["critical","high"])
+           : _rnd(["high","medium"]);
+  const ip = _rnd(_D.ipsExt);
+  return { scenario:sc, severity:sv, source_ip:_rnd([..._D.ipsInt,..._D.ipsExt]),
+    user_id:_rnd([..._D.users,..._D.privUsers]),
+    message:`${sc.replace(/_/g," ").toUpperCase()} detected from ${ip}`,
+    latencyMs:_int(5,90), endpoint:_rnd([..._D.rfcNormal,..._D.rfcRisky,..._D.rfcShadow]),
+    ts:_now() };
+}
+function _genAnomaly(){
+  const phase = demoMode.tick < 10 ? [0.05,0.30] : demoMode.tick < 25 ? [0.40,0.75] : [0.70,0.99];
+  return { anomaly_score:_flt(...phase), classification:_rnd(_D.anonClass),
+    baseline_deviation:_flt(1.0,8.0), source_ip:_rnd([..._D.ipsInt,..._D.ipsExt]),
+    user_id:_rnd([..._D.users,..._D.privUsers]), endpoint:_rnd([..._D.rfcNormal,..._D.rfcShadow]),
+    model_version:"isolation_forest_v1", ts:_now() };
+}
+function _genSap(){
+  const anomalous = Math.random()<0.3;
+  const risky = ["export_payroll_data","change_user_auth","delete_table_entries"];
+  const tool = anomalous ? _rnd(risky) : _rnd(_D.sapTools);
+  return { tool_name:tool, session_id:`sess-${_uid().slice(0,8)}`,
+    tenant_id:_rnd(["PROD-001","PROD-002","DEV-001"]),
+    user_id:_rnd([..._D.users,..._D.privUsers]),
+    result: anomalous?"error":_rnd(["success","success","partial"]),
+    status: anomalous?"anomalous":"ok", anomalous, flagged:anomalous,
+    latency_ms:_int(10,800), ts:_now() };
+}
+function _genZeroTrust(){
+  const dec = _rnd(["allow","allow","allow","deny","deny","challenge"]);
+  const risk = dec==="allow" ? _flt(0.05,0.35) : _flt(0.50,0.95);
+  const allControls = ["mfa_required","device_compliant","geo_risk","time_risk","behaviour_risk"];
+  const failed = dec==="allow" ? [] : allControls.sort(()=>Math.random()-0.5).slice(0,_int(1,3));
+  return { decision:dec, risk_score:risk, user_id:_rnd([..._D.users,..._D.privUsers]),
+    source_ip:_rnd([..._D.ipsInt,..._D.ipsExt]),
+    failed_controls: failed, device_id:`dev-${_uid().slice(0,8)}`, ts:_now() };
+}
+function _genCredential(){
+  const action = _rnd(["issued","issued","rotated","rotated","revoked","accessed"]);
+  return { action, key:`key-${_uid().slice(0,12)}`,
+    tenant_id:_rnd(["PROD-001","PROD-002","STAGING-001"]),
+    status: action==="revoked"?"revoked":"ok",
+    algorithm:_rnd(["RSA-4096","EC-P256","AES-256-GCM"]),
+    ttl_days:_int(1,90), ts:_now() };
+}
+function _genCompliance(){
+  const r = _rnd(["pass","pass","pass","warning","violation"]);
+  const fw = _rnd(_D.frameworks), ctrl = _rnd(_D.controls);
+  return { framework:fw, control_id:ctrl, result:r, status:r,
+    description:`${fw} ${ctrl} — ${r==="pass"?"passed":r}`,
+    evidence_ref:`EVD-${_uid().slice(0,8)}`, actor:_rnd(_D.users),
+    severity: r==="violation"?"critical":r==="warning"?"medium":"low", ts:_now() };
+}
+function _genDlp(){
+  const rule = _rnd(_D.dlpRules);
+  const sv   = rule.includes("pii")||rule.includes("block") ? "critical" : _rnd(["critical","high"]);
+  return { rule, scenario:rule, severity:sv,
+    bytes_out:_int(500_000,500_000_000),
+    row_count:_int(1000,200_000),
+    user_id:_rnd([..._D.users,..._D.privUsers]),
+    destination:_rnd(["10.9.0.5","dropbox.com","mega.nz","45.77.200.1"]),
+    message:`DLP policy triggered: ${rule.replace(/_/g," ").toUpperCase()}`,
+    ts:_now() };
+}
+function _genIncident(){
+  _demoIncCounter++;
+  const st  = _rnd(["open","open","investigating","investigating","resolved"]);
+  const sv  = _rnd(["critical","critical","high","medium"]);
+  return { incident_id:`INC-${_demoIncCounter}`, title:_rnd(_D.incTitles),
+    status:st, state:st, severity:sv,
+    source_module:_rnd(["m01-api-gateway-shield","m08-anomaly-detection","m09-dlp","m11-shadow-integration","m04-zero-trust-fabric"]),
+    playbook_id:_rnd(_D.playbooks), playbook_run: st==="investigating",
+    action:_rnd(["created","escalated","contained","assigned","resolved"]), ts:_now() };
+}
+function _genShadow(){
+  const fn = _rnd(_D.rfcShadow);
+  return { endpoint:fn, rfc_function:fn,
+    severity:_rnd(["critical","critical","high"]),
+    user_id:_rnd(_D.privUsers), source_ip:_rnd(_D.ipsExt),
+    message:`Unknown RFC function ${fn} called from external IP`,
+    first_seen:_now(), call_count:_int(1,50), ts:_now() };
+}
+function _genSbom(){
+  const clean = Math.random()<0.3;
+  return { target:_rnd(_D.sbomTargets), component:_rnd(_D.sbomTargets),
+    scan_status: clean?"CLEAN":"VULNERABLE",
+    cve_count: clean?0:_int(0,15), insecure_rfc_count: clean?0:_int(0,5),
+    component_count:_int(10,200), sbom_format:_rnd(["CycloneDX","SPDX"]),
+    scan_id:`SCAN-${_uid().slice(0,8)}`, ts:_now() };
+}
+function _genCloud(){
+  const sv = _rnd(["critical","critical","high","high","medium","low"]);
+  return { provider:_rnd(_D.providers), resource_id:_rnd(_D.resources),
+    control_id:`CIS-${_int(1,9)}.${_int(1,20)}`, raw_severity:sv, severity:sv,
+    risk_score:_flt(0.3,0.99),
+    region:_rnd(["us-east-1","us-west-2","eu-west-1","ap-southeast-1"]),
+    finding_type:_rnd(_D.findings), ts:_now() };
+}
+
+// --- demo tick: add N new events per stream, trim to max ---
+function _demoTick(){
+  const t = demoMode.tick;
+  const burst = t < 5 ? 8 : t < 15 ? 4 : 2;   // big burst at start, then trickle
+
+  // helper: prepend n items, cap at max
+  function push(arr, gen, n=1, max=80){
+    for(let i=0;i<n;i++) arr.unshift(gen());
+    while(arr.length>max) arr.pop();
+  }
+
+  push(alerts,      _genAlert,      _int(1,burst),  80);
+  push(anomalies,   _genAnomaly,    _int(1,2),       60);
+  push(sapEvents,   _genSap,        1,               60);
+  push(ztEvents,    _genZeroTrust,  _int(1,3),       60);
+  push(credEvents,  _genCredential, 1,               60);
+  push(compEvents,  _genCompliance, _int(1,2),       60);
+  push(dlpEvents,   _genDlp,        Math.random()<.6?1:0, 60);
+  push(incEvents,   _genIncident,   Math.random()<.5?1:0, 40);
+  push(shadowEvents,_genShadow,     Math.random()<.4?1:0, 40);
+  push(sbomEvents,  _genSbom,       Math.random()<.4?1:0, 40);
+  push(cloudEvents, _genCloud,      Math.random()<.6?1:0, 60);
+
+  // audit trail
+  const auditSources = [
+    {actor:"rules-engine",action:"alert_published",module:"m12-rules-engine"},
+    {actor:"m08-anomaly-detection",action:"anomaly_scored",module:"m08-anomaly-detection"},
+    {actor:"m05-sap-mcp-suite",action:"tool_invoked",module:"m05-sap-mcp-suite"},
+    {actor:"m04-zero-trust-fabric",action:"evaluated",module:"m04-zero-trust-fabric"},
+    {actor:"m07-compliance-autopilot",action:"compliance_check",module:"m07-compliance-autopilot"},
+    {actor:"m09-dlp",action:"dlp_violation",module:"m09-dlp"},
+    {actor:"m10-incident-response",action:"incident_updated",module:"m10-incident-response"},
+  ];
+  push(auditRows, ()=>({...(_rnd(auditSources)), status:"ok", ts:_now()}), _int(1,3), 60);
+
+  demoMode.totalEvents += alerts.length>0?1:0;
+  demoMode.tick++;
+
+  // update UI
+  const allAlerts = alerts;
+  const critical  = allAlerts.filter(a=>a.severity==="critical").length;
+  const latencies = allAlerts.map(a=>+a.latencyMs||0);
+  const avgLat    = latencies.length ? latencies.reduce((s,v)=>s+v,0)/latencies.length : 0;
+
+  ui.backendStatus.textContent  = "demo";
+  ui.statusDot.className        = "status-dot online";
+  ui.eventsProcessed.textContent= (alerts.length+anomalies.length+sapEvents.length+ztEvents.length+
+    credEvents.length+compEvents.length+dlpEvents.length+incEvents.length+
+    shadowEvents.length+sbomEvents.length+cloudEvents.length).toLocaleString();
+  ui.streamUpdated.textContent  = `live · ${new Date().toLocaleTimeString()}`;
+
+  animateValue(ui.totalAlerts,     allAlerts.length);
+  animateValue(ui.criticalAlerts,  critical);
+  ui.avgLatency.textContent      = `${(avgLat/1000).toFixed(1)}s`;
+  animateValue(ui.anomalyCount,    anomalies.length);
+  animateValue(ui.dlpCount,        dlpEvents.length);
+  animateValue(ui.shadowCount,     shadowEvents.length);
+  animateValue(ui.sapCount,        sapEvents.length);
+  animateValue(ui.complianceCount, compEvents.length);
+  animateValue(ui.incidentCount,   incEvents.length);
+  animateValue(ui.sbomCount,       sbomEvents.length);
+  animateValue(ui.ztCount,         ztEvents.length);
+  animateValue(ui.credCount,       credEvents.length);
+  animateValue(ui.cloudCount,      cloudEvents.length);
+  animateValue(ui.gwTotalCount,    allAlerts.length);
+  animateValue(ui.rulesCount,      allAlerts.filter(a=>a.scenario).length);
+
+  if(ui.trendAlerts){
+    ui.trendAlerts.textContent = `▲ +${_int(1,5)}`;
+    ui.trendAlerts.style.color = "var(--critical)";
+  }
+
+  // charts
+  alertTimeline.push({t:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"}),count:allAlerts.length});
+  if(alertTimeline.length>30) alertTimeline.shift();
+  alertChart.data.labels          = alertTimeline.map(p=>p.t);
+  alertChart.data.datasets[0].data= alertTimeline.map(p=>p.count);
+  alertChart.update("none");
+
+  severityChart.data.datasets[0].data = [
+    allAlerts.filter(a=>a.severity==="critical").length,
+    allAlerts.filter(a=>a.severity==="high").length,
+    allAlerts.filter(a=>a.severity==="medium").length,
+    allAlerts.filter(a=>a.severity==="low").length,
+  ];
+  severityChart.update("none");
+
+  const KEY = ["bulk_extraction","off_hours_rfc","shadow_endpoint","velocity_anomaly"];
+  rulesChart.data.datasets[0].data = [
+    allAlerts.filter(a=>a.scenario==="bulk_extraction").length,
+    allAlerts.filter(a=>a.scenario==="off_hours_rfc").length,
+    allAlerts.filter(a=>a.scenario==="shadow_endpoint").length,
+    allAlerts.filter(a=>a.scenario==="velocity_anomaly").length,
+    allAlerts.filter(a=>!KEY.includes(a.scenario)).length,
+  ];
+  rulesChart.update("none");
+
+  // pills — all green in demo
+  ["m01","m04","m05","m06","m07","m08","m09","m10","m11","m12","m13","m15"].forEach(id=>{
+    const el=document.getElementById(`pill-${id}`);
+    if(el) el.className="pill pill-ok";
+  });
+  updatePills({"m01-api-gateway-shield":true,"m04-zero-trust-fabric":true,"m05-sap-mcp-suite":true,
+    "m06-credential-vault":true,"m07-compliance-autopilot":true,"m08-anomaly-detection":true,
+    "m09-dlp":true,"m10-incident-response":true,"m11-shadow-integration":true,
+    "m12-rules-engine":true,"m13-sbom-scanner":true,"m15-multicloud-ispm":true});
+  if(ui.moduleGrid) renderModuleGrid({"m01-api-gateway-shield":{events:alerts.length},
+    "m03-traffic-analyzer":{events:_int(10,50)},"m08-anomaly-detection":{events:anomalies.length},
+    "m09-dlp":{events:dlpEvents.length},"m11-shadow-integration":{events:shadowEvents.length},
+    "m05-sap-mcp-suite":{events:sapEvents.length},"m07-compliance-autopilot":{events:compEvents.length},
+    "m10-incident-response":{events:incEvents.length},"m13-sbom-scanner":{events:sbomEvents.length},
+    "m04-zero-trust-fabric":{events:ztEvents.length},"m06-credential-vault":{events:credEvents.length},
+    "m12-rules-engine":{events:alerts.length},"m15-multicloud-ispm":{events:cloudEvents.length}});
+
+  renderActiveTab();
+}
+
+function startDemoMode(){
+  if(demoMode.active) return;
+  demoMode.active = true;
+  demoMode.tick   = 0;
+  console.info("IntegriShield: backend offline — demo mode active");
+  showToast("Demo mode — live simulated data · All 13 modules active", "info", 6000);
+
+  // Prime with several ticks immediately so data is full on first render
+  for(let i=0;i<8;i++) _demoTick();
+
+  // Then keep ticking on the normal poll interval
+  // (syncData will catch error each time and call startDemoMode, which is now a no-op)
 }
 
 // ── Pills ────────────────────────────────────────────────────
