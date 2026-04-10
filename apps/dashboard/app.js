@@ -389,199 +389,263 @@ async function syncData() {
 }
 
 // ══════════════════════════════════════════════════════════════
-// DEMO MODE — self-contained live mock engine
-// Fires when backend is unreachable (GitHub Pages / offline)
+// LIVE DEMO ENGINE — scenario-driven, correlated, continuous
+// Auto-activates when backend is unreachable (GitHub Pages)
+// Plays through realistic attack scenarios end-to-end
 // ══════════════════════════════════════════════════════════════
-const demoMode = { active: false, tick: 0, totalEvents: 0 };
 
+const demoMode = { active: false, tick: 0, scenarioTick: 0, currentScenario: 0, intervalId: null };
+
+// ── Static reference data ──────────────────────────────────────
 const _D = {
-  users:      ["USR001","USR002","USR007","USR013","SVCACCT","ADMIN","jsmith","agarwal","lchen","mrodriguez"],
-  privUsers:  ["ROOT","SYSADMIN","SEC_ADMIN","BATCHJOB","INT_USER"],
-  ipsInt:     ["10.42.0.15","10.42.1.34","10.42.2.82","10.42.3.61","10.42.5.60","10.42.0.74","10.42.2.26"],
-  ipsExt:     ["185.193.67.170","185.116.29.233","185.137.69.31","185.196.2.78","45.77.200.1","91.108.4.1"],
-  rfcNormal:  ["BAPI_CUSTOMER_GETLIST","BAPI_MATERIAL_GETLIST","RFC_GET_LOCAL_DESTINATIONS","BAPI_USER_GET_DETAIL","BAPI_SALESORDER_GETLIST"],
-  rfcRisky:   ["RFC_READ_TABLE","BAPI_USER_GETLIST","SUSR_USER_AUTH_FOR_OBJ_GET"],
-  rfcShadow:  ["ZRFC_EXFIL_DATA","ZTEST_BACKDOOR","Z_HIDDEN_EXTRACT","ZRFC_DUMP_PAYROLL"],
-  sapTools:   ["read_table","execute_bapi","get_system_info","list_users","get_auth_objects","run_report","change_user_auth","export_payroll_data"],
-  frameworks: ["SOX","GDPR","ISO27001","PCI-DSS","NIST-CSF","HIPAA"],
-  controls:   ["AC-2","AC-6","AU-2","IA-2","SC-7","SI-3","CM-2","RA-5","SA-9","IR-4"],
-  providers:  ["aws","gcp","azure"],
-  resources:  ["arn:aws:s3:::prod-payroll","projects/prod/db-main","subscriptions/prod/vm-app01","arn:aws:iam:::role/AdminRole"],
-  findings:   ["PUBLIC_BUCKET","UNENCRYPTED_DB","OVERPRIVILEGED_ROLE","OPEN_SECURITY_GROUP","MFA_DISABLED","ROOT_ACCESS_USED"],
-  sbomTargets:["m01-api-gateway-shield","m05-sap-mcp-suite","shared-libs","fastapi","redis-client"],
-  scenarios:  ["bulk_extraction","off_hours_rfc","shadow_endpoint","velocity_anomaly","credential_abuse","privilege_escalation","data_staging","geo_anomaly"],
-  severities: ["critical","critical","high","high","medium","medium","low"],
-  incTitles:  ["Bulk data exfiltration detected","Off-hours privileged access","Shadow RFC endpoint invoked","Anomalous SAP query pattern","Credential rotation overdue","Cloud misconfiguration exploited","Zero-trust policy violated"],
-  dlpRules:   ["bulk_export_detected","staging_area_write","blocklist_destination","pii_exfiltration","mass_download","large_file_transfer"],
-  playbooks:  ["PB-RANSOMWARE","PB-DATA-EXFIL","PB-PRIV-ESC","PB-ACCOUNT-TAKEOVER","PB-SHADOW-API"],
-  anonClass:  ["velocity_spike","new_endpoint","off_hours_pattern","geo_anomaly","baseline_deviation","privilege_escalation"],
+  users:     ["USR001","USR002","USR007","USR013","SVCACCT","jsmith","agarwal","lchen","mrodriguez"],
+  priv:      ["ROOT","SYSADMIN","SEC_ADMIN","BATCHJOB","INT_USER"],
+  ipsInt:    ["10.42.0.15","10.42.1.34","10.42.2.82","10.42.3.61","10.42.5.60","10.42.0.74","10.42.2.26"],
+  ipsExt:    ["185.193.67.170","185.116.29.233","185.137.69.31","185.196.2.78","45.77.200.1","91.108.4.1","103.21.45.9"],
+  rfcOk:     ["BAPI_CUSTOMER_GETLIST","BAPI_MATERIAL_GETLIST","RFC_GET_LOCAL_DESTINATIONS","BAPI_USER_GET_DETAIL","BAPI_SALESORDER_GETLIST"],
+  rfcRisky:  ["RFC_READ_TABLE","BAPI_USER_GETLIST","SUSR_USER_AUTH_FOR_OBJ_GET","RFC_ABAP_INSTALL_AND_RUN"],
+  rfcShadow: ["ZRFC_EXFIL_DATA","ZTEST_BACKDOOR","Z_HIDDEN_EXTRACT","ZRFC_DUMP_PAYROLL","Z_RFC_SAPCONTROL"],
+  sapOk:     ["read_table","get_system_info","list_users","get_auth_objects","run_report","execute_bapi"],
+  sapRisky:  ["change_user_auth","export_payroll_data","delete_table_entries","modify_auth_profile"],
+  fws:       ["SOX","GDPR","ISO27001","PCI-DSS","NIST-CSF","HIPAA"],
+  controls:  ["AC-2","AC-6","AU-2","IA-2","SC-7","SI-3","CM-2","RA-5","SA-9","IR-4","PS-3","PE-3"],
+  providers: ["aws","gcp","azure"],
+  resources: ["arn:aws:s3:::prod-payroll-data","arn:aws:iam:::role/AdminRole","projects/prod/db-main","subscriptions/prod/vm-app01","arn:aws:rds:::db:prod-hr"],
+  findings:  ["PUBLIC_BUCKET","UNENCRYPTED_DB","OVERPRIVILEGED_ROLE","OPEN_SECURITY_GROUP","MFA_DISABLED","ROOT_ACCESS_USED","INSECURE_TLS","LOGGING_DISABLED"],
+  sbomTargets:["m01-api-gateway-shield","m05-sap-mcp-suite","shared-libs","fastapi","redis-client","pydantic","uvicorn"],
+  playbooks: ["PB-DATA-EXFIL","PB-PRIV-ESC","PB-ACCOUNT-TAKEOVER","PB-SHADOW-API","PB-RANSOMWARE","PB-CLOUD-BREACH"],
+  regions:   ["us-east-1","us-west-2","eu-west-1","ap-southeast-1","eastus","us-central1"],
 };
 
-let _demoIncCounter = 1000;
+// ── Scenario definitions — each is a complete attack story ────
+// Each scenario has phases; each phase runs for N ticks
+// Events in each phase are correlated (same attacker IP/user)
+const SCENARIOS = [
+  // ── S1: Insider Threat — Off-hours data exfil ─────────────
+  { name:"Insider Threat",
+    phases:[
+      { ticks:4, label:"Normal Operations",
+        fn:(ctx)=>[
+          _evt("alert",  {scenario:"off_hours_rfc",severity:"low",   source_ip:ctx.ip, user_id:ctx.user, message:`Off-hours RFC access by ${ctx.user}`, latencyMs:_int(10,40)}),
+          _evt("anomaly",{anomaly_score:_flt(0.15,0.30), classification:"off_hours_pattern", source_ip:ctx.ip, user_id:ctx.user}),
+          _evt("zt",     {decision:"allow", risk_score:_flt(0.10,0.25), user_id:ctx.user, source_ip:ctx.ip, failed_controls:[]}),
+          _evt("audit",  {actor:"m04-zero-trust-fabric", action:"access_allowed", module:"m04-zero-trust-fabric"}),
+        ]},
+      { ticks:4, label:"Reconnaissance",
+        fn:(ctx)=>[
+          _evt("alert",  {scenario:"off_hours_rfc",severity:"medium", source_ip:ctx.ip, user_id:ctx.user, message:`Repeated off-hours calls — ${ctx.user} queried ${_rnd(_D.rfcRisky)}`, latencyMs:_int(20,60)}),
+          _evt("sap",    {tool_name:"list_users", anomalous:false, user_id:ctx.user, tenant_id:"PROD-001", result:"success"}),
+          _evt("sap",    {tool_name:"get_auth_objects", anomalous:true, user_id:ctx.user, tenant_id:"PROD-001", result:"success", flagged:true}),
+          _evt("anomaly",{anomaly_score:_flt(0.45,0.65), classification:"off_hours_pattern", source_ip:ctx.ip, user_id:ctx.user}),
+          _evt("zt",     {decision:"challenge", risk_score:_flt(0.52,0.70), user_id:ctx.user, source_ip:ctx.ip, failed_controls:["time_risk","behaviour_risk"]}),
+          _evt("audit",  {actor:"m08-anomaly-detection", action:"anomaly_scored", module:"m08-anomaly-detection"}),
+        ]},
+      { ticks:5, label:"Bulk Extraction Begins",
+        fn:(ctx)=>[
+          _evt("alert",  {scenario:"bulk_extraction",severity:"critical", source_ip:ctx.ip, user_id:ctx.user, message:`Bulk RFC_READ_TABLE extraction — ${_int(50,120)}K rows by ${ctx.user}`, latencyMs:_int(50,90)}),
+          _evt("dlp",    {rule:"bulk_export_detected", severity:"critical", bytes_out:_int(12e6,60e6), row_count:_int(50000,120000), user_id:ctx.user, destination:ctx.ip}),
+          _evt("anomaly",{anomaly_score:_flt(0.82,0.97), classification:"velocity_spike", source_ip:ctx.ip, user_id:ctx.user}),
+          _evt("sap",    {tool_name:"export_payroll_data", anomalous:true, user_id:ctx.user, flagged:true, result:"success"}),
+          _evt("zt",     {decision:"deny", risk_score:_flt(0.85,0.98), user_id:ctx.user, source_ip:ctx.ip, failed_controls:["behaviour_risk","time_risk","geo_risk"]}),
+          _evt("comp",   {framework:"SOX", control_id:"AC-6", result:"violation", description:`Excessive data access by ${ctx.user}`, severity:"critical"}),
+          _evt("inc",    {title:"Bulk data exfiltration detected", status:"open", severity:"critical", source_module:"m09-dlp", playbook_id:"PB-DATA-EXFIL"}),
+          _evt("audit",  {actor:"m12-rules-engine", action:"alert_published", module:"m12-rules-engine"}),
+        ]},
+      { ticks:4, label:"Containment",
+        fn:(ctx)=>[
+          _evt("cred",   {action:"revoked", key:`key-${ctx.user}-${_uid().slice(0,6)}`, tenant_id:"PROD-001", status:"revoked"}),
+          _evt("inc",    {title:"Bulk data exfiltration detected", status:"investigating", severity:"critical", source_module:"m10-incident-response", playbook_id:"PB-DATA-EXFIL", playbook_run:true}),
+          _evt("comp",   {framework:"GDPR", control_id:"SA-9", result:"violation", description:"Data breach notification required", severity:"critical"}),
+          _evt("zt",     {decision:"deny", risk_score:0.99, user_id:ctx.user, source_ip:ctx.ip, failed_controls:["mfa_required","device_compliant","geo_risk","behaviour_risk"]}),
+          _evt("audit",  {actor:"m10-incident-response", action:"playbook_executed", module:"m10-incident-response"}),
+          _evt("audit",  {actor:"m06-credential-vault",  action:"credential_revoked", module:"m06-credential-vault"}),
+        ]},
+    ],
+    ctx:()=>({ user:_rnd(_D.priv), ip:_rnd(_D.ipsInt) }),
+  },
 
-function _rnd(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+  // ── S2: External Attack — Shadow RFC + Cloud Breach ───────
+  { name:"External Attack",
+    phases:[
+      { ticks:3, label:"External Probe",
+        fn:(ctx)=>[
+          _evt("alert",  {scenario:"geo_anomaly",severity:"medium", source_ip:ctx.ip, user_id:"UNKNOWN", message:`Geo anomaly — connection from ${ctx.ip}`, latencyMs:_int(30,80)}),
+          _evt("zt",     {decision:"challenge", risk_score:_flt(0.55,0.72), user_id:"UNKNOWN", source_ip:ctx.ip, failed_controls:["geo_risk","device_compliant"]}),
+          _evt("anomaly",{anomaly_score:_flt(0.40,0.60), classification:"geo_anomaly", source_ip:ctx.ip, user_id:"UNKNOWN"}),
+          _evt("cloud",  {provider:"aws", finding_type:"MFA_DISABLED", raw_severity:"medium", resource_id:"arn:aws:iam:::role/AdminRole", risk_score:_flt(0.45,0.65)}),
+        ]},
+      { ticks:4, label:"Shadow Endpoint Discovery",
+        fn:(ctx)=>[
+          _evt("shadow", {endpoint:ctx.rfcFn, severity:"critical", user_id:ctx.user, source_ip:ctx.ip, message:`Unknown RFC ${ctx.rfcFn} called from external IP ${ctx.ip}`, call_count:_int(3,15)}),
+          _evt("alert",  {scenario:"shadow_endpoint",severity:"critical", source_ip:ctx.ip, user_id:ctx.user, message:`SHADOW ENDPOINT: ${ctx.rfcFn} called ${_int(3,15)} times`, latencyMs:_int(40,90)}),
+          _evt("anomaly",{anomaly_score:_flt(0.80,0.95), classification:"new_endpoint", source_ip:ctx.ip, user_id:ctx.user}),
+          _evt("zt",     {decision:"deny", risk_score:_flt(0.88,0.99), user_id:ctx.user, source_ip:ctx.ip, failed_controls:["geo_risk","mfa_required","behaviour_risk"]}),
+          _evt("inc",    {title:"Shadow RFC endpoint invoked", status:"open", severity:"critical", source_module:"m11-shadow-integration", playbook_id:"PB-SHADOW-API"}),
+          _evt("audit",  {actor:"m11-shadow-integration", action:"shadow_endpoint_detected", module:"m11-shadow-integration"}),
+        ]},
+      { ticks:5, label:"Cloud Infrastructure Compromise",
+        fn:(ctx)=>[
+          _evt("cloud",  {provider:"aws", finding_type:"PUBLIC_BUCKET", raw_severity:"critical", resource_id:"arn:aws:s3:::prod-payroll-data", risk_score:_flt(0.88,0.99)}),
+          _evt("cloud",  {provider:"gcp", finding_type:"OVERPRIVILEGED_ROLE", raw_severity:"critical", resource_id:"projects/prod/db-main", risk_score:_flt(0.82,0.96)}),
+          _evt("cloud",  {provider:"azure", finding_type:"ROOT_ACCESS_USED", raw_severity:"critical", resource_id:"subscriptions/prod/vm-app01", risk_score:_flt(0.91,0.99)}),
+          _evt("dlp",    {rule:"pii_exfiltration", severity:"critical", bytes_out:_int(100e6,500e6), row_count:_int(100000,500000), user_id:ctx.user, destination:ctx.ip}),
+          _evt("alert",  {scenario:"data_staging",severity:"critical", source_ip:ctx.ip, user_id:ctx.user, message:`Data staging detected — ${_int(100,500)}MB to external`, latencyMs:_int(60,90)}),
+          _evt("comp",   {framework:"PCI-DSS", control_id:"SC-7", result:"violation", description:"Cloud data exfiltration violates PCI-DSS SC-7", severity:"critical"}),
+          _evt("inc",    {title:"Cloud misconfiguration exploited", status:"investigating", severity:"critical", source_module:"m15-multicloud-ispm", playbook_id:"PB-CLOUD-BREACH", playbook_run:true}),
+          _evt("sbom",   {target:"m01-api-gateway-shield", scan_status:"VULNERABLE", cve_count:_int(3,12), insecure_rfc_count:_int(1,5)}),
+        ]},
+      { ticks:3, label:"Incident Resolved",
+        fn:(ctx)=>[
+          _evt("cred",   {action:"rotated", key:`key-aws-admin-${_uid().slice(0,6)}`, tenant_id:"PROD-001"}),
+          _evt("cred",   {action:"revoked", key:`key-svc-${_uid().slice(0,6)}`, tenant_id:"PROD-001", status:"revoked"}),
+          _evt("comp",   {framework:"ISO27001", control_id:"IR-4", result:"pass", description:"Incident response controls passed", severity:"low"}),
+          _evt("inc",    {title:"Cloud misconfiguration exploited", status:"resolved", severity:"critical", source_module:"m10-incident-response", playbook_id:"PB-CLOUD-BREACH"}),
+          _evt("cloud",  {provider:"aws", finding_type:"LOGGING_DISABLED", raw_severity:"high", resource_id:"arn:aws:s3:::prod-payroll-data", risk_score:_flt(0.55,0.75)}),
+          _evt("audit",  {actor:"m10-incident-response", action:"incident_resolved", module:"m10-incident-response"}),
+        ]},
+    ],
+    ctx:()=>({ user:_rnd([..._D.priv,"UNKNOWN"]), ip:_rnd(_D.ipsExt), rfcFn:_rnd(_D.rfcShadow) }),
+  },
+
+  // ── S3: Credential Abuse + Privilege Escalation ────────────
+  { name:"Credential Abuse",
+    phases:[
+      { ticks:3, label:"Credential Stuffing",
+        fn:(ctx)=>[
+          _evt("alert",  {scenario:"credential_abuse",severity:"high", source_ip:ctx.ip, user_id:ctx.user, message:`Credential ${ctx.user} used from ${_int(3,8)} IPs simultaneously`, latencyMs:_int(20,50)}),
+          _evt("zt",     {decision:"challenge", risk_score:_flt(0.60,0.78), user_id:ctx.user, source_ip:ctx.ip, failed_controls:["device_compliant","mfa_required"]}),
+          _evt("cred",   {action:"accessed", key:`key-${ctx.user}-session`, tenant_id:"PROD-001"}),
+          _evt("anomaly",{anomaly_score:_flt(0.50,0.70), classification:"baseline_deviation", source_ip:ctx.ip, user_id:ctx.user}),
+        ]},
+      { ticks:4, label:"Privilege Escalation",
+        fn:(ctx)=>[
+          _evt("alert",  {scenario:"privilege_escalation",severity:"critical", source_ip:ctx.ip, user_id:ctx.user, message:`Privilege escalation attempt by ${ctx.user} — SUSR_USER_AUTH_FOR_OBJ_GET`, latencyMs:_int(40,90)}),
+          _evt("sap",    {tool_name:"change_user_auth", anomalous:true, user_id:ctx.user, flagged:true, result:"success", tenant_id:"PROD-001"}),
+          _evt("sap",    {tool_name:"modify_auth_profile", anomalous:true, user_id:ctx.user, flagged:true, result:"success", tenant_id:"PROD-001"}),
+          _evt("anomaly",{anomaly_score:_flt(0.87,0.99), classification:"privilege_escalation", source_ip:ctx.ip, user_id:ctx.user}),
+          _evt("comp",   {framework:"SOX", control_id:"AC-2", result:"violation", description:`Unauthorized privilege escalation by ${ctx.user}`, severity:"critical"}),
+          _evt("comp",   {framework:"NIST-CSF", control_id:"IA-2", result:"violation", description:"Multi-factor authentication bypassed", severity:"critical"}),
+          _evt("zt",     {decision:"deny", risk_score:0.97, user_id:ctx.user, source_ip:ctx.ip, failed_controls:["behaviour_risk","mfa_required","device_compliant","time_risk"]}),
+          _evt("inc",    {title:"Off-hours privileged access", status:"open", severity:"critical", source_module:"m04-zero-trust-fabric", playbook_id:"PB-PRIV-ESC"}),
+        ]},
+      { ticks:4, label:"SAP Data Exfiltration",
+        fn:(ctx)=>[
+          _evt("sap",    {tool_name:"export_payroll_data", anomalous:true, user_id:ctx.user, flagged:true, result:"success", tenant_id:"PROD-001"}),
+          _evt("sap",    {tool_name:"delete_table_entries", anomalous:true, user_id:ctx.user, flagged:true, result:"partial", tenant_id:"PROD-001"}),
+          _evt("dlp",    {rule:"staging_area_write", severity:"critical", bytes_out:_int(5e6,50e6), row_count:_int(10000,80000), user_id:ctx.user, destination:"10.9.0.5"}),
+          _evt("dlp",    {rule:"blocklist_destination", severity:"critical", bytes_out:_int(2e6,20e6), row_count:_int(5000,40000), user_id:ctx.user, destination:"mega.nz"}),
+          _evt("shadow", {endpoint:"ZRFC_DUMP_PAYROLL", severity:"critical", user_id:ctx.user, source_ip:ctx.ip, message:`Payroll dump RFC called by compromised account ${ctx.user}`}),
+          _evt("inc",    {title:"Anomalous SAP query pattern", status:"investigating", severity:"critical", source_module:"m05-sap-mcp-suite", playbook_id:"PB-PRIV-ESC", playbook_run:true}),
+          _evt("audit",  {actor:"m09-dlp", action:"dlp_violation", module:"m09-dlp"}),
+        ]},
+      { ticks:3, label:"Recovery",
+        fn:(ctx)=>[
+          _evt("cred",   {action:"revoked", key:`key-${ctx.user}-all`, tenant_id:"PROD-001", status:"revoked"}),
+          _evt("cred",   {action:"rotated", key:`key-admin-${_uid().slice(0,6)}`, tenant_id:"PROD-001"}),
+          _evt("cred",   {action:"issued",  key:`key-new-${_uid().slice(0,6)}`, tenant_id:"PROD-001"}),
+          _evt("comp",   {framework:"HIPAA", control_id:"PS-3", result:"pass", description:"Access review completed", severity:"low"}),
+          _evt("inc",    {title:"Off-hours privileged access", status:"resolved", severity:"critical", source_module:"m10-incident-response", playbook_id:"PB-PRIV-ESC"}),
+          _evt("sbom",   {target:"m05-sap-mcp-suite", scan_status:"CLEAN", cve_count:0, insecure_rfc_count:0}),
+          _evt("audit",  {actor:"m06-credential-vault", action:"emergency_rotation", module:"m06-credential-vault"}),
+        ]},
+    ],
+    ctx:()=>({ user:_rnd(_D.priv), ip:_rnd([..._D.ipsInt,..._D.ipsExt]) }),
+  },
+];
+
+// ── Helpers ────────────────────────────────────────────────────
+function _rnd(a){ return a[Math.floor(Math.random()*a.length)]; }
 function _int(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
 function _flt(a,b){ return +(Math.random()*(b-a)+a).toFixed(3); }
-function _uid(){ return Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,6); }
+function _uid(){ return Math.random().toString(36).slice(2,10); }
 function _now(){ return new Date().toISOString(); }
-function _offhours(){ const d=new Date(); d.setHours(2,_int(0,59),_int(0,59)); return d.toISOString(); }
 
-// --- generators ---
-function _genAlert(){
-  const sc = _rnd(_D.scenarios);
-  const sv = sc==="shadow_endpoint"||sc==="credential_abuse"||sc==="privilege_escalation" ? "critical"
-           : sc==="bulk_extraction"||sc==="data_staging" ? _rnd(["critical","high"])
-           : _rnd(["high","medium"]);
-  const ip = _rnd(_D.ipsExt);
-  return { scenario:sc, severity:sv, source_ip:_rnd([..._D.ipsInt,..._D.ipsExt]),
-    user_id:_rnd([..._D.users,..._D.privUsers]),
-    message:`${sc.replace(/_/g," ").toUpperCase()} detected from ${ip}`,
-    latencyMs:_int(5,90), endpoint:_rnd([..._D.rfcNormal,..._D.rfcRisky,..._D.rfcShadow]),
-    ts:_now() };
-}
-function _genAnomaly(){
-  const phase = demoMode.tick < 10 ? [0.05,0.30] : demoMode.tick < 25 ? [0.40,0.75] : [0.70,0.99];
-  return { anomaly_score:_flt(...phase), classification:_rnd(_D.anonClass),
-    baseline_deviation:_flt(1.0,8.0), source_ip:_rnd([..._D.ipsInt,..._D.ipsExt]),
-    user_id:_rnd([..._D.users,..._D.privUsers]), endpoint:_rnd([..._D.rfcNormal,..._D.rfcShadow]),
-    model_version:"isolation_forest_v1", ts:_now() };
-}
-function _genSap(){
-  const anomalous = Math.random()<0.3;
-  const risky = ["export_payroll_data","change_user_auth","delete_table_entries"];
-  const tool = anomalous ? _rnd(risky) : _rnd(_D.sapTools);
-  return { tool_name:tool, session_id:`sess-${_uid().slice(0,8)}`,
-    tenant_id:_rnd(["PROD-001","PROD-002","DEV-001"]),
-    user_id:_rnd([..._D.users,..._D.privUsers]),
-    result: anomalous?"error":_rnd(["success","success","partial"]),
-    status: anomalous?"anomalous":"ok", anomalous, flagged:anomalous,
-    latency_ms:_int(10,800), ts:_now() };
-}
-function _genZeroTrust(){
-  const dec = _rnd(["allow","allow","allow","deny","deny","challenge"]);
-  const risk = dec==="allow" ? _flt(0.05,0.35) : _flt(0.50,0.95);
-  const allControls = ["mfa_required","device_compliant","geo_risk","time_risk","behaviour_risk"];
-  const failed = dec==="allow" ? [] : allControls.sort(()=>Math.random()-0.5).slice(0,_int(1,3));
-  return { decision:dec, risk_score:risk, user_id:_rnd([..._D.users,..._D.privUsers]),
-    source_ip:_rnd([..._D.ipsInt,..._D.ipsExt]),
-    failed_controls: failed, device_id:`dev-${_uid().slice(0,8)}`, ts:_now() };
-}
-function _genCredential(){
-  const action = _rnd(["issued","issued","rotated","rotated","revoked","accessed"]);
-  return { action, key:`key-${_uid().slice(0,12)}`,
-    tenant_id:_rnd(["PROD-001","PROD-002","STAGING-001"]),
-    status: action==="revoked"?"revoked":"ok",
-    algorithm:_rnd(["RSA-4096","EC-P256","AES-256-GCM"]),
-    ttl_days:_int(1,90), ts:_now() };
-}
-function _genCompliance(){
-  const r = _rnd(["pass","pass","pass","warning","violation"]);
-  const fw = _rnd(_D.frameworks), ctrl = _rnd(_D.controls);
-  return { framework:fw, control_id:ctrl, result:r, status:r,
-    description:`${fw} ${ctrl} — ${r==="pass"?"passed":r}`,
-    evidence_ref:`EVD-${_uid().slice(0,8)}`, actor:_rnd(_D.users),
-    severity: r==="violation"?"critical":r==="warning"?"medium":"low", ts:_now() };
-}
-function _genDlp(){
-  const rule = _rnd(_D.dlpRules);
-  const sv   = rule.includes("pii")||rule.includes("block") ? "critical" : _rnd(["critical","high"]);
-  return { rule, scenario:rule, severity:sv,
-    bytes_out:_int(500_000,500_000_000),
-    row_count:_int(1000,200_000),
-    user_id:_rnd([..._D.users,..._D.privUsers]),
-    destination:_rnd(["10.9.0.5","dropbox.com","mega.nz","45.77.200.1"]),
-    message:`DLP policy triggered: ${rule.replace(/_/g," ").toUpperCase()}`,
-    ts:_now() };
-}
-function _genIncident(){
-  _demoIncCounter++;
-  const st  = _rnd(["open","open","investigating","investigating","resolved"]);
-  const sv  = _rnd(["critical","critical","high","medium"]);
-  return { incident_id:`INC-${_demoIncCounter}`, title:_rnd(_D.incTitles),
-    status:st, state:st, severity:sv,
-    source_module:_rnd(["m01-api-gateway-shield","m08-anomaly-detection","m09-dlp","m11-shadow-integration","m04-zero-trust-fabric"]),
-    playbook_id:_rnd(_D.playbooks), playbook_run: st==="investigating",
-    action:_rnd(["created","escalated","contained","assigned","resolved"]), ts:_now() };
-}
-function _genShadow(){
-  const fn = _rnd(_D.rfcShadow);
-  return { endpoint:fn, rfc_function:fn,
-    severity:_rnd(["critical","critical","high"]),
-    user_id:_rnd(_D.privUsers), source_ip:_rnd(_D.ipsExt),
-    message:`Unknown RFC function ${fn} called from external IP`,
-    first_seen:_now(), call_count:_int(1,50), ts:_now() };
-}
-function _genSbom(){
-  const clean = Math.random()<0.3;
-  return { target:_rnd(_D.sbomTargets), component:_rnd(_D.sbomTargets),
-    scan_status: clean?"CLEAN":"VULNERABLE",
-    cve_count: clean?0:_int(0,15), insecure_rfc_count: clean?0:_int(0,5),
-    component_count:_int(10,200), sbom_format:_rnd(["CycloneDX","SPDX"]),
-    scan_id:`SCAN-${_uid().slice(0,8)}`, ts:_now() };
-}
-function _genCloud(){
-  const sv = _rnd(["critical","critical","high","high","medium","low"]);
-  return { provider:_rnd(_D.providers), resource_id:_rnd(_D.resources),
-    control_id:`CIS-${_int(1,9)}.${_int(1,20)}`, raw_severity:sv, severity:sv,
-    risk_score:_flt(0.3,0.99),
-    region:_rnd(["us-east-1","us-west-2","eu-west-1","ap-southeast-1"]),
-    finding_type:_rnd(_D.findings), ts:_now() };
+let _demoIncID = 1000;
+
+// Build a typed event object
+function _evt(type, fields){
+  const base = { ts: _now(), _type: type };
+  return { ...base, ...fields };
 }
 
-// --- demo tick: add N new events per stream, trim to max ---
+// ── Live tick — called every POLL_MS ──────────────────────────
 function _demoTick(){
-  const t = demoMode.tick;
-  const burst = t < 5 ? 8 : t < 15 ? 4 : 2;   // big burst at start, then trickle
+  const sc   = SCENARIOS[demoMode.currentScenario % SCENARIOS.length];
+  const phase = sc.phases[Math.floor(demoMode.scenarioTick / 1) % sc.phases.length];
+  const ctx  = demoMode.ctx || (demoMode.ctx = sc.ctx());
 
-  // helper: prepend n items, cap at max
-  function push(arr, gen, n=1, max=80){
-    for(let i=0;i<n;i++) arr.unshift(gen());
-    while(arr.length>max) arr.pop();
+  // Get this tick's correlated events
+  const newEvents = phase.fn(ctx);
+
+  // Sprinkle in background normal traffic every other tick
+  if(demoMode.tick % 2 === 0){
+    newEvents.push(
+      _evt("alert",  {scenario:_rnd(["off_hours_rfc","velocity_anomaly"]), severity:_rnd(["medium","low"]),
+        source_ip:_rnd(_D.ipsInt), user_id:_rnd(_D.users),
+        message:`Background RFC activity — ${_rnd(_D.rfcOk)}`, latencyMs:_int(5,30)}),
+      _evt("zt",     {decision:"allow", risk_score:_flt(0.05,0.25), user_id:_rnd(_D.users), source_ip:_rnd(_D.ipsInt), failed_controls:[]}),
+      _evt("cred",   {action:_rnd(["issued","rotated"]), key:`key-${_uid()}`, tenant_id:_rnd(["PROD-001","DEV-001"])}),
+    );
+    if(Math.random()>0.5)
+      newEvents.push(_evt("sbom", {target:_rnd(_D.sbomTargets), scan_status:Math.random()>0.6?"CLEAN":"VULNERABLE", cve_count:_int(0,8), insecure_rfc_count:_int(0,3)}));
+    if(Math.random()>0.6)
+      newEvents.push(_evt("cloud", {provider:_rnd(_D.providers), finding_type:_rnd(_D.findings), raw_severity:_rnd(["high","medium","low"]), resource_id:_rnd(_D.resources), risk_score:_flt(0.3,0.8)}));
   }
 
-  push(alerts,      _genAlert,      _int(1,burst),  80);
-  push(anomalies,   _genAnomaly,    _int(1,2),       60);
-  push(sapEvents,   _genSap,        1,               60);
-  push(ztEvents,    _genZeroTrust,  _int(1,3),       60);
-  push(credEvents,  _genCredential, 1,               60);
-  push(compEvents,  _genCompliance, _int(1,2),       60);
-  push(dlpEvents,   _genDlp,        Math.random()<.6?1:0, 60);
-  push(incEvents,   _genIncident,   Math.random()<.5?1:0, 40);
-  push(shadowEvents,_genShadow,     Math.random()<.4?1:0, 40);
-  push(sbomEvents,  _genSbom,       Math.random()<.4?1:0, 40);
-  push(cloudEvents, _genCloud,      Math.random()<.6?1:0, 60);
+  // Route events to their arrays
+  const push = (arr, item, max=80) => { arr.unshift(item); if(arr.length>max) arr.pop(); };
+  const auditMap = {
+    alert:"m12-rules-engine", anomaly:"m08-anomaly-detection", sap:"m05-sap-mcp-suite",
+    zt:"m04-zero-trust-fabric", cred:"m06-credential-vault", comp:"m07-compliance-autopilot",
+    dlp:"m09-dlp", inc:"m10-incident-response", shadow:"m11-shadow-integration",
+    sbom:"m13-sbom-scanner", cloud:"m15-multicloud-ispm",
+  };
 
-  // audit trail
-  const auditSources = [
-    {actor:"rules-engine",action:"alert_published",module:"m12-rules-engine"},
-    {actor:"m08-anomaly-detection",action:"anomaly_scored",module:"m08-anomaly-detection"},
-    {actor:"m05-sap-mcp-suite",action:"tool_invoked",module:"m05-sap-mcp-suite"},
-    {actor:"m04-zero-trust-fabric",action:"evaluated",module:"m04-zero-trust-fabric"},
-    {actor:"m07-compliance-autopilot",action:"compliance_check",module:"m07-compliance-autopilot"},
-    {actor:"m09-dlp",action:"dlp_violation",module:"m09-dlp"},
-    {actor:"m10-incident-response",action:"incident_updated",module:"m10-incident-response"},
-  ];
-  push(auditRows, ()=>({...(_rnd(auditSources)), status:"ok", ts:_now()}), _int(1,3), 60);
+  for(const ev of newEvents){
+    const t = ev._type; delete ev._type;
+    if(t==="alert")  push(alerts,       ev, 80);
+    if(t==="anomaly")push(anomalies,     ev, 60);
+    if(t==="sap")    push(sapEvents,     ev, 60);
+    if(t==="zt")     push(ztEvents,      ev, 60);
+    if(t==="cred")   push(credEvents,    ev, 60);
+    if(t==="comp")   push(compEvents,    ev, 60);
+    if(t==="dlp")    push(dlpEvents,     ev, 60);
+    if(t==="inc"){   ev.incident_id=ev.incident_id||`INC-${++_demoIncID}`; push(incEvents, ev, 40); }
+    if(t==="shadow") push(shadowEvents,  ev, 40);
+    if(t==="sbom")   push(sbomEvents,    ev, 40);
+    if(t==="cloud")  push(cloudEvents,   ev, 60);
+    if(t==="audit")  push(auditRows,     ev, 60);
+    else if(auditMap[t]) push(auditRows, {actor:auditMap[t], action:t+"_event", module:auditMap[t], status:"ok", ts:ev.ts}, 60);
+  }
 
-  demoMode.totalEvents += alerts.length>0?1:0;
+  // Advance scenario
+  demoMode.scenarioTick++;
+  if(demoMode.scenarioTick >= sc.phases.length * 4){
+    demoMode.scenarioTick = 0;
+    demoMode.currentScenario++;
+    demoMode.ctx = null; // new context for next scenario
+    const next = SCENARIOS[demoMode.currentScenario % SCENARIOS.length];
+    showToast(`🔴 New threat scenario: ${next.name}`, "critical", 4000);
+  }
   demoMode.tick++;
 
-  // update UI
+  // ── Update all UI counters ──
   const allAlerts = alerts;
   const critical  = allAlerts.filter(a=>a.severity==="critical").length;
-  const latencies = allAlerts.map(a=>+a.latencyMs||0);
+  const latencies = allAlerts.map(a=>+(a.latencyMs||0));
   const avgLat    = latencies.length ? latencies.reduce((s,v)=>s+v,0)/latencies.length : 0;
+  const totalEvt  = alerts.length+anomalies.length+sapEvents.length+ztEvents.length+
+                    credEvents.length+compEvents.length+dlpEvents.length+incEvents.length+
+                    shadowEvents.length+sbomEvents.length+cloudEvents.length;
 
-  ui.backendStatus.textContent  = "demo";
+  ui.backendStatus.textContent  = "live";
   ui.statusDot.className        = "status-dot online";
-  ui.eventsProcessed.textContent= (alerts.length+anomalies.length+sapEvents.length+ztEvents.length+
-    credEvents.length+compEvents.length+dlpEvents.length+incEvents.length+
-    shadowEvents.length+sbomEvents.length+cloudEvents.length).toLocaleString();
-  ui.streamUpdated.textContent  = `live · ${new Date().toLocaleTimeString()}`;
+  ui.eventsProcessed.textContent= totalEvt.toLocaleString();
+  ui.streamUpdated.textContent  = `${new Date().toLocaleTimeString()}`;
 
   animateValue(ui.totalAlerts,     allAlerts.length);
   animateValue(ui.criticalAlerts,  critical);
-  ui.avgLatency.textContent      = `${(avgLat/1000).toFixed(1)}s`;
+  ui.avgLatency.textContent      = `${(avgLat/1000).toFixed(2)}s`;
   animateValue(ui.anomalyCount,    anomalies.length);
   animateValue(ui.dlpCount,        dlpEvents.length);
   animateValue(ui.shadowCount,     shadowEvents.length);
@@ -596,15 +660,19 @@ function _demoTick(){
   animateValue(ui.rulesCount,      allAlerts.filter(a=>a.scenario).length);
 
   if(ui.trendAlerts){
-    ui.trendAlerts.textContent = `▲ +${_int(1,5)}`;
-    ui.trendAlerts.style.color = "var(--critical)";
+    const delta = newEvents.filter(e=>e.scenario).length;
+    ui.trendAlerts.textContent = delta>0 ? `▲ +${delta}` : "—";
+    ui.trendAlerts.style.color = delta>0 ? "var(--critical)" : "var(--text-dim)";
   }
 
-  // charts
-  alertTimeline.push({t:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"}),count:allAlerts.length});
+  // ── Charts ──
+  alertTimeline.push({
+    t: new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"}),
+    count: allAlerts.length
+  });
   if(alertTimeline.length>30) alertTimeline.shift();
-  alertChart.data.labels          = alertTimeline.map(p=>p.t);
-  alertChart.data.datasets[0].data= alertTimeline.map(p=>p.count);
+  alertChart.data.labels           = alertTimeline.map(p=>p.t);
+  alertChart.data.datasets[0].data = alertTimeline.map(p=>p.count);
   alertChart.update("none");
 
   severityChart.data.datasets[0].data = [
@@ -625,38 +693,37 @@ function _demoTick(){
   ];
   rulesChart.update("none");
 
-  // pills — all green in demo
-  ["m01","m04","m05","m06","m07","m08","m09","m10","m11","m12","m13","m15"].forEach(id=>{
-    const el=document.getElementById(`pill-${id}`);
-    if(el) el.className="pill pill-ok";
-  });
-  updatePills({"m01-api-gateway-shield":true,"m04-zero-trust-fabric":true,"m05-sap-mcp-suite":true,
-    "m06-credential-vault":true,"m07-compliance-autopilot":true,"m08-anomaly-detection":true,
-    "m09-dlp":true,"m10-incident-response":true,"m11-shadow-integration":true,
-    "m12-rules-engine":true,"m13-sbom-scanner":true,"m15-multicloud-ispm":true});
-  if(ui.moduleGrid) renderModuleGrid({"m01-api-gateway-shield":{events:alerts.length},
-    "m03-traffic-analyzer":{events:_int(10,50)},"m08-anomaly-detection":{events:anomalies.length},
-    "m09-dlp":{events:dlpEvents.length},"m11-shadow-integration":{events:shadowEvents.length},
-    "m05-sap-mcp-suite":{events:sapEvents.length},"m07-compliance-autopilot":{events:compEvents.length},
-    "m10-incident-response":{events:incEvents.length},"m13-sbom-scanner":{events:sbomEvents.length},
-    "m04-zero-trust-fabric":{events:ztEvents.length},"m06-credential-vault":{events:credEvents.length},
-    "m12-rules-engine":{events:alerts.length},"m15-multicloud-ispm":{events:cloudEvents.length}});
+  // ── Module pills — all live ──
+  const modStatus = {
+    "m01-api-gateway-shield":{events:allAlerts.length}, "m03-traffic-analyzer":{events:_int(10,50)},
+    "m08-anomaly-detection":{events:anomalies.length},  "m09-dlp":{events:dlpEvents.length},
+    "m11-shadow-integration":{events:shadowEvents.length}, "m05-sap-mcp-suite":{events:sapEvents.length},
+    "m07-compliance-autopilot":{events:compEvents.length}, "m10-incident-response":{events:incEvents.length},
+    "m13-sbom-scanner":{events:sbomEvents.length}, "m04-zero-trust-fabric":{events:ztEvents.length},
+    "m06-credential-vault":{events:credEvents.length}, "m12-rules-engine":{events:allAlerts.length},
+    "m15-multicloud-ispm":{events:cloudEvents.length},
+  };
+  updatePills(modStatus);
+  if(ui.moduleGrid) renderModuleGrid(modStatus);
 
   renderActiveTab();
 }
 
 function startDemoMode(){
   if(demoMode.active) return;
-  demoMode.active = true;
-  demoMode.tick   = 0;
-  console.info("IntegriShield: backend offline — demo mode active");
-  showToast("Demo mode — live simulated data · All 13 modules active", "info", 6000);
+  demoMode.active          = true;
+  demoMode.tick            = 0;
+  demoMode.scenarioTick    = 0;
+  demoMode.currentScenario = 0;
+  demoMode.ctx             = null;
+  console.info("IntegriShield: demo mode — scenario-driven live simulation");
+  showToast("⚡ Live simulation — scenario-driven · All 13 modules active", "info", 5000);
 
-  // Prime with several ticks immediately so data is full on first render
-  for(let i=0;i<8;i++) _demoTick();
+  // Prime: run enough ticks to fill all panels immediately
+  for(let i=0;i<12;i++) _demoTick();
 
-  // Then keep ticking on the normal poll interval
-  // (syncData will catch error each time and call startDemoMode, which is now a no-op)
+  // Keep streaming — interval fires on each POLL_MS cycle via syncData catch
+  // No separate interval needed; syncData already calls startDemoMode() → _demoTick on each cycle
 }
 
 // ── Pills ────────────────────────────────────────────────────
