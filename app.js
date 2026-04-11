@@ -92,16 +92,16 @@ let alertChart=null, severityChart=null, rulesChart=null, riskGaugeChart=null;
 const alertTimeline = [];
 
 function initCharts() {
-  const gc = "rgba(40,58,90,0.2)", tc = "#4a6080";
+  const gc = "var(--border-subtle)", tc = "var(--text-dim)";
 
   const actx = $("alert-chart").getContext("2d");
   const ag = actx.createLinearGradient(0,0,0,190);
   ag.addColorStop(0,"rgba(91,141,239,0.15)"); ag.addColorStop(1,"rgba(91,141,239,0)");
   alertChart = new Chart(actx, {
     type:"line",
-    data:{ labels:[], datasets:[{ label:"Alerts", data:[], borderColor:"#5b8def",
+    data:{ labels:[], datasets:[{ label:"Alerts", data:[], borderColor:"var(--accent)",
       backgroundColor:ag, borderWidth:2, fill:true, tension:0.4, pointRadius:0,
-      pointHoverRadius:5, pointHoverBackgroundColor:"#5b8def", pointHoverBorderColor:"#fff", pointHoverBorderWidth:2 }] },
+      pointHoverRadius:5, pointHoverBackgroundColor:"var(--accent)", pointHoverBorderColor:"var(--bg-card)", pointHoverBorderWidth:2 }] },
     options:{ responsive:true, maintainAspectRatio:false, animation:{duration:400},
       interaction:{mode:"index",intersect:false},
       scales:{
@@ -109,37 +109,51 @@ function initCharts() {
         y:{beginAtZero:true,grid:{color:gc,drawBorder:false},ticks:{color:tc,font:{size:10,family:"Inter"},precision:0,maxTicksLimit:5},border:{display:false}}
       },
       plugins:{ legend:{display:false},
-        tooltip:{backgroundColor:"rgba(14,22,38,0.9)",titleColor:"#eaf0f7",bodyColor:"#b0c4de",
-          borderColor:"rgba(91,141,239,0.3)",borderWidth:1,cornerRadius:8,padding:10,titleFont:{weight:"600"},displayColors:false} } }
+        tooltip:{backgroundColor:"var(--panel-active)",titleColor:"var(--text-hi)",bodyColor:"var(--text-mid)",
+          borderColor:"var(--border)",borderWidth:1,cornerRadius:8,padding:10,titleFont:{weight:"600"},displayColors:false} } }
   });
 
   severityChart = new Chart($("severity-chart").getContext("2d"), {
     type:"doughnut",
     data:{ labels:["Critical","High","Medium","Low"],
-      datasets:[{ data:[0,0,0,0], backgroundColor:["#ff4757","#ff8b3d","#ffa502","#2ed573"],
-        borderColor:"rgba(14,22,38,0.8)", borderWidth:3, hoverOffset:8 }] },
+      datasets:[{ data:[0,0,0,0], backgroundColor:[
+        getComputedStyle(document.documentElement).getPropertyValue('--critical').trim() || "#ef4444",
+        getComputedStyle(document.documentElement).getPropertyValue('--orange').trim() || "#ea580c",
+        getComputedStyle(document.documentElement).getPropertyValue('--warning').trim() || "#f59e0b",
+        getComputedStyle(document.documentElement).getPropertyValue('--ok').trim() || "#10b981",
+      ],
+        borderColor:"var(--bg-card)", borderWidth:3, hoverOffset:8 }] },
     options:{ responsive:true, maintainAspectRatio:false, animation:{duration:600},
       cutout:"70%",
-      plugins:{ legend:{position:"bottom",labels:{color:"#7a93b4",font:{size:10,family:"Inter"},padding:12,usePointStyle:true,pointStyleWidth:8}},
-        tooltip:{backgroundColor:"rgba(14,22,38,0.9)",titleColor:"#eaf0f7",bodyColor:"#b0c4de",borderColor:"rgba(91,141,239,0.3)",borderWidth:1,cornerRadius:8,padding:10} } }
+      plugins:{ legend:{position:"bottom",labels:{color:"var(--text-muted)",font:{size:10,family:"Inter"},padding:12,usePointStyle:true,pointStyleWidth:8}},
+        tooltip:{backgroundColor:"var(--panel-active)",titleColor:"var(--text-hi)",bodyColor:"var(--text-mid)",borderColor:"var(--border)",borderWidth:1,cornerRadius:8,padding:10} } }
   });
 
   rulesChart = new Chart($("rules-chart").getContext("2d"), {
     type:"doughnut",
     data:{ labels:["Bulk Extract","Off-Hours","Shadow EP","Velocity","Other"],
-      datasets:[{ data:[0,0,0,0,0], backgroundColor:["#ff4757","#ffa502","#ff8b3d","#5b8def","#a17fe0"],
-        borderColor:"rgba(14,22,38,0.8)", borderWidth:3, hoverOffset:8 }] },
+      datasets:[{ data:[0,0,0,0,0], backgroundColor:[
+        getComputedStyle(document.documentElement).getPropertyValue('--critical').trim() || "#ef4444",
+        getComputedStyle(document.documentElement).getPropertyValue('--warning').trim() || "#f59e0b",
+        getComputedStyle(document.documentElement).getPropertyValue('--orange').trim() || "#ea580c",
+        getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || "#3b82f6",
+        getComputedStyle(document.documentElement).getPropertyValue('--purple').trim() || "#8b5cf6",
+      ],
+        borderColor:"var(--bg-card)", borderWidth:3, hoverOffset:8 }] },
     options:{ responsive:true, maintainAspectRatio:false, animation:{duration:600},
       cutout:"70%",
-      plugins:{ legend:{position:"bottom",labels:{color:"#7a93b4",font:{size:10,family:"Inter"},padding:10,usePointStyle:true,pointStyleWidth:8}},
-        tooltip:{backgroundColor:"rgba(14,22,38,0.9)",titleColor:"#eaf0f7",bodyColor:"#b0c4de",borderColor:"rgba(91,141,239,0.3)",borderWidth:1,cornerRadius:8,padding:10} } }
+      plugins:{ legend:{position:"bottom",labels:{color:"var(--text-muted)",font:{size:10,family:"Inter"},padding:10,usePointStyle:true,pointStyleWidth:8}},
+        tooltip:{backgroundColor:"var(--panel-active)",titleColor:"var(--text-hi)",bodyColor:"var(--text-mid)",borderColor:"var(--border)",borderWidth:1,cornerRadius:8,padding:10} } }
   });
 
   const rgEl = $("risk-gauge-chart");
   if (rgEl) {
     riskGaugeChart = new Chart(rgEl.getContext("2d"), {
       type:"doughnut",
-      data:{ datasets:[{ data:[0,100], backgroundColor:["#2ed573","rgba(40,58,90,0.25)"],
+      data:{ datasets:[{ data:[0,100], backgroundColor:[
+        getComputedStyle(document.documentElement).getPropertyValue('--critical').trim() || "#ef4444",
+        "var(--border-subtle)"
+      ],
         borderWidth:0, circumference:180, rotation:270 }] },
       options:{ responsive:true, maintainAspectRatio:false, cutout:"75%",
         animation:{duration:800},
@@ -1939,6 +1953,22 @@ if (ui.auditFilter)    ui.auditFilter.addEventListener("change", renderAudit);
 ['cloud-search','cloud-provider-filter','cloud-sev-filter'].forEach(id => {
   const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderCloud);
 });
+
+// ── Theme toggle ──────────────────────────────────────────────
+const themeToggleBtn = document.getElementById("theme-toggle");
+if (themeToggleBtn) {
+  const currentTheme = localStorage.getItem("theme") || "dark";
+  document.documentElement.setAttribute("data-theme", currentTheme);
+  themeToggleBtn.querySelector(".theme-icon").textContent = currentTheme === "dark" ? "☀" : "☾";
+
+  themeToggleBtn.addEventListener("click", () => {
+    let theme = document.documentElement.getAttribute("data-theme");
+    let newTheme = theme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", newTheme);
+    localStorage.setItem("theme", newTheme);
+    themeToggleBtn.querySelector(".theme-icon").textContent = newTheme === "dark" ? "☀" : "☾";
+  });
+}
 
 // ── Sidebar nav ───────────────────────────────────────────────
 document.querySelectorAll(".nav-btn").forEach(btn=>btn.addEventListener("click",()=>navigateToTab(btn.dataset.tab)));
