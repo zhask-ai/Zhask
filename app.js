@@ -658,15 +658,22 @@ function renderGateway() {
   animateValue(ui.gwBulk,     alerts.filter(a=>a.scenario==="bulk_extraction").length);
   animateValue(ui.gwVelocity, alerts.filter(a=>a.scenario==="velocity_anomaly").length);
   setEmpty(ui.gatewayList, ui.gatewayEmpty, alerts);
-  ui.gatewayList.innerHTML = alerts.map(a => {
+  ui.gatewayList.innerHTML = alerts.map((a, i) => {
     const sev = (a.severity||"low").toLowerCase();
-    return li(`ev-gateway sev-${sev}`,
-      `<strong>RFC CALL</strong> <span class="panel-subtitle">${scl(a.scenario)}</span>
-       <span class="sev-badge sev-${sev}" style="margin-left:auto">${sev.toUpperCase()}</span>
-       <span class="panel-subtitle" style="margin-left:.5rem">${ts(a.ts)}</span>`,
-      `<code style="font-size:.73rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px">${a.message||"—"}</code>`,
-      `IP: ${a.source_ip||"—"} · user: ${a.user_id||"—"} · latency: ${ms(a.latencyMs)}`
-    );
+    const fixBadge = fixedItems.has('gateway-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-gateway sev-${sev}" onclick="showItemDetail('gateway',${i})" style="cursor:pointer">
+      <div class="alert-item-row">
+        <strong>RFC CALL</strong> <span class="panel-subtitle">${scl(a.scenario)}</span>
+        <span class="sev-badge sev-${sev}" style="margin-left:auto">${sev.toUpperCase()}</span>
+        <span class="panel-subtitle" style="margin-left:.5rem">${ts(a.ts)}</span>
+      </div>
+      <div class="alert-item-meta"><code style="font-size:.73rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px">${a.message||"—"}</code></div>
+      <div class="alert-item-meta">IP: ${a.source_ip||"—"} · user: ${a.user_id||"—"} · latency: ${ms(a.latencyMs)}</div>
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
+    </li>`;
   }).join("");
 }
 
@@ -679,11 +686,12 @@ function renderAnomaly() {
   animateValue(ui.anomHigh,  hi.length);
   animateValue(ui.anomNewEp, ep.length);
   setEmpty(ui.anomalyList, ui.anomalyEmpty, anomalies);
-  ui.anomalyList.innerHTML = anomalies.map(a => {
+  ui.anomalyList.innerHTML = anomalies.map((a, i) => {
     const sc = parseFloat(a.anomaly_score||0);
     const cls = sc>0.7?"sev-critical":sc>0.4?"sev-medium":"sev-low";
     const barColor = sc>0.7?"#ff4757":sc>0.4?"#ffa502":"#2ed573";
-    return `<li class="alert-item ev-anomaly ${cls}">
+    const fixBadge = fixedItems.has('anomaly-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-anomaly ${cls}" onclick="showItemDetail('anomaly',${i})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>ANOMALY</strong>
         <span class="panel-subtitle">${a.classification||"unclassified"}</span>
@@ -696,6 +704,10 @@ function renderAnomaly() {
         </div>
       </div>
       <div class="alert-item-meta">IP: ${a.source_ip||"—"} · user: ${a.user_id||"—"}</div>
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
     </li>`;
   }).join("");
 }
@@ -707,15 +719,22 @@ function renderDlp() {
   animateValue(ui.dlpStaging,   dlpEvents.filter(e=>(e.rule||"").includes("staging")).length);
   animateValue(ui.dlpBlocklist, dlpEvents.filter(e=>(e.rule||"").includes("blocklist")).length);
   setEmpty(ui.dlpList, ui.dlpEmpty, dlpEvents);
-  ui.dlpList.innerHTML = dlpEvents.map(e => {
+  ui.dlpList.innerHTML = dlpEvents.map((e, i) => {
     const sev = (e.severity||"high").toLowerCase();
-    return li(`ev-dlp sev-${sev}`,
-      `<strong>${(e.rule||"DLP VIOLATION").toUpperCase().replace(/_/g," ")}</strong>
-       <span class="sev-badge sev-${sev}" style="margin-left:auto">${sev.toUpperCase()}</span>
-       <span class="panel-subtitle" style="margin-left:.5rem">${ts(e.ts)}</span>`,
-      `<span style="color:#ff8b3d">📤 ${byt(e.bytes_out)}</span> · <span>${(e.row_count||0).toLocaleString()} rows</span> · dest: <code style="font-size:.72rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px">${e.destination||"—"}</code>`,
-      `user: ${e.user_id||"—"}`
-    );
+    const fixBadge = fixedItems.has('dlp-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-dlp sev-${sev}" onclick="showItemDetail('dlp',${i})" style="cursor:pointer">
+      <div class="alert-item-row">
+        <strong>${(e.rule||"DLP VIOLATION").toUpperCase().replace(/_/g," ")}</strong>
+        <span class="sev-badge sev-${sev}" style="margin-left:auto">${sev.toUpperCase()}</span>
+        <span class="panel-subtitle" style="margin-left:.5rem">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta"><span style="color:#ff8b3d">📤 ${byt(e.bytes_out)}</span> · <span>${(e.row_count||0).toLocaleString()} rows</span> · dest: <code style="font-size:.72rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px">${e.destination||"—"}</code></div>
+      <div class="alert-item-meta">user: ${e.user_id||"—"}</div>
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
+    </li>`;
   }).join("");
 }
 
@@ -726,15 +745,22 @@ function renderShadow() {
   animateValue(ui.shadowTotal,  shadowEvents.length);
   animateValue(ui.shadowUnique, hosts);
   setEmpty(ui.shadowList, ui.shadowEmpty, shadowEvents);
-  ui.shadowList.innerHTML = shadowEvents.map(e => {
+  ui.shadowList.innerHTML = shadowEvents.map((e, i) => {
     const sev = (e.severity||"high").toLowerCase();
-    return li(`ev-shadow sev-${sev}`,
-      `<strong>SHADOW ENDPOINT</strong>
-       <code style="font-size:.75rem;background:rgba(255,139,61,.15);color:#ff8b3d;padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.endpoint||"unknown"}</code>
-       <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>`,
-      e.message||"Unknown RFC endpoint invoked",
-      `user: ${e.user_id||"—"} · IP: ${e.source_ip||"—"} · calls: ${e.call_count||"—"}`
-    );
+    const fixBadge = fixedItems.has('shadow-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-shadow sev-${sev}" onclick="showItemDetail('shadow',${i})" style="cursor:pointer">
+      <div class="alert-item-row">
+        <strong>SHADOW ENDPOINT</strong>
+        <code style="font-size:.75rem;background:rgba(255,139,61,.15);color:#ff8b3d;padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.endpoint||"unknown"}</code>
+        <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">${e.message||"Unknown RFC endpoint invoked"}</div>
+      <div class="alert-item-meta">user: ${e.user_id||"—"} · IP: ${e.source_ip||"—"} · calls: ${e.call_count||"—"}</div>
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
+    </li>`;
   }).join("");
 }
 
@@ -744,17 +770,24 @@ function renderSap() {
   animateValue(ui.sapTotal,     sapEvents.length);
   animateValue(ui.sapAnomalous, sapEvents.filter(e=>e.anomalous||e.flagged).length);
   setEmpty(ui.sapList, ui.sapEmpty, sapEvents);
-  ui.sapList.innerHTML = sapEvents.map(e => {
+  ui.sapList.innerHTML = sapEvents.map((e, i) => {
     const flagged = e.anomalous || e.flagged;
     const toolColor = flagged ? "#ff4757" : "#5b8def";
-    return li(`ev-sap ${flagged?"sev-critical":""}`,
-      `<strong>SAP MCP</strong>
-       <code style="font-size:.73rem;background:${flagged?"rgba(255,71,87,.15)":"rgba(91,141,239,.12)"};color:${toolColor};padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.tool_name||"tool"}</code>
-       ${flagged?`<span class="sev-badge sev-critical" style="margin-left:.5rem">FLAGGED</span>`:""}
-       <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>`,
-      `result: <strong style="color:${e.result==="success"?flagged?"#ff4757":"#2ed573":"#ffa502"}">${e.result||"—"}</strong> · tenant: ${e.tenant_id||"—"}`,
-      `user: ${e.user_id||"—"}`
-    );
+    const fixBadge = fixedItems.has('sap-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-sap ${flagged?"sev-critical":""}" onclick="showItemDetail('sap',${i})" style="cursor:pointer">
+      <div class="alert-item-row">
+        <strong>SAP MCP</strong>
+        <code style="font-size:.73rem;background:${flagged?"rgba(255,71,87,.15)":"rgba(91,141,239,.12)"};color:${toolColor};padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.tool_name||"tool"}</code>
+        ${flagged?`<span class="sev-badge sev-critical" style="margin-left:.5rem">FLAGGED</span>`:""}
+        <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">result: <strong style="color:${e.result==="success"?flagged?"#ff4757":"#2ed573":"#ffa502"}">${e.result||"—"}</strong> · tenant: ${e.tenant_id||"—"}</div>
+      <div class="alert-item-meta">user: ${e.user_id||"—"}</div>
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
+    </li>`;
   }).join("");
 }
 
@@ -769,17 +802,24 @@ function renderCompliance() {
 
   const fwColors = {SOX:"#ff4757",GDPR:"#5b8def","PCI-DSS":"#ff8b3d","NIST-CSF":"#2ed573",ISO27001:"#a17fe0",HIPAA:"#39c5cf"};
 
-  ui.complianceList.innerHTML = compEvents.map(e => {
+  ui.complianceList.innerHTML = compEvents.map((e, i) => {
     const res = (e.result||"unknown").toLowerCase();
     const cls = res==="violation"?"sev-critical":res==="warning"?"sev-medium":"sev-low";
     const fwC = fwColors[e.framework]||"#7a93b4";
-    return li(`ev-compliance ${cls}`,
-      `<strong>${res.toUpperCase()}</strong>
-       <span style="background:${fwC}22;color:${fwC};font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:.5rem">${e.framework||"—"}</span>
-       <code style="font-size:.7rem;background:rgba(255,255,255,.06);padding:1px 6px;border-radius:3px;margin-left:.4rem">${e.control_id||"—"}</code>
-       <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>`,
-      e.description||e.message||"—"
-    );
+    const fixBadge = fixedItems.has('comp-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-compliance ${cls}" onclick="showItemDetail('comp',${i})" style="cursor:pointer">
+      <div class="alert-item-row">
+        <strong>${res.toUpperCase()}</strong>
+        <span style="background:${fwC}22;color:${fwC};font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:.5rem">${e.framework||"—"}</span>
+        <code style="font-size:.7rem;background:rgba(255,255,255,.06);padding:1px 6px;border-radius:3px;margin-left:.4rem">${e.control_id||"—"}</code>
+        <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">${e.description||e.message||"—"}</div>
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
+    </li>`;
   }).join("");
 
   renderComplianceScorecard();
@@ -820,20 +860,25 @@ function renderIncidents() {
 
   const stColor = {open:"#ff4757",investigating:"#ffa502",in_progress:"#ffa502",active:"#ffa502",resolved:"#2ed573",closed:"#2ed573",contained:"#2ed573"};
 
-  ui.incidentsList.innerHTML = incEvents.map(e => {
+  ui.incidentsList.innerHTML = incEvents.map((e, i) => {
     const st  = (e.status||"open").toLowerCase();
     const stC = stColor[st]||"#7a93b4";
     const cls = st==="open"?"sev-critical":["investigating","in_progress","active"].includes(st)?"sev-medium":"sev-low";
-    return li(`ev-incident ${cls}`,
-      `<strong>${e.incident_id||"INC-?"}</strong>
-       <span class="panel-subtitle" style="margin-left:.4rem">${e.title||"incident"}</span>
-       <span style="background:${stC}22;color:${stC};font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:auto">${st.toUpperCase()}</span>
-       <span class="panel-subtitle" style="margin-left:.5rem">${ts(e.ts)}</span>`,
-      `severity: <span style="color:${e.severity==="critical"?"#ff4757":e.severity==="high"?"#ff8b3d":"#ffa502"}">${(e.severity||"—").toUpperCase()}</span>
-       · source: ${e.source_module||"—"}`,
-      `playbook: <code style="font-size:.7rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 6px;border-radius:3px">${e.playbook_id||"none"}</code>
-       ${e.playbook_run?`<span style="color:#2ed573;font-size:.7rem;margin-left:.4rem">▶ Running</span>`:""}`
-    );
+    const fixBadge = fixedItems.has('incident-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-incident ${cls}" onclick="showItemDetail('incident',${i})" style="cursor:pointer">
+      <div class="alert-item-row">
+        <strong>${e.incident_id||"INC-?"}</strong>
+        <span class="panel-subtitle" style="margin-left:.4rem">${e.title||"incident"}</span>
+        <span style="background:${stC}22;color:${stC};font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:auto">${st.toUpperCase()}</span>
+        <span class="panel-subtitle" style="margin-left:.5rem">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">severity: <span style="color:${e.severity==="critical"?"#ff4757":e.severity==="high"?"#ff8b3d":"#ffa502"}">${(e.severity||"—").toUpperCase()}</span> · source: ${e.source_module||"—"}</div>
+      <div class="alert-item-meta">playbook: <code style="font-size:.7rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 6px;border-radius:3px">${e.playbook_id||"none"}</code>${e.playbook_run?`<span style="color:#2ed573;font-size:.7rem;margin-left:.4rem">▶ Running</span>`:""}</div>
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
+    </li>`;
   }).join("");
 
   renderPlaybookTracker();
@@ -879,17 +924,22 @@ function renderSbom() {
   animateValue(ui.sbomInsecure,ins);
   animateValue(ui.sbomClean,   clean);
   setEmpty(ui.sbomList, ui.sbomEmpty, sbomEvents);
-  ui.sbomList.innerHTML = sbomEvents.map(e => {
+  ui.sbomList.innerHTML = sbomEvents.map((e, i) => {
     const vuln = parseInt(e.cve_count||0)>0 || parseInt(e.insecure_rfc_count||0)>0;
     const cls  = e.scan_status==="VULNERABLE"?"sev-critical":"sev-low";
-    return li(`ev-sbom ${cls}`,
-      `<span style="font-size:.7rem;font-weight:700;background:${vuln?"rgba(255,71,87,.2)":"rgba(46,213,115,.15)"};color:${vuln?"#ff4757":"#2ed573"};padding:2px 8px;border-radius:4px">${e.scan_status||"SCAN"}</span>
-       <code style="font-size:.73rem;background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px;margin-left:.5rem;color:#b0c4de">${e.target||"—"}</code>
-       <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>`,
-      `CVEs: <strong style="color:${parseInt(e.cve_count||0)>0?"#ff4757":"#2ed573"}">${e.cve_count||0}</strong>
-       · Insecure RFC: <strong style="color:${parseInt(e.insecure_rfc_count||0)>0?"#ffa502":"#2ed573"}">${e.insecure_rfc_count||0}</strong>
-       · format: CycloneDX 1.4`
-    );
+    const fixBadge = fixedItems.has('sbom-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-sbom ${cls}" onclick="showItemDetail('sbom',${i})" style="cursor:pointer">
+      <div class="alert-item-row">
+        <span style="font-size:.7rem;font-weight:700;background:${vuln?"rgba(255,71,87,.2)":"rgba(46,213,115,.15)"};color:${vuln?"#ff4757":"#2ed573"};padding:2px 8px;border-radius:4px">${e.scan_status||"SCAN"}</span>
+        <code style="font-size:.73rem;background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px;margin-left:.5rem;color:#b0c4de">${e.target||"—"}</code>
+        <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">CVEs: <strong style="color:${parseInt(e.cve_count||0)>0?"#ff4757":"#2ed573"}">${e.cve_count||0}</strong> · Insecure RFC: <strong style="color:${parseInt(e.insecure_rfc_count||0)>0?"#ffa502":"#2ed573"}">${e.insecure_rfc_count||0}</strong> · format: CycloneDX 1.4</div>
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
+    </li>`;
   }).join("");
 }
 
@@ -903,16 +953,23 @@ function renderRules() {
   animateValue(ui.ruleVelocity,  alerts.filter(a=>a.scenario==="velocity_anomaly").length);
   animateValue(ui.ruleOther,     alerts.filter(a=>!KEY.includes(a.scenario)).length);
   setEmpty(ui.rulesList, ui.rulesEmpty, alerts);
-  ui.rulesList.innerHTML = alerts.map(a => {
+  ui.rulesList.innerHTML = alerts.map((a, i) => {
     const sev = (a.severity||"medium").toLowerCase();
     const ruleColor = {bulk_extraction:"#ff4757",off_hours_rfc:"#ffa502",shadow_endpoint:"#ff8b3d",velocity_anomaly:"#5b8def",data_staging:"#ff4757",credential_abuse:"#a17fe0",privilege_escalation:"#ff4757",geo_anomaly:"#ffa502"}[a.scenario]||"#7a93b4";
-    return li(`ev-rules sev-${sev}`,
-      `<span style="font-size:.7rem;font-weight:700;background:${ruleColor}22;color:${ruleColor};padding:2px 8px;border-radius:4px">${scl(a.scenario)||"RULE"}</span>
-       <span class="sev-badge sev-${sev}" style="margin-left:.4rem">${sev.toUpperCase()}</span>
-       <span class="panel-subtitle" style="margin-left:auto">${ts(a.ts)}</span>`,
-      a.message||"—",
-      `${ms(a.latencyMs)} · IP: ${a.source_ip||"—"} · user: ${a.user_id||"—"}`
-    );
+    const fixBadge = fixedItems.has('rules-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-rules sev-${sev}" onclick="showItemDetail('rules',${i})" style="cursor:pointer">
+      <div class="alert-item-row">
+        <span style="font-size:.7rem;font-weight:700;background:${ruleColor}22;color:${ruleColor};padding:2px 8px;border-radius:4px">${scl(a.scenario)||"RULE"}</span>
+        <span class="sev-badge sev-${sev}" style="margin-left:.4rem">${sev.toUpperCase()}</span>
+        <span class="panel-subtitle" style="margin-left:auto">${ts(a.ts)}</span>
+      </div>
+      <div class="alert-item-meta">${a.message||"—"}</div>
+      <div class="alert-item-meta">${ms(a.latencyMs)} · IP: ${a.source_ip||"—"} · user: ${a.user_id||"—"}</div>
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
+    </li>`;
   }).join("");
 }
 
@@ -928,13 +985,14 @@ function renderZeroTrust() {
   animateValue(ui.ztChallenge,chal.length);
   if (ui.ztAvgRisk) ui.ztAvgRisk.textContent = risks.length ? (risks.reduce((a,b)=>a+b,0)/risks.length).toFixed(2) : "—";
   setEmpty(ui.ztList, ui.ztEmpty, ztEvents);
-  ui.ztList.innerHTML = ztEvents.map(e => {
+  ui.ztList.innerHTML = ztEvents.map((e, i) => {
     const dec  = (e.decision||"evaluated").toLowerCase();
     const dC   = dec==="allow"?"#2ed573":dec==="deny"?"#ff4757":"#ffa502";
     const risk = parseFloat(e.risk_score||0);
     let fc = [];
     try { fc = Array.isArray(e.failed_controls) ? e.failed_controls : JSON.parse(e.failed_controls||"[]"); } catch {}
-    return `<li class="alert-item ev-zt-${dec}">
+    const fixBadge = fixedItems.has('zt-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-zt-${dec}" onclick="showItemDetail('zt',${i})" style="cursor:pointer">
       <div class="alert-item-row">
         <span style="font-size:.72rem;font-weight:700;background:${dC}22;color:${dC};padding:2px 9px;border-radius:4px">${dec.toUpperCase()}</span>
         <span style="margin-left:.6rem;font-size:.75rem;color:#b0c4de">risk: <strong style="color:${risk>0.7?"#ff4757":risk>0.4?"#ffa502":"#2ed573"}">${risk.toFixed(3)}</strong></span>
@@ -947,6 +1005,10 @@ function renderZeroTrust() {
       </div>
       <div class="alert-item-meta">user: ${e.user_id||"—"} · IP: ${e.source_ip||"—"}</div>
       ${fc.length?`<div class="alert-item-meta">failed: ${fc.map(f=>`<span style="font-size:.65rem;background:rgba(255,71,87,.1);color:#ff8b8b;padding:1px 5px;border-radius:3px;margin-right:3px">${f}</span>`).join("")}</div>`:""}
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
     </li>`;
   }).join("");
 }
@@ -959,17 +1021,24 @@ function renderCredentials() {
   animateValue(ui.credRevoked, credEvents.filter(e=>(e.action||"").includes("revok")).length);
   setEmpty(ui.credList, ui.credEmpty, credEvents);
   const icons = {issued:"🔑",accessed:"🔑",rotated:"🔄",revoked:"❌",default:"🔐"};
-  ui.credList.innerHTML = credEvents.map(e => {
+  ui.credList.innerHTML = credEvents.map((e, i) => {
     const act   = e.action||"event";
     const icon  = icons[act]||icons.default;
     const actC  = act.includes("revok")?"#ff4757":act.includes("rotat")?"#ffa502":"#2ed573";
-    return li("ev-credential",
-      `<span style="font-size:.85rem">${icon}</span>
-       <strong style="color:${actC};margin-left:.3rem">${act.toUpperCase()}</strong>
-       <code style="font-size:.7rem;background:rgba(255,255,255,.06);padding:1px 7px;border-radius:4px;margin-left:.5rem;color:#b0c4de">${e.key||"—"}</code>
-       <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>`,
-      `tenant: ${e.tenant_id||"—"} · status: <span style="color:${actC}">${e.status||act}</span>`
-    );
+    const fixBadge = fixedItems.has('cred-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-credential" onclick="showItemDetail('cred',${i})" style="cursor:pointer">
+      <div class="alert-item-row">
+        <span style="font-size:.85rem">${icon}</span>
+        <strong style="color:${actC};margin-left:.3rem">${act.toUpperCase()}</strong>
+        <code style="font-size:.7rem;background:rgba(255,255,255,.06);padding:1px 7px;border-radius:4px;margin-left:.5rem;color:#b0c4de">${e.key||"—"}</code>
+        <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">tenant: ${e.tenant_id||"—"} · status: <span style="color:${actC}">${e.status||act}</span></div>
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
+    </li>`;
   }).join("");
 }
 
@@ -984,98 +1053,430 @@ function renderCloud() {
   setEmpty(ui.cloudList, ui.cloudEmpty, cloudEvents);
   const provC = {aws:"#ff9900",gcp:"#4285f4",azure:"#00a4ef"};
   const provBg = {aws:"rgba(255,153,0,.15)",gcp:"rgba(66,133,244,.15)",azure:"rgba(0,164,239,.15)"};
-  ui.cloudList.innerHTML = cloudEvents.map(e => {
+  ui.cloudList.innerHTML = cloudEvents.map((e, i) => {
     const prov = (e.provider||"cloud").toLowerCase();
     const sev  = (e.raw_severity||e.severity||"medium").toLowerCase();
     const pc   = provC[prov]||"#7a93b4";
     const pb   = provBg[prov]||"rgba(255,255,255,.06)";
-    return li(`ev-cloud sev-${sev}`,
-      `<span style="font-size:.7rem;font-weight:700;background:${pb};color:${pc};padding:2px 8px;border-radius:4px">${prov.toUpperCase()}</span>
-       <code style="font-size:.7rem;background:rgba(255,71,87,.1);color:#ff8b8b;padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.finding_type||"FINDING"}</code>
-       <span class="sev-badge sev-${sev}" style="margin-left:auto">${sev.toUpperCase()}</span>
-       <span class="panel-subtitle" style="margin-left:.5rem">${ts(e.ts)}</span>`,
-      `<code style="font-size:.68rem;background:rgba(255,255,255,.04);padding:1px 6px;border-radius:3px;color:#7a93b4">${e.resource_id||"—"}</code>`,
-      `risk score: <strong style="color:${parseFloat(e.risk_score||0)>0.7?"#ff4757":"#ffa502"}">${e.risk_score||"—"}</strong>`
-    );
+    const fixBadge = fixedItems.has('cloud-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-cloud sev-${sev}" onclick="showItemDetail('cloud',${i})" style="cursor:pointer">
+      <div class="alert-item-row">
+        <span style="font-size:.7rem;font-weight:700;background:${pb};color:${pc};padding:2px 8px;border-radius:4px">${prov.toUpperCase()}</span>
+        <code style="font-size:.7rem;background:rgba(255,71,87,.1);color:#ff8b8b;padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.finding_type||"FINDING"}</code>
+        <span class="sev-badge sev-${sev}" style="margin-left:auto">${sev.toUpperCase()}</span>
+        <span class="panel-subtitle" style="margin-left:.5rem">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta"><code style="font-size:.68rem;background:rgba(255,255,255,.04);padding:1px 6px;border-radius:3px;color:#7a93b4">${e.resource_id||"—"}</code></div>
+      <div class="alert-item-meta">risk score: <strong style="color:${parseFloat(e.risk_score||0)>0.7?"#ff4757":"#ffa502"}">${e.risk_score||"—"}</strong></div>
+      <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
+        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${fixBadge}
+      </div>
+    </li>`;
   }).join("");
 }
 
-// ── Alert detail drawer ───────────────────────────────────────
-let _currentAlerts = [];
-function showAlertDetail(idx) {
-  // Use filtered view same as renderAlerts
-  let v = alerts;
-  const sc = ui.scenarioFilter ? ui.scenarioFilter.value : "all";
-  const sv = ui.severityFilter ? ui.severityFilter.value : "all";
-  if (sc !== "all") v = v.filter(a => a.scenario === sc);
-  if (sv !== "all") v = v.filter(a => a.severity === sv);
-  _currentAlerts = v;
-  const a = v[idx]; if (!a) return;
+// ── Universal item detail + fix system ────────────────────────
+const fixedItems = new Set(); // "type-idx" keys of resolved items
 
-  const overlay = $("detail-overlay");
-  if (!overlay) return;
+function showItemDetail(type, idx) {
+  const arrMap = {
+    alert: alerts, anomaly: anomalies, sap: sapEvents, dlp: dlpEvents,
+    shadow: shadowEvents, comp: compEvents, incident: incEvents,
+    sbom: sbomEvents, zt: ztEvents, cred: credEvents, cloud: cloudEvents,
+    gateway: alerts, rules: alerts,
+  };
+  const arr = arrMap[type]; if (!arr) return;
+  const ev = arr[idx];      if (!ev)  return;
+  const fixKey = `${type}-${idx}`;
+  const alreadyFixed = fixedItems.has(fixKey);
 
-  const sev = (a.severity||"medium").toLowerCase();
+  const overlay = $("detail-overlay"); if (!overlay) return;
   const drwBadge = $("drw-badge"), drwTitle = $("drw-title"),
         drwBody  = $("drw-body"),  drwActions = $("drw-actions");
 
-  if (drwBadge) { drwBadge.textContent = sev.toUpperCase(); drwBadge.className = `sev-badge sev-${sev}`; }
-  if (drwTitle) drwTitle.textContent = a.message || "Security Alert";
+  // Badge + title
+  const sev = (ev.severity || ev.raw_severity || (type==="anomaly"?"medium":"info")).toLowerCase();
+  const typeLabels = {
+    alert:"ALERT", anomaly:"ANOMALY DETECTED", sap:"SAP MCP EVENT", dlp:"DLP VIOLATION",
+    shadow:"SHADOW ENDPOINT", comp:"COMPLIANCE", incident:"INCIDENT",
+    sbom:"SBOM SCAN", zt:"ZERO-TRUST", cred:"CREDENTIAL EVENT", cloud:"CLOUD FINDING",
+    gateway:"GATEWAY EVENT", rules:"RULE TRIGGERED",
+  };
+  if (drwBadge) {
+    drwBadge.textContent = alreadyFixed ? "✓ RESOLVED" : (typeLabels[type]||type.toUpperCase());
+    drwBadge.className = `sev-badge ${alreadyFixed ? "sev-ok" : `sev-${sev}`}`;
+    if (alreadyFixed) drwBadge.style.background="rgba(46,213,115,0.2)";
+  }
+  const titleMap = {
+    alert: ev.message,
+    anomaly: `Anomaly — ${ev.classification||"unclassified"} (score: ${parseFloat(ev.anomaly_score||0).toFixed(3)})`,
+    sap: `SAP Tool: ${ev.tool_name||"unknown"} ${ev.flagged?"— FLAGGED":""}`,
+    dlp: `DLP: ${(ev.rule||"violation").replace(/_/g," ").toUpperCase()} — ${(ev.bytes_out/1e6||0).toFixed(1)}MB`,
+    shadow: `Shadow RFC: ${ev.endpoint||"unknown endpoint"}`,
+    comp: `${ev.framework||"Framework"} ${ev.control_id||""} — ${(ev.result||"").toUpperCase()}`,
+    incident: `${ev.incident_id||"INC-?"}: ${ev.title||"incident"}`,
+    sbom: `SBOM: ${ev.target||"package"} — ${ev.scan_status||"SCAN"}`,
+    zt: `Zero-Trust ${(ev.decision||"evaluated").toUpperCase()} — risk ${parseFloat(ev.risk_score||0).toFixed(3)}`,
+    cred: `Credential ${(ev.action||"event").toUpperCase()} — ${ev.key||"key"}`,
+    cloud: `${(ev.provider||"cloud").toUpperCase()} ${ev.finding_type||"FINDING"} on ${ev.resource_id||"resource"}`,
+  };
+  if (drwTitle) drwTitle.textContent = (alreadyFixed ? "✓ RESOLVED — " : "") + (titleMap[type] || ev.message || "Security Event");
 
-  const corrAlerts = alerts.filter(x=>x!==a&&(x.source_ip===a.source_ip||x.user_id===a.user_id)).slice(0,3);
-  const corrAnom   = anomalies.filter(x=>x.source_ip===a.source_ip||x.user_id===a.user_id).slice(0,2);
-  const corrDlp    = dlpEvents.filter(x=>x.user_id===a.user_id).slice(0,2);
-  const corrZT     = ztEvents.filter(x=>x.source_ip===a.source_ip||x.user_id===a.user_id).slice(0,2);
-  const corrCount  = corrAlerts.length+corrAnom.length+corrDlp.length+corrZT.length;
+  // Build field grid based on type
+  const fields = _buildFields(type, ev);
+  const explanation = _explainEvent(type, ev);
+  const fixSteps = _getFixSteps(type, ev);
+
+  // Correlated events (only for alert-type)
+  let corrHTML = "";
+  if (type === "alert" || type === "gateway" || type === "rules") {
+    const corrAlerts = alerts.filter(x=>x!==ev&&(x.source_ip===ev.source_ip||x.user_id===ev.user_id)).slice(0,3);
+    const corrAnom   = anomalies.filter(x=>x.source_ip===ev.source_ip||x.user_id===ev.user_id).slice(0,2);
+    const corrDlp    = dlpEvents.filter(x=>x.user_id===ev.user_id).slice(0,2);
+    const corrZT     = ztEvents.filter(x=>x.source_ip===ev.source_ip||x.user_id===ev.user_id).slice(0,2);
+    const corrCount  = corrAlerts.length+corrAnom.length+corrDlp.length+corrZT.length;
+    if (corrCount > 0) {
+      corrHTML = `<div>
+        <div class="drw-section-title">🔗 Correlated Events (${corrCount})</div>
+        ${corrAlerts.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(255,71,87,.08);color:#ff9aa2">⚠️ ALERT: ${x.message||x.scenario} — ${ts(x.ts)}</div>`).join("")}
+        ${corrAnom.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(161,127,224,.09);color:#c4a5f5">🧠 ANOMALY: score ${x.anomaly_score} · ${x.classification} — ${ts(x.ts)}</div>`).join("")}
+        ${corrDlp.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(57,197,207,.07);color:#67e8f9">🔒 DLP: ${x.rule} · ${byt(x.bytes_out)} — ${ts(x.ts)}</div>`).join("")}
+        ${corrZT.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(91,141,239,.09);color:#93bbff">🔐 ZERO-TRUST: ${(x.decision||"").toUpperCase()} · risk ${x.risk_score} — ${ts(x.ts)}</div>`).join("")}
+      </div>`;
+    }
+  }
 
   if (drwBody) drwBody.innerHTML = `
     <div>
       <div class="drw-section-title">Event Details</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
-        <div class="drw-field"><label>Timestamp</label><span>${new Date(a.ts).toLocaleString()}</span></div>
-        <div class="drw-field"><label>Severity</label><span class="sev-badge sev-${sev}">${sev.toUpperCase()}</span></div>
-        <div class="drw-field"><label>Scenario</label><span>${scl(a.scenario)}</span></div>
-        <div class="drw-field"><label>Latency</label><span>${ms(a.latencyMs)}</span></div>
-        <div class="drw-field"><label>Source IP</label><code>${a.source_ip||"—"}</code></div>
-        <div class="drw-field"><label>User</label><code>${a.user_id||"—"}</code></div>
-      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">${fields}</div>
     </div>
     <div>
-      <div class="drw-section-title">🧠 AI Analysis</div>
+      <div class="drw-section-title">🧠 What Is This?</div>
       <div style="background:rgba(91,141,239,.07);border:1px solid rgba(91,141,239,.18);border-radius:6px;padding:.75rem;font-size:.78rem;color:#b0c4de;line-height:1.6">
-        ${_aiExplain(a)}
+        ${explanation}
       </div>
     </div>
-    ${corrCount>0?`
     <div>
-      <div class="drw-section-title">🔗 Correlated Events (${corrCount})</div>
-      ${corrAlerts.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(255,71,87,.08);color:#ff9aa2">⚠️ ALERT: ${x.message||x.scenario} — ${ts(x.ts)}</div>`).join("")}
-      ${corrAnom.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(161,127,224,.09);color:#c4a5f5">🧠 ANOMALY: score ${x.anomaly_score} · ${x.classification} — ${ts(x.ts)}</div>`).join("")}
-      ${corrDlp.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(57,197,207,.07);color:#67e8f9">🔒 DLP: ${x.rule} · ${byt(x.bytes_out)} — ${ts(x.ts)}</div>`).join("")}
-      ${corrZT.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(91,141,239,.09);color:#93bbff">🔐 ZERO-TRUST: ${(x.decision||"").toUpperCase()} · risk ${x.risk_score} — ${ts(x.ts)}</div>`).join("")}
-    </div>`:""}
+      <div class="drw-section-title">🔧 How To Fix It</div>
+      <div style="display:flex;flex-direction:column;gap:.35rem">
+        ${fixSteps.map((s,i)=>`<div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.76rem;padding:.4rem .6rem;border-radius:5px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)">
+          <span style="flex-shrink:0;width:18px;height:18px;border-radius:50%;background:rgba(91,141,239,.2);color:#5b8def;font-weight:700;font-size:.65rem;display:flex;align-items:center;justify-content:center">${i+1}</span>
+          <span style="color:#b0c4de;line-height:1.5">${s}</span>
+        </div>`).join("")}
+      </div>
+    </div>
+    ${corrHTML}
   `;
 
-  if (drwActions) drwActions.innerHTML = `
-    <button onclick="demoAction('block_ip','${a.source_ip||""}')"
-      style="flex:1;min-width:110px;padding:.5rem .7rem;border:1px solid rgba(255,71,87,.3);border-radius:6px;background:rgba(255,71,87,.18);color:#ff4757;font-size:.76rem;font-weight:600;cursor:pointer">
-      🚫 Block IP ${a.source_ip||""}
-    </button>
-    <button onclick="demoAction('revoke_user','${a.user_id||""}')"
-      style="flex:1;min-width:110px;padding:.5rem .7rem;border:1px solid rgba(255,165,2,.28);border-radius:6px;background:rgba(255,165,2,.16);color:#ffa502;font-size:.76rem;font-weight:600;cursor:pointer">
-      🔑 Revoke ${a.user_id||"User"}
-    </button>
-    <button onclick="demoAction('create_incident','${a.scenario||""}')"
-      style="flex:1;min-width:110px;padding:.5rem .7rem;border:1px solid rgba(91,141,239,.3);border-radius:6px;background:rgba(91,141,239,.18);color:#5b8def;font-size:.76rem;font-weight:600;cursor:pointer">
-      🚨 Create Incident
-    </button>
-    <button onclick="demoAction('export','')"
-      style="flex:1;min-width:110px;padding:.5rem .7rem;border:1px solid rgba(46,213,115,.22);border-radius:6px;background:rgba(46,213,115,.12);color:#2ed573;font-size:.76rem;font-weight:600;cursor:pointer">
-      📄 Export Report
-    </button>
-  `;
+  if (drwActions) {
+    if (alreadyFixed) {
+      drwActions.innerHTML = `
+        <div style="flex:1;padding:.5rem .7rem;border:1px solid rgba(46,213,115,.3);border-radius:6px;background:rgba(46,213,115,.1);color:#2ed573;font-size:.76rem;font-weight:600;text-align:center">
+          ✓ Already resolved by IntegriShield
+        </div>
+        <button onclick="closeDetailDrawer()" style="padding:.5rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.06);color:#7a93b4;font-size:.76rem;cursor:pointer">Close</button>`;
+    } else {
+      drwActions.innerHTML = `
+        <button onclick="applyFix('${type}',${idx})"
+          style="flex:1;padding:.55rem .8rem;border:none;border-radius:6px;background:linear-gradient(135deg,#2ed573,#5b8def);color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.03em;box-shadow:0 0 16px rgba(46,213,115,.35)">
+          ⚡ Fix It Now
+        </button>
+        <button onclick="demoActionAlt('block','${type}','${ev.source_ip||ev.user_id||""}')"
+          style="padding:.5rem .7rem;border:1px solid rgba(255,71,87,.3);border-radius:6px;background:rgba(255,71,87,.15);color:#ff4757;font-size:.76rem;font-weight:600;cursor:pointer">
+          🚫 Block
+        </button>
+        <button onclick="demoActionAlt('report','${type}','')"
+          style="padding:.5rem .7rem;border:1px solid rgba(91,141,239,.3);border-radius:6px;background:rgba(91,141,239,.14);color:#5b8def;font-size:.76rem;font-weight:600;cursor:pointer">
+          📄 Report
+        </button>
+      `;
+    }
+  }
 
   overlay.classList.remove("hidden");
+}
+
+function _buildFields(type, ev) {
+  const f = (label, val) => `<div class="drw-field"><label>${label}</label><span>${val||"—"}</span></div>`;
+  const c = (label, val) => `<div class="drw-field"><label>${label}</label><code>${val||"—"}</code></div>`;
+  const base = f("Timestamp", new Date(ev.ts||Date.now()).toLocaleString());
+  if (type==="alert"||type==="gateway"||type==="rules")
+    return base + f("Severity",`<span class="sev-badge sev-${(ev.severity||"low").toLowerCase()}">${(ev.severity||"low").toUpperCase()}</span>`) +
+           f("Scenario", scl(ev.scenario)) + f("Latency", ms(ev.latencyMs)) +
+           c("Source IP", ev.source_ip) + c("User", ev.user_id);
+  if (type==="anomaly")
+    return base + f("Score",`<strong style="color:${parseFloat(ev.anomaly_score||0)>0.7?"#ff4757":"#ffa502"}">${parseFloat(ev.anomaly_score||0).toFixed(4)}</strong>`) +
+           f("Classification", ev.classification) + c("Source IP", ev.source_ip) + c("User", ev.user_id);
+  if (type==="sap")
+    return base + c("Tool", ev.tool_name) + f("Result", ev.result) + f("Tenant", ev.tenant_id) +
+           c("User", ev.user_id) + f("Flagged", ev.flagged?"<span style='color:#ff4757'>YES</span>":"No");
+  if (type==="dlp")
+    return base + f("Rule", (ev.rule||"").replace(/_/g," ")) + f("Severity",`<span class="sev-badge sev-${(ev.severity||"high").toLowerCase()}">${(ev.severity||"high").toUpperCase()}</span>`) +
+           f("Data Volume", byt(ev.bytes_out)) + f("Row Count", (ev.row_count||0).toLocaleString()) +
+           c("User", ev.user_id) + c("Destination", ev.destination);
+  if (type==="shadow")
+    return base + c("Endpoint", ev.endpoint) + f("Severity",`<span class="sev-badge sev-${(ev.severity||"critical").toLowerCase()}">${(ev.severity||"critical").toUpperCase()}</span>`) +
+           c("User", ev.user_id) + c("Source IP", ev.source_ip) + f("Call Count", ev.call_count||"—");
+  if (type==="comp")
+    return base + f("Framework", ev.framework) + c("Control", ev.control_id) +
+           f("Result",`<span style="color:${(ev.result||"")=="violation"?"#ff4757":"#2ed573"}">${(ev.result||"").toUpperCase()}</span>`) +
+           f("Severity",`<span class="sev-badge sev-${(ev.severity||"medium").toLowerCase()}">${(ev.severity||"medium").toUpperCase()}</span>`);
+  if (type==="incident")
+    return base + f("Incident ID", ev.incident_id) + f("Status",`<span style="color:${(ev.status||"open")==="open"?"#ff4757":(ev.status||"")==="investigating"?"#ffa502":"#2ed573"}">${(ev.status||"open").toUpperCase()}</span>`) +
+           f("Severity",`<span class="sev-badge sev-${(ev.severity||"critical").toLowerCase()}">${(ev.severity||"critical").toUpperCase()}</span>`) +
+           f("Source Module", ev.source_module) + c("Playbook", ev.playbook_id||"none");
+  if (type==="sbom")
+    return base + c("Target", ev.target) + f("Status",`<span style="color:${ev.scan_status==="VULNERABLE"?"#ff4757":"#2ed573"}">${ev.scan_status||"—"}</span>`) +
+           f("CVEs", `<strong style="color:${parseInt(ev.cve_count||0)>0?"#ff4757":"#2ed573"}">${ev.cve_count||0}</strong>`) +
+           f("Insecure RFCs", `<strong style="color:${parseInt(ev.insecure_rfc_count||0)>0?"#ffa502":"#2ed573"}">${ev.insecure_rfc_count||0}</strong>`);
+  if (type==="zt") {
+    let fc = []; try { fc = Array.isArray(ev.failed_controls)?ev.failed_controls:JSON.parse(ev.failed_controls||"[]"); } catch {}
+    return base + f("Decision",`<span style="color:${(ev.decision||"")==="deny"?"#ff4757":(ev.decision||"")==="allow"?"#2ed573":"#ffa502"}">${(ev.decision||"").toUpperCase()}</span>`) +
+           f("Risk Score",`<strong style="color:${parseFloat(ev.risk_score||0)>0.7?"#ff4757":"#ffa502"}">${parseFloat(ev.risk_score||0).toFixed(4)}</strong>`) +
+           c("User", ev.user_id) + c("Source IP", ev.source_ip) +
+           `<div class="drw-field" style="grid-column:1/-1"><label>Failed Controls</label><span>${fc.length?fc.map(f2=>`<span style="font-size:.65rem;background:rgba(255,71,87,.1);color:#ff8b8b;padding:1px 5px;border-radius:3px;margin:2px">${f2}</span>`).join(""):"None"}</span></div>`;
+  }
+  if (type==="cred")
+    return base + f("Action",`<span style="color:${(ev.action||"").includes("revok")?"#ff4757":(ev.action||"").includes("rotat")?"#ffa502":"#2ed573"}">${(ev.action||"").toUpperCase()}</span>`) +
+           c("Key", ev.key) + f("Tenant", ev.tenant_id) + f("Status", ev.status||ev.action);
+  if (type==="cloud")
+    return base + f("Provider",`<span style="color:${(ev.provider||"")==="aws"?"#ff9900":(ev.provider||"")==="gcp"?"#4285f4":"#00a4ef"}">${(ev.provider||"").toUpperCase()}</span>`) +
+           f("Finding", ev.finding_type) + f("Severity",`<span class="sev-badge sev-${(ev.raw_severity||"medium").toLowerCase()}">${(ev.raw_severity||"medium").toUpperCase()}</span>`) +
+           f("Risk Score",`<strong style="color:${parseFloat(ev.risk_score||0)>0.7?"#ff4757":"#ffa502"}">${ev.risk_score||"—"}</strong>`) +
+           `<div class="drw-field" style="grid-column:1/-1"><label>Resource</label><code style="font-size:.7rem">${ev.resource_id||"—"}</code></div>`;
+  return base;
+}
+
+function _explainEvent(type, ev) {
+  if (type==="alert"||type==="gateway"||type==="rules") {
+    const sc = ev.scenario||"";
+    if (sc.includes("bulk_extraction"))      return `<strong>High-confidence data exfiltration attempt.</strong> User <code>${ev.user_id}</code> invoked RFC_READ_TABLE at anomalous velocity, extracting rows far exceeding normal business volume. Isolation Forest ML model scored this at <strong>0.94</strong> confidence. Cross-correlated with off-hours access patterns from IP <code>${ev.source_ip}</code>. This pattern matches known insider threat data-theft playbooks — immediate containment is required before data leaves the perimeter.`;
+    if (sc.includes("privilege_escalation")) return `<strong>Unauthorized privilege escalation detected.</strong> <code>${ev.user_id}</code> called SUSR_USER_AUTH_FOR_OBJ_GET outside of the approved change window. Zero-Trust Fabric denied the session (risk: 0.97). This violates SOX AC-2 (account management) and NIST CSF IA-2 (authentication controls). Attackers use privilege escalation to gain admin-level access — enabling data exfiltration, configuration changes, and backdoor creation.`;
+    if (sc.includes("shadow_endpoint"))      return `<strong>Unknown/unauthorized RFC endpoint invoked from external IP.</strong> The function <code>${ev.source_ip}</code> has no registered business owner in the SAP function whitelist. External origin strongly suggests a supply-chain compromise, insider planting a backdoor, or active exploitation of an unpatched SAP vulnerability. Shadow endpoints bypass all standard DLP and audit controls.`;
+    if (sc.includes("credential_abuse"))     return `<strong>Credential used from multiple geographic locations simultaneously.</strong> Account <code>${ev.user_id}</code> is showing activity from ${_int(3,8)} distinct IP ranges simultaneously — a physical impossibility indicating stolen credentials or session hijacking. Zero-Trust risk score: 0.78. If left unaddressed, the attacker has full access to all data accessible by this account.`;
+    if (sc.includes("geo_anomaly"))          return `<strong>Access from high-risk or anomalous geolocation.</strong> IP <code>${ev.source_ip}</code> originates from a region outside all known corporate locations and vendor ranges. No historical sessions from this location are on record. This is a common initial-access vector where attackers use VPNs or compromised infrastructure in policy-restricted countries.`;
+    if (sc.includes("data_staging"))         return `<strong>Data staging — large volume write to external destination detected.</strong> Data is being written to an external staging location before exfiltration. This two-step approach is used to bypass real-time DLP monitoring. Cloud misconfiguration (PUBLIC_BUCKET or OVERPRIVILEGED_ROLE) likely enabled this exfiltration path. Combined cloud + DLP alert pattern indicates active breach in progress.`;
+    if (sc.includes("off_hours_rfc"))        return `<strong>RFC access outside business hours by privileged user.</strong> User <code>${ev.user_id}</code> is making SAP RFC calls during off-hours (nights/weekends). While not conclusive alone, this deviates significantly from the established baseline. Combined with repeated access patterns, this is a common precursor to bulk data extraction or reconnaissance activity. Monitoring should be elevated.`;
+    if (sc.includes("velocity_anomaly"))     return `<strong>Request velocity spike — far above baseline.</strong> The number of RFC calls per minute from <code>${ev.user_id}</code> / <code>${ev.source_ip}</code> has exceeded normal thresholds by 10×+. Automated tooling or scripted exfiltration is suspected. Normal user sessions do not exhibit this pattern.`;
+    return `<strong>Anomalous activity pattern flagged by rules engine.</strong> Behaviour deviation from established baseline detected. ML model confidence: ${_flt(0.55,0.92).toFixed(2)}. Correlated with ${_int(2,5)} recent events from same source. The combination of signals suggests escalating malicious activity — investigation and monitoring are recommended.`;
+  }
+  if (type==="anomaly") {
+    const cls = ev.classification||"";
+    const sc = parseFloat(ev.anomaly_score||0);
+    if (cls==="velocity_spike")      return `<strong>Request velocity spike detected by Isolation Forest ML model.</strong> The model scored this session at <strong>${sc.toFixed(3)}</strong> (threshold: 0.75 = high risk). Velocity spikes indicate automated tooling — scripts that extract large datasets far faster than human users can operate. This is the signature of data-exfiltration tools like custom ABAP reports or RFC automation frameworks. Score above 0.85 triggers automatic incident creation.`;
+    if (cls==="off_hours_pattern")   return `<strong>Anomalous off-hours access pattern.</strong> The ML baseline model detected activity at times statistically inconsistent with this user's historical behaviour. Anomaly score: <strong>${sc.toFixed(3)}</strong>. Off-hours access by privileged accounts is a high-risk indicator — legitimate users rarely access sensitive SAP data outside business hours. This score combined with IP reputation analysis places this session in the top 5% of risk signals.`;
+    if (cls==="new_endpoint")        return `<strong>First-seen RFC endpoint — not in historical baseline.</strong> This RFC function has never been called by this user/IP combination before. New endpoints appearing without change-request authorisation indicate either a misconfiguration, a new attack vector, or an undocumented integration. Isolation Forest assigns high anomaly scores to novel endpoint usage since it deviates completely from baseline.`;
+    if (cls==="geo_anomaly")         return `<strong>Geographic anomaly — access from unexpected location.</strong> ML model detected that the source IP geolocation is statistically impossible given the user's prior session history. Score: <strong>${sc.toFixed(3)}</strong>. This is a strong indicator of account compromise, credential theft, or unauthorised delegation. The model compares current location against the last 90 days of session history.`;
+    if (cls==="baseline_deviation")  return `<strong>Significant deviation from user behaviour baseline.</strong> Multiple behavioural signals — access time, data volume, RFC patterns, session duration — are all outside normal ranges simultaneously. Composite anomaly score: <strong>${sc.toFixed(3)}</strong>. The Isolation Forest model treats multi-dimensional outliers as highest priority. This pattern often precedes confirmed breaches by 2–6 hours.`;
+    if (cls==="privilege_escalation") return `<strong>Privilege escalation pattern detected by ML model.</strong> Auth object manipulation calls have spiked. The sequence of SAP function calls matches known privilege-escalation attack chains. Score: <strong>${sc.toFixed(3)}</strong> — in the top 2% of all scored sessions. Automated escalation attempts move fast; containment within minutes is critical.`;
+    return `<strong>Isolation Forest ML model flagged this session as anomalous.</strong> Score: <strong>${sc.toFixed(3)}</strong> (above 0.5 = suspicious, above 0.75 = high risk, above 0.9 = critical). The model trained on 90 days of baseline traffic identified this session as a statistical outlier across ${_int(5,12)} behavioural dimensions including access time, data volume, endpoint usage, and request patterns.`;
+  }
+  if (type==="sap") {
+    const tool = ev.tool_name||"";
+    if (tool==="export_payroll_data")   return `<strong>Payroll data export via SAP MCP — extremely high risk.</strong> The <code>export_payroll_data</code> tool accesses salary, bank account, and PII for all employees. This is the highest-value dataset in most organisations. Export by <code>${ev.user_id}</code> without a corresponding approved change request constitutes a GDPR Article 32 violation and likely triggers mandatory breach notification obligations. This tool should only be called by payroll administrators during month-end processing.`;
+    if (tool==="change_user_auth")      return `<strong>Unauthorised modification of user authorisation objects.</strong> <code>change_user_auth</code> was called by <code>${ev.user_id}</code> — this tool modifies who has access to what in SAP. Misuse enables privilege escalation, hiding of audit trails, and creation of backdoor accounts. SOX AC-2 requires all auth changes to follow a 4-eyes approval process. This call bypassed that control.`;
+    if (tool==="modify_auth_profile")   return `<strong>Auth profile modification outside change window.</strong> SAP authentication profiles define the security perimeter for entire user groups. Modification by <code>${ev.user_id}</code> could grant unlimited access to thousands of sensitive transactions. This is a critical SoD (Segregation of Duties) violation and must be reviewed within 1 hour.`;
+    if (tool==="delete_table_entries")  return `<strong>Direct SAP table deletion — potential evidence destruction.</strong> Deleting entries from SAP tables can erase transaction records, audit trails, and financial data. This is used in advanced attacks to cover tracks after data theft. Under SOX and GDPR, organisations must maintain data integrity logs — this action violates both. Forensic capture should occur immediately before any data is overwritten.`;
+    if (tool==="run_report")            return `<strong>Custom ABAP report execution flagged.</strong> Execution of custom reports can bypass standard SAP security controls and access data across all modules. The report <code>${ev.tool_name}</code> was not in the pre-approved report whitelist. Custom reports are a common vector for extracting sensitive data in bulk without triggering standard DLP rules.`;
+    if (ev.flagged)                     return `<strong>Flagged SAP MCP tool call — anomalous usage pattern.</strong> The tool <code>${tool}</code> was called by <code>${ev.user_id}</code> in a context that deviates from established baseline behaviour. Flagged indicators: unusual time, excessive call frequency, or sensitive data access pattern. The SAP MCP Suite cross-references every tool call against authorised service accounts and approved workflows.`;
+    return `<strong>SAP MCP tool execution logged.</strong> Tool <code>${tool}</code> called by <code>${ev.user_id}</code> on tenant <code>${ev.tenant_id}</code>. All MCP tool calls are logged for compliance purposes. This event does not indicate a breach but is retained for the full audit trail required by SOX Section 404 and GDPR Article 30.`;
+  }
+  if (type==="dlp") {
+    const rule = ev.rule||"";
+    if (rule.includes("bulk"))       return `<strong>Bulk data export — DLP critical violation.</strong> <code>${(ev.bytes_out/1e6||0).toFixed(1)}MB</code> (${(ev.row_count||0).toLocaleString()} rows) transferred to <code>${ev.destination}</code>. This exceeds the bulk export threshold by ${_int(5,20)}×. DLP policy requires all exports above 1,000 rows to have pre-approved data transfer authorisation (DTA). Without DTA, this constitutes an unauthorised data transfer under GDPR Article 44 and PCI-DSS Requirement 12.`;
+    if (rule.includes("staging"))    return `<strong>Data staging area write detected — pre-exfiltration behaviour.</strong> Data is being written to an internal staging location (<code>${ev.destination}</code>) which is typically used as a holding area before external transfer. This two-step exfiltration technique is designed to avoid real-time DLP monitoring. ${(ev.bytes_out/1e6||0).toFixed(1)}MB has already been staged. Immediate investigation of the staging location is required.`;
+    if (rule.includes("blocklist"))  return `<strong>Data sent to blocklisted destination — confirmed policy violation.</strong> Transfer to <code>${ev.destination}</code> is explicitly blocked by DLP policy. This destination appears on the corporate blocklist due to known association with data exfiltration services (file-sharing platforms, personal cloud storage, or competitor domains). ${(ev.bytes_out/1e6||0).toFixed(1)}MB was transferred before the block triggered.`;
+    if (rule.includes("pii"))        return `<strong>PII exfiltration detected — GDPR breach notification may be required.</strong> Personally Identifiable Information detected in outbound transfer to <code>${ev.destination}</code>. Under GDPR Article 33, if this data includes EU resident PII, a breach notification to the supervisory authority must be made within 72 hours. Legal and compliance teams must be notified immediately. ${(ev.bytes_out/1e6||0).toFixed(1)}MB of potentially regulated data was transferred.`;
+    return `<strong>DLP rule violation detected.</strong> Rule <code>${rule.replace(/_/g," ")}</code> triggered on outbound transfer from <code>${ev.user_id}</code>. ${(ev.bytes_out/1e6||0).toFixed(1)}MB transferred to <code>${ev.destination}</code>. All DLP violations are logged for compliance reporting and may require incident escalation depending on data classification and destination.`;
+  }
+  if (type==="shadow") {
+    return `<strong>Shadow/unauthorised RFC endpoint detected — critical risk.</strong> RFC function <code>${ev.endpoint}</code> was invoked ${ev.call_count||"multiple"} times but has NO entry in the authorised SAP function registry. Shadow endpoints are created to: (1) bypass security controls, (2) create persistent backdoors, (3) exfiltrate data without triggering standard monitoring. The external/internal source <code>${ev.source_ip}</code> calling an unregistered endpoint is a strong indicator of supply-chain compromise or insider threat. This function must be blocked immediately and SAP must be scanned for additional shadow endpoints.`;
+  }
+  if (type==="comp") {
+    const fw = ev.framework||"";
+    const ctrl = ev.control_id||"";
+    const descs = {
+      SOX: `SOX (Sarbanes-Oxley Act) requires organisations to maintain internal controls over financial reporting. Violation of <code>${ctrl}</code> means financial audit controls have failed — this triggers mandatory disclosure to auditors and may result in material weakness reporting, regulatory fines, and executive certification liability under SOX Section 302/906.`,
+      GDPR: `GDPR (EU General Data Protection Regulation) violation of <code>${ctrl}</code> detected. Depending on severity, this may trigger the 72-hour breach notification obligation under Article 33. Maximum fines: €20M or 4% of global annual turnover. Data Protection Officer must be notified immediately.`,
+      "PCI-DSS": `PCI-DSS (Payment Card Industry Data Security Standard) violation of <code>${ctrl}</code>. This may suspend card processing capabilities and trigger a mandatory forensic investigation. Fines range from $5,000–$100,000/month and may result in loss of payment processing rights.`,
+      "NIST-CSF": `NIST Cybersecurity Framework control <code>${ctrl}</code> failed. While NIST-CSF is voluntary, violations create gaps in the security posture that are reported to board-level risk committees. They also indicate non-compliance with federal contractor requirements.`,
+      ISO27001: `ISO 27001 control <code>${ctrl}</code> violation detected. This impacts the organisation's ISMS (Information Security Management System) certification status. If this violation is identified during an audit, it would be raised as a nonconformity — potentially triggering a surveillance audit.`,
+      HIPAA: `HIPAA (Health Insurance Portability and Accountability Act) violation of <code>${ctrl}</code>. PHI (Protected Health Information) controls have been breached. HHS fines range from $100–$50,000 per violation, and criminal penalties apply for wilful neglect. OCR breach investigation may be required.`,
+    };
+    return `<strong>${fw} compliance violation — ${ctrl}.</strong> ${descs[fw]||"Compliance control failed. Violation logged for audit trail."} <br><br><em>Description: ${ev.description||"—"}</em>`;
+  }
+  if (type==="incident") {
+    const title = ev.title||"";
+    return `<strong>Security incident: ${title}.</strong> This incident was auto-created by the IntegriShield M10 Incident Response engine based on correlated signals from multiple detection modules. Status: <strong>${(ev.status||"open").toUpperCase()}</strong>. Severity: <strong>${(ev.severity||"critical").toUpperCase()}</strong>. Playbook <code>${ev.playbook_id||"none"}</code> ${ev.playbook_run?"has been auto-triggered and is currently executing containment steps.":"is queued for execution."} SLA: Critical incidents require initial response within 15 minutes and resolution within 4 hours. Current MTTD: 3.2 seconds (IntegriShield average).`;
+  }
+  if (type==="sbom") {
+    const cves = parseInt(ev.cve_count||0);
+    const ins  = parseInt(ev.insecure_rfc_count||0);
+    if (ev.scan_status==="VULNERABLE") return `<strong>VULNERABLE component detected in ${ev.target}.</strong> SBOM scan found <strong>${cves} CVE(s)</strong> and <strong>${ins} insecure RFC call(s)</strong>. CVEs in runtime dependencies create exploitable attack surfaces — attackers actively scan for known vulnerabilities in exposed SAP integration components. Each unpatched CVE with a CVSS score above 7.0 must be remediated within 30 days under most security frameworks. Insecure RFC calls indicate use of deprecated or unsafe function modules that bypass modern security controls.`;
+    return `<strong>SBOM scan completed — ${ev.target} is CLEAN.</strong> No CVEs or insecure RFC calls detected in this component's dependency tree. The Software Bill of Materials (SBOM) confirms all libraries are at patched versions with no known exploits. This component is cleared for production use. SBOM records are retained for supply-chain audit compliance (NIST SSDF, EO 14028).`;
+  }
+  if (type==="zt") {
+    const dec   = ev.decision||"";
+    const risk  = parseFloat(ev.risk_score||0);
+    let fc = []; try { fc = Array.isArray(ev.failed_controls)?ev.failed_controls:JSON.parse(ev.failed_controls||"[]"); } catch {}
+    if (dec==="deny")      return `<strong>Zero-Trust access denied — risk score ${risk.toFixed(3)}.</strong> The M04 Zero-Trust Fabric evaluated ${fc.length} security controls and found ${fc.length} failures: <code>${fc.join(", ")}</code>. Under Zero-Trust architecture, every access request must prove trust from scratch — no implicit trust is ever granted based on network location. A risk score of ${risk.toFixed(3)} places this session in the top ${Math.round((1-risk)*100)}th percentile of risk. The session has been terminated and the user must re-authenticate with additional factors.`;
+    if (dec==="challenge")  return `<strong>Zero-Trust MFA challenge issued — risk score ${risk.toFixed(3)}.</strong> The session triggered ${fc.length} risk factor(s): <code>${fc.join(", ")}</code>. Rather than blocking outright, Zero-Trust issued a step-up authentication challenge. The user must provide additional verification (MFA, device certificate, or manager approval) within 5 minutes or the session will be auto-terminated. This approach balances security with user productivity for borderline-risk sessions.`;
+    return `<strong>Zero-Trust access granted — risk score ${risk.toFixed(3)}.</strong> All security controls passed. The session was evaluated against ${_int(6,12)} behavioural and contextual signals including device health, geolocation, time-of-access, and user behaviour baseline. Low risk score indicates this is a legitimate session consistent with historical patterns. Logged for continuous monitoring and anomaly detection baseline.`;
+  }
+  if (type==="cred") {
+    const action = ev.action||"";
+    if (action.includes("revok")) return `<strong>Credential revocation executed — access terminated.</strong> Key <code>${ev.key}</code> on tenant <code>${ev.tenant_id}</code> has been revoked by M06 Credential Vault. Revocation is the nuclear option — all active sessions using this credential are immediately terminated. This action was triggered by: correlated threat signals (anomaly score, Zero-Trust deny, or admin override). Forensic copies of session logs have been preserved. The credential cannot be reinstated without a new issuance workflow and manager approval.`;
+    if (action.includes("rotat")) return `<strong>Credential rotation completed — key refreshed automatically.</strong> Key <code>${ev.key}</code> was rotated as part of M06's automated key lifecycle management. Rotation replaces credentials before they expire or are compromised, maintaining continuity while eliminating static credential risk. Rotated keys are logged immutably. Previous key version is now invalidated. This is compliant with CIS Control 5, NIST SP 800-53 IA-5, and PCI-DSS Requirement 8.`;
+    if (action==="issued") return `<strong>New credential issued — access granted.</strong> Key <code>${ev.key}</code> has been issued to an authorised service or user on tenant <code>${ev.tenant_id}</code>. All issued credentials have a maximum TTL configured per policy. The issuance was logged with full audit trail including approver, purpose, and expiry. Monitor for first-use patterns to detect credential theft immediately after issuance.`;
+    return `<strong>Credential event logged by M06 Credential Vault.</strong> Action <code>${action}</code> on key <code>${ev.key}</code>. All credential lifecycle events are captured for SOX Section 404 compliance, PCI-DSS Requirement 8 audit trails, and NIST CSF Identity management reporting.`;
+  }
+  if (type==="cloud") {
+    const finding = ev.finding_type||"";
+    if (finding==="PUBLIC_BUCKET")        return `<strong>Public cloud storage bucket detected — CRITICAL data exposure risk.</strong> Resource <code>${ev.resource_id}</code> on ${(ev.provider||"").toUpperCase()} is publicly accessible from the internet with NO authentication required. Any data in this bucket can be downloaded by anyone with the URL. This is one of the most common causes of large-scale data breaches (Capital One, Twitch, GoDaddy). If this bucket contains PII, financial data, or credentials, a breach notification may be legally required. Remediate immediately.`;
+    if (finding==="UNENCRYPTED_DB")       return `<strong>Unencrypted database detected — data at rest not protected.</strong> Resource <code>${ev.resource_id}</code> stores data without encryption. If this server is compromised, all stored data is immediately readable. Encryption at rest is required by GDPR Article 32, PCI-DSS Requirement 3.5, and HIPAA § 164.312. Enabling encryption is a non-disruptive operation that should be completed within 24 hours.`;
+    if (finding==="OVERPRIVILEGED_ROLE")  return `<strong>Overprivileged IAM role — principle of least privilege violated.</strong> Role <code>${ev.resource_id}</code> has excessive permissions beyond what its function requires. Overprivileged roles are exploited in lateral movement attacks — once an attacker compromises one service, they can pivot to the entire cloud environment. The blast radius of a compromise using this role is: ${_int(3,12)} additional services exposed. Permissions must be scoped to minimum required.`;
+    if (finding==="OPEN_SECURITY_GROUP")  return `<strong>Open security group / firewall rule detected.</strong> Network access controls on <code>${ev.resource_id}</code> allow inbound traffic from 0.0.0.0/0 (any IP). This exposes the resource to the entire internet. Even if the service has application-level auth, exposed ports are actively scanned by automated bots within minutes of deployment. Immediate restriction to specific CIDR ranges required.`;
+    if (finding==="MFA_DISABLED")         return `<strong>MFA disabled on privileged account or console access.</strong> Resource <code>${ev.resource_id}</code> does not require multi-factor authentication. Accounts without MFA are ${_int(40,100)}× more likely to be compromised. Stolen passwords alone are sufficient for full account takeover. This is a critical gap — MFA must be enforced for all console access, especially for roles with admin-level permissions.`;
+    if (finding==="ROOT_ACCESS_USED")     return `<strong>Root/owner account used directly — critical policy violation.</strong> Cloud root account <code>${ev.resource_id}</code> was accessed directly. Root access should NEVER be used for day-to-day operations — it bypasses all IAM permission boundaries and cannot be restricted. Best practice (CIS Benchmark, AWS Well-Architected) requires root access only for initial account setup and billing. Every root access event is treated as a potential compromise indicator.`;
+    if (finding==="LOGGING_DISABLED")     return `<strong>Cloud audit logging disabled — blind spot created.</strong> Resource <code>${ev.resource_id}</code> has logging turned off. Without logs, you cannot detect breaches, investigate incidents, or meet compliance requirements. SOC 2, PCI-DSS Requirement 10, and GDPR Article 30 all require comprehensive audit logs. A logging gap means any attacker activity in this resource is completely invisible.`;
+    return `<strong>Cloud security posture finding on ${(ev.provider||"").toUpperCase()}.</strong> M15 Multi-Cloud ISPM detected misconfiguration or security risk on resource <code>${ev.resource_id}</code>. Risk score: ${ev.risk_score||"—"}. All cloud findings are continuously monitored and scored for exploitability, data sensitivity, and blast radius. This finding requires remediation within the SLA window for its severity level.`;
+  }
+  return `<strong>Security event detected.</strong> Logged by IntegriShield monitoring engine. All events are retained for compliance audit trails and cross-module correlation analysis.`;
+}
+
+function _getFixSteps(type, ev) {
+  const fixMap = {
+    alert: {
+      bulk_extraction:       ["Block source IP via M01 Gateway firewall rule","Immediately revoke all active credentials for " + (ev.user_id||"user") + " via M06 Credential Vault","Trigger forensic capture of all RFC call logs for the past 24 hours","Create incident ticket and assign PB-DATA-EXFIL playbook","Notify DLP team and legal counsel of potential data breach","File SIEM correlation report and preserve evidence chain"],
+      privilege_escalation:  ["Terminate all active sessions for " + (ev.user_id||"user") + " immediately","Reset SAP authorisation profile to last known-good state","Audit all auth object changes made in the last 4 hours","Enforce step-up MFA re-authentication before access restoration","Review and revoke any new roles/profiles created by this user","Submit SOX incident report to internal audit"],
+      shadow_endpoint:       ["Block RFC endpoint " + (ev.source_ip||"source") + " at the gateway layer (M01)","Alert SAP Basis team to investigate the function module origin","Perform full scan of SAP function module registry for similar shadow entries","Trace the deployment source of the endpoint — check transport logs","Update SAP RFC whitelist and rebuild the approved endpoint registry","File security advisory if supply-chain compromise is suspected"],
+      credential_abuse:      ["Force immediate re-authentication for account " + (ev.user_id||"user") + " across all sessions","Trigger M06 emergency credential rotation for all keys associated with this account","Enable enhanced logging for this user for 30 days","Review all access in the past 24h for unauthorised data access","Alert the user via out-of-band channel (phone) to confirm compromise","Implement device certificate requirement for future sessions"],
+      geo_anomaly:           ["Challenge session from " + (ev.source_ip||"IP") + " with MFA step-up immediately","If MFA fails, block the IP at the perimeter firewall","Add IP to M04 Zero-Trust geo-risk blocklist","Notify user via registered phone number to confirm travel","If travel not confirmed, assume compromise and revoke session","Review access logs for the past 72 hours from this IP"],
+      data_staging:          ["Immediately quarantine the staging destination " + (ev.source_ip||"") + "","Revoke write access to staging locations for account " + (ev.user_id||""),"Block all egress to external file transfer services (mega.nz, etc.)","Trigger cloud key rotation if AWS/GCP/Azure resources were involved","Initiate PB-CLOUD-BREACH playbook for full containment","Notify legal team of potential breach — assess GDPR Article 33 obligations"],
+      off_hours_rfc:         ["Elevate monitoring level to HIGH for account " + (ev.user_id||"user"),"Trigger MFA step-up challenge for next RFC call from this session","Review all RFC calls made in the last 2 hours for anomalies","Set automated alert if off-hours activity continues beyond 30 minutes","Cross-reference with badge access records to confirm physical presence","No immediate block required — escalate to Tier 2 analyst"],
+      velocity_anomaly:      ["Rate-limit RFC calls from " + (ev.source_ip||"IP") + " to 10 req/min immediately","Challenge the session with CAPTCHA or MFA step-up","Alert SAP admin to check if automated scripts are running","If velocity continues, block source IP via M01 gateway","Audit the tool or script that is generating high-velocity calls","Review SAP workload monitor for resource impact"],
+    },
+    anomaly: {
+      default: ["Investigate the session flagged by the Isolation Forest model","Cross-reference with SAP audit log for the same user/IP pair","If anomaly score > 0.85, auto-escalate to Tier 1 analyst","Apply Zero-Trust step-up challenge to the current session","If pattern continues for 2+ ticks, create incident and trigger playbook","Retain session logs for forensic analysis — do not overwrite"]
+    },
+    sap: {
+      default: ["Terminate the flagged SAP MCP session for user " + (ev.user_id||""),"Review what data was accessed or exported in this session","Revoke SAP authorisation for the tool " + (ev.tool_name||"") + " temporarily","Compare against SAP change request log — validate authorisation","If no change request exists, escalate to SAP Basis security team","Preserve RFC call logs and session data for forensic audit"]
+    },
+    dlp: {
+      default: ["Block further egress from account " + (ev.user_id||"") + " immediately","Quarantine the data that was transferred to " + (ev.destination||"destination") + " if recoverable","Assess the data transferred for PII/financial data classification","Notify data protection officer if GDPR Article 33 threshold is met","Submit DLP incident report with transfer details and data classification","Apply stricter DLP policy to this user account for 30 days"]
+    },
+    shadow: {
+      default: ["Block RFC function " + (ev.endpoint||"") + " at M01 API Gateway immediately","Notify SAP Basis administrator to investigate function module origin","Scan entire SAP system for additional unknown/shadow RFC modules","Check transport management system for unauthorised deployments","If external source: initiate PB-SHADOW-API playbook","Update function module whitelist — trigger differential rescan"]
+    },
+    comp: {
+      default: ["Log violation " + (ev.control_id||"") + " in GRC system immediately","Notify compliance officer and relevant framework owner","Initiate remediation workflow with assigned control owner","Assess if violation triggers breach notification obligations","Apply compensating controls while primary control is remediated","Schedule follow-up audit to confirm control restoration within SLA"]
+    },
+    incident: {
+      default: ["Assign incident to on-call Tier 2 analyst immediately","Execute playbook " + (ev.playbook_id||"assigned") + " — all steps must be completed in order","Update incident status to INVESTIGATING in ticketing system","Preserve all evidence — do not modify affected systems","Notify CISO and legal if severity is CRITICAL","Post-incident: complete root cause analysis within 5 business days"]
+    },
+    sbom: {
+      default: ["Patch all CVEs with CVSS score >= 7.0 within 30 days (critical: 7 days)","Replace insecure RFC function calls with approved secure alternatives","Update dependency versions in requirements.txt/package.json","Rebuild and redeploy container with patched base image","Re-run SBOM scan to confirm clean bill of materials","Update SBOM report in compliance artifact store (SOC2, ISO27001)"]
+    },
+    zt: {
+      deny: ["Session has been auto-terminated by Zero-Trust — no additional blocking needed","Notify user via out-of-band channel if legitimate access was expected","Review failed controls: " + (() => { let fc=[]; try{fc=Array.isArray(ev.failed_controls)?ev.failed_controls:JSON.parse(ev.failed_controls||"[]")}catch{} return fc.join(", ")||"none"; })(),"If MFA failure: force re-enrolment of authenticator device","If geo-risk: challenge with manager approval for location exception","Monitor for further access attempts from same source in next 1 hour"],
+      challenge: ["User must complete MFA step-up within 5 minutes","If MFA not completed, session auto-terminates — no action needed","Review why risk score exceeded challenge threshold","If pattern repeats 3+ times, consider blocking the source","Log challenge outcome in Zero-Trust audit trail","No data access occurs during challenge state — safe to monitor"],
+      allow: ["No action required — session is within normal risk parameters","Session will continue to be monitored in real-time by Zero-Trust","Anomaly detection (M08) will flag any behavioural changes","All RFC calls during this session are logged for compliance","This event is retained for baseline model updates","Review if risk score trended up over recent sessions"],
+    },
+    cred: {
+      revoked: ["Credential has been revoked — no further action needed","Verify that all active sessions using this credential have been terminated","Issue replacement credential through proper approval workflow if legitimate","Audit all actions taken using the revoked credential in past 48h","Notify the application or user that was using this credential","Update any hardcoded credential references in configuration files"],
+      rotated: ["New rotated credential is now active — update all consuming services","Verify that legacy credential version is fully invalidated (confirm in Vault)","Check for any hardcoded uses of the old credential in codebases","Update CI/CD pipeline secrets if applicable","Log rotation event in credential lifecycle audit trail","Next rotation scheduled per policy (30/60/90 day cycle)"],
+      default: ["Audit the context in which credential " + (ev.key||"") + " was issued/accessed","Verify the requesting service/user is authorised for this credential","Monitor first-use of newly issued credentials for anomalous behaviour","Ensure credential TTL is set per least-privilege access policy","Review Vault audit log for this credential path","Alert if credential is used outside expected service boundary"]
+    },
+    cloud: {
+      PUBLIC_BUCKET:        ["Apply bucket policy: Block Public Access = true immediately","Enable server-side encryption (SSE-S3 or SSE-KMS) if not already enabled","Review bucket contents for sensitive data — classify and inventory","Enable CloudTrail/GCS audit logging for this bucket","Notify data owner and confirm intended access policy","Add bucket to automated CSPM scanning policy for continuous monitoring"],
+      UNENCRYPTED_DB:       ["Enable encryption at rest on the database (AWS RDS/GCP Cloud SQL/Azure SQL)","Apply KMS customer-managed key for encrypted data","Rotate database credentials immediately (encryption prevents static key reuse)","Enable database audit logging and query logging","Notify DBA and application team of encryption requirement","Verify application can connect to encrypted instance before retiring unencrypted"],
+      OVERPRIVILEGED_ROLE:  ["Apply principle of least privilege — remove all permissions not required","Use IAM Access Analyzer to generate minimal-permission policy","Detach all managed policies — apply inline policy with only required actions","Set permission boundary to cap maximum permissions","Enable CloudTrail for all API calls using this role","Review all resources accessible by this role and assess blast radius"],
+      OPEN_SECURITY_GROUP:  ["Restrict inbound rule 0.0.0.0/0 to specific CIDR ranges (corporate IP + VPN)","Apply separate security groups for each tier (web, app, DB)","Enable VPC Flow Logs to audit all network traffic","Use a WAF in front of any public-facing endpoints","Set up automated alert for any future 0.0.0.0/0 security group rule creation","Run network exposure assessment to identify all public-facing resources"],
+      MFA_DISABLED:         ["Enable MFA immediately for all console/API access","For AWS: use virtual MFA device or hardware security key","For GCP: enforce 2FA in Admin Console > Security","For Azure: enable Conditional Access with MFA for all admin roles","Disable all access keys for root/admin accounts — use MFA-protected roles instead","Audit all recent access to confirm no unauthorised activity during MFA gap"],
+      ROOT_ACCESS_USED:     ["Investigate the justification for root access — confirm it was authorised","Enable MFA on root account if not already configured","Create least-privilege admin IAM roles for all day-to-day operations","Lock root account credentials in secure password manager (1 person max)","Set CloudTrail alert for any future root access events","Review all actions taken under root session — verify no unauthorised changes"],
+      LOGGING_DISABLED:     ["Enable CloudTrail (AWS) / Cloud Audit Logs (GCP) / Activity Log (Azure) immediately","Apply log retention policy: minimum 1 year for compliance","Send logs to immutable S3 / GCS bucket with Object Lock","Set up real-time alerting on log delivery failures","Ensure all API calls, management events, and data events are logged","Verify log integrity with CloudTrail Log File Validation or equivalent"],
+      default: ["Remediate the finding per cloud provider security best practices","Apply CIS Cloud Benchmark controls for the affected resource","Enable continuous compliance scanning via M15 ISPM policy","Assign remediation ownership to cloud infrastructure team","Set SLA: Critical findings < 24h, High < 7 days, Medium < 30 days","Re-scan after remediation to confirm finding is resolved"]
+    }
+  };
+
+  if (type==="alert"||type==="gateway"||type==="rules") {
+    const sc = ev.scenario||"";
+    for (const [k,v] of Object.entries(fixMap.alert)) {
+      if (sc.includes(k)) return v;
+    }
+    return fixMap.alert.off_hours_rfc;
+  }
+  if (type==="anomaly") return fixMap.anomaly.default;
+  if (type==="sap")     return fixMap.sap.default;
+  if (type==="dlp")     return fixMap.dlp.default;
+  if (type==="shadow")  return fixMap.shadow.default;
+  if (type==="comp")    return fixMap.comp.default;
+  if (type==="incident")return fixMap.incident.default;
+  if (type==="sbom")    return fixMap.sbom.default;
+  if (type==="zt") {
+    const dec = (ev.decision||"allow").toLowerCase();
+    return fixMap.zt[dec] || fixMap.zt.allow;
+  }
+  if (type==="cred") {
+    const act = (ev.action||"").toLowerCase();
+    if (act.includes("revok")) return fixMap.cred.revoked;
+    if (act.includes("rotat")) return fixMap.cred.rotated;
+    return fixMap.cred.default;
+  }
+  if (type==="cloud") {
+    return fixMap.cloud[ev.finding_type] || fixMap.cloud.default;
+  }
+  return ["Investigate the flagged event","Escalate to Tier 2 analyst if pattern continues","Log remediation steps in incident tracker","Apply compensating controls while root cause is identified","Verify fix effectiveness with follow-up scan","Close incident with post-mortem report"];
+}
+
+function applyFix(type, idx) {
+  const arrMap = {
+    alert:alerts, anomaly:anomalies, sap:sapEvents, dlp:dlpEvents,
+    shadow:shadowEvents, comp:compEvents, incident:incEvents,
+    sbom:sbomEvents, zt:ztEvents, cred:credEvents, cloud:cloudEvents,
+    gateway:alerts, rules:alerts,
+  };
+  const arr = arrMap[type]; if (!arr || !arr[idx]) return;
+  const ev  = arr[idx];
+  fixedItems.add(`${type}-${idx}`);
+
+  // Visual feedback in drawer
+  const drwBadge = $("drw-badge"), drwTitle = $("drw-title");
+  if (drwBadge) { drwBadge.textContent="✓ RESOLVED"; drwBadge.className="sev-badge sev-ok"; drwBadge.style.background="rgba(46,213,115,0.2)"; }
+  if (drwTitle) drwTitle.textContent = "✓ RESOLVED — " + (drwTitle.textContent||"");
+
+  const actionsEl = $("drw-actions");
+  if (actionsEl) {
+    actionsEl.innerHTML = `<div style="flex:1;padding:.55rem .8rem;border:1px solid rgba(46,213,115,.35);border-radius:6px;background:rgba(46,213,115,.12);color:#2ed573;font-size:.78rem;font-weight:700;text-align:center;animation:none">
+      ✅ IntegriShield applied all ${_getFixSteps(type,ev).length} fix steps automatically
+    </div>
+    <button onclick="closeDetailDrawer()" style="padding:.5rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.06);color:#7a93b4;font-size:.76rem;cursor:pointer">Close</button>`;
+  }
+
+  // Type-specific success messages
+  const msgs = {
+    alert:    `⚡ Alert remediated — IP blocked, credentials revoked, incident created`,
+    anomaly:  `🧠 Anomaly suppressed — session terminated, analyst notified`,
+    sap:      `⚙️ SAP MCP session terminated — tool access revoked for ${ev.user_id||"user"}`,
+    dlp:      `🔒 DLP violation remediated — egress blocked, data owner notified`,
+    shadow:   `👁️ Shadow RFC ${ev.endpoint||"endpoint"} blocked — gateway rule applied`,
+    comp:     `✅ Compliance violation logged — remediation workflow triggered`,
+    incident: `🚨 Incident ${ev.incident_id||""} resolved — playbook completed`,
+    sbom:     `📦 SBOM patch applied — CVEs remediated on ${ev.target||"package"}`,
+    zt:       `🔐 Zero-Trust action applied — session policy updated`,
+    cred:     `🔑 Credential action confirmed — vault updated for ${ev.key||"key"}`,
+    cloud:    `☁️ Cloud misconfiguration fixed on ${ev.resource_id||"resource"}`,
+    gateway:  `🛡️ Gateway rule applied — RFC call blocked`,
+    rules:    `📏 Rule triggered and enforced — alert suppressed`,
+  };
+  showToast(msgs[type]||"✅ Fix applied by IntegriShield", "success", 5000);
+
+  // Increment fix-applied KPI
+  kpiBlocked += _int(3,8);
+
+  setTimeout(()=>{ closeDetailDrawer(); updateAllUI(); }, 1500);
 }
 
 function closeDetailDrawer(e) {
@@ -1085,26 +1486,23 @@ function closeDetailDrawer(e) {
   overlay.classList.add("hidden");
 }
 
-function demoAction(action, param) {
+function demoActionAlt(action, type, param) {
   const msgs = {
-    block_ip:        `🚫 IP ${param} blocked — firewall rule applied across all zones`,
-    revoke_user:     `🔑 All sessions for ${param} terminated — credentials revoked`,
-    create_incident: `🚨 Incident INC-${_incID+1} created — playbook auto-triggered`,
-    export:          `📄 Incident report exported — PDF sent to SOC team & CISO`,
+    block: `🚫 ${param||type} blocked at perimeter — firewall rule propagated across all zones`,
+    report: `📄 ${type.charAt(0).toUpperCase()+type.slice(1)} report exported — PDF sent to SOC team & CISO`,
   };
-  showToast(msgs[action]||"Action executed", "success", 4000);
-  closeDetailDrawer();
+  showToast(msgs[action]||"Action executed", action==="block"?"warning":"info", 4000);
 }
 
-function _aiExplain(a) {
-  const sc = a.scenario||"";
-  if (sc.includes("bulk_extraction"))      return `<strong>High-confidence data exfiltration.</strong> User <code>${a.user_id}</code> invoked RFC_READ_TABLE at anomalous velocity. Isolation Forest score: <strong>0.94</strong>. Cross-referenced with ${_int(2,5)} prior off-hours sessions from same IP. <strong>→ Immediate credential revocation + forensic capture recommended.</strong>`;
-  if (sc.includes("privilege_escalation")) return `<strong>Unauthorized privilege escalation detected.</strong> SUSR_USER_AUTH_FOR_OBJ_GET called outside change window. Zero-Trust denied (risk: 0.97). SOX AC-2 and NIST IA-2 violated. <strong>→ Terminate session, audit all recent auth changes.</strong>`;
-  if (sc.includes("shadow_endpoint"))      return `<strong>Unknown RFC endpoint from external IP.</strong> No registered business owner for this function. External origin suggests supply-chain or insider threat vector. <strong>→ Block endpoint, initiate full SAP system scan.</strong>`;
-  if (sc.includes("credential_abuse"))     return `<strong>Credential used from ${_int(3,8)} geolocations simultaneously.</strong> Indicates credential compromise or sharing. Zero-Trust risk score: 0.78. <strong>→ Force re-auth with MFA, review recent access logs.</strong>`;
-  if (sc.includes("geo_anomaly"))          return `<strong>Access from high-risk geolocation.</strong> IP ${a.source_ip} maps to region outside corporate policy. No prior sessions from this location. <strong>→ Challenge with MFA, apply geo-block if unapproved.</strong>`;
-  if (sc.includes("data_staging"))         return `<strong>Data staging activity detected.</strong> Large volume write to external destination. Cloud misconfiguration may have enabled exfiltration path. <strong>→ Revoke cloud keys, remediate S3/storage permissions immediately.</strong>`;
-  return `<strong>Anomalous activity pattern.</strong> Behaviour deviation from baseline: score ${_flt(0.55,0.92)}. Correlated with ${_int(2,5)} recent events from same source. <strong>→ Investigate and monitor for escalation.</strong>`;
+// Keep legacy alias
+function showAlertDetail(idx) { showItemDetail("alert", idx); }
+function demoAction(action, param) {
+  const msgs = {
+    block_ip: `🚫 IP ${param} blocked — firewall rule applied`, revoke_user: `🔑 ${param} sessions terminated`,
+    create_incident: `🚨 Incident INC-${_incID+1} created`, export: `📄 Report exported`,
+  };
+  showToast(msgs[action]||"Action executed","success",4000);
+  closeDetailDrawer();
 }
 
 // ── Navigate ──────────────────────────────────────────────────
