@@ -49,6 +49,14 @@
       .scorecard-viol{font-size:0.68rem;color:#ff4757;background:rgba(255,71,87,0.12);padding:1px 6px;border-radius:3px}
       .scorecard-ok{font-size:0.68rem;color:#2ed573}
 
+      /* ── Filters, Search & Export ── */
+      .filter-input{height:30px;padding:0 .6rem;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:5px;color:#b0c4de;font-size:.72rem;outline:none;min-width:150px;transition:border-color .15s}
+      .filter-input:focus{border-color:rgba(76,130,247,.5);background:rgba(76,130,247,.06)}
+      .filter-input::placeholder{color:#4a6080}
+      .export-btn{height:30px;padding:0 .75rem;background:rgba(0,229,160,.08);border:1px solid rgba(0,229,160,.25);border-radius:5px;color:#00e5a0;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s}
+      .export-btn:hover{background:rgba(0,229,160,.15);border-color:rgba(0,229,160,.4)}
+      .badge-live{background:rgba(0,229,160,.15);color:#00e5a0;border:1px solid rgba(0,229,160,.3);font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.06em}
+
       /* ── Playbook Tracker ── */
       .playbook-tracker{background:rgba(91,141,239,0.07);border:1px solid rgba(91,141,239,0.2);border-radius:8px;padding:1rem;margin-bottom:1rem}
       .playbook-header{display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;flex-wrap:wrap}
@@ -151,8 +159,8 @@
             <span class="logo-icon">◆</span>
             <span class="logo-text">IntegriShield</span>
           </div>
-          <span class="badge badge-poc">POC</span>
-          <span class="badge badge-sprint">Sprint · Day 7</span>
+          <span class="badge badge-live"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#00e5a0;animation:pulse-dot 1.4s infinite;margin-right:5px;vertical-align:middle"></span>LIVE</span>
+          <span class="badge badge-sprint">v2.1 · Enterprise</span>
         </div>
         <div class="topbar-center">
           <div class="health-pills">
@@ -283,9 +291,9 @@
             </div>
           </div>
           <div class="scenario-banner-right">
-            <span class="scenario-meta" id="scenario-attacker-label">Attacker:</span>
+            <span class="scenario-meta">Threat Actor IP:</span>
             <code class="scenario-attacker-ip" id="scenario-attacker-ip">—</code>
-            <span class="scenario-meta">User:</span>
+            <span class="scenario-meta">Account:</span>
             <code class="scenario-attacker-user" id="scenario-attacker-user">—</code>
           </div>
         </div>
@@ -464,6 +472,7 @@
                 <option value="medium">Medium</option>
                 <option value="low">Low</option>
               </select>
+              <button class="export-btn" onclick="exportCSV('alerts')">⬇ CSV</button>
             </div>
           </div>
           <ul id="alerts-list" class="feed-list"></ul>
@@ -510,13 +519,18 @@
               <h2>API Gateway Shield</h2>
               <span class="panel-subtitle">RFC proxy · request inspection · event publishing</span>
             </div>
-            <span class="owner-tag">Dev 1</span>
+            <div class="panel-controls">
+              <input type="text" id="gw-search" placeholder="Search IP, user, message…" class="filter-input">
+              <select id="gw-scenario-filter"><option value="all">All types</option><option value="off_hours_rfc">Off-hours RFC</option><option value="bulk_extraction">Bulk extraction</option><option value="velocity_anomaly">Velocity anomaly</option><option value="shadow_endpoint">Shadow endpoint</option><option value="credential_abuse">Credential abuse</option></select>
+              <select id="gw-severity-filter"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+              <button class="export-btn" onclick="exportCSV('gateway')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
-            <div class="mini-stat"><span id="gw-total">0</span><label>Total Calls</label></div>
-            <div class="mini-stat mini-stat-warn"><span id="gw-off-hours">0</span><label>Off-Hours</label></div>
-            <div class="mini-stat mini-stat-critical"><span id="gw-bulk">0</span><label>Bulk Extractions</label></div>
-            <div class="mini-stat mini-stat-info"><span id="gw-velocity">0</span><label>Velocity Alerts</label></div>
+            <div class="mini-stat" style="cursor:pointer" onclick="miniStatFilter('gateway','gw-scenario-filter','all')" title="Show all"><span id="gw-total">0</span><label>Total Calls</label></div>
+            <div class="mini-stat mini-stat-warn" style="cursor:pointer" onclick="miniStatFilter('gateway','gw-scenario-filter','off_hours_rfc')" title="Filter off-hours"><span id="gw-off-hours">0</span><label>Off-Hours ↗</label></div>
+            <div class="mini-stat mini-stat-critical" style="cursor:pointer" onclick="miniStatFilter('gateway','gw-scenario-filter','bulk_extraction')" title="Filter bulk"><span id="gw-bulk">0</span><label>Bulk Extractions ↗</label></div>
+            <div class="mini-stat mini-stat-info" style="cursor:pointer" onclick="miniStatFilter('gateway','gw-scenario-filter','velocity_anomaly')" title="Filter velocity"><span id="gw-velocity">0</span><label>Velocity Alerts ↗</label></div>
           </div>
           <ul id="gateway-list" class="feed-list"></ul>
           <p class="empty-state" id="gateway-empty">Waiting for API call events from M01 stream…</p>
@@ -530,12 +544,17 @@
               <h2>Anomaly Detection</h2>
               <span class="panel-subtitle">Isolation Forest · baseline deviation · ML scoring</span>
             </div>
-            <span class="owner-tag">Dev 2</span>
+            <div class="panel-controls">
+              <input type="text" id="anom-search" placeholder="Search user, IP…" class="filter-input">
+              <select id="anom-class-filter"><option value="all">All classifications</option><option value="velocity_spike">Velocity spike</option><option value="off_hours_pattern">Off-hours pattern</option><option value="new_endpoint">New endpoint</option><option value="geo_anomaly">Geo anomaly</option><option value="baseline_deviation">Baseline deviation</option><option value="privilege_escalation">Privilege escalation</option></select>
+              <select id="anom-score-filter"><option value="all">All scores</option><option value="high">High (&gt;0.7)</option><option value="medium">Medium (0.4–0.7)</option><option value="low">Low (&lt;0.4)</option></select>
+              <button class="export-btn" onclick="exportCSV('anomaly')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
-            <div class="mini-stat mini-stat-purple"><span id="anom-total">0</span><label>Scored</label></div>
-            <div class="mini-stat mini-stat-critical"><span id="anom-high">0</span><label>High (&gt;0.7)</label></div>
-            <div class="mini-stat mini-stat-info"><span id="anom-new-ep">0</span><label>New Endpoints</label></div>
+            <div class="mini-stat mini-stat-purple" style="cursor:pointer" onclick="miniStatFilter('anomalies','anom-score-filter','all')" title="Show all"><span id="anom-total">0</span><label>Scored</label></div>
+            <div class="mini-stat mini-stat-critical" style="cursor:pointer" onclick="miniStatFilter('anomalies','anom-score-filter','high')" title="Filter high score"><span id="anom-high">0</span><label>High (&gt;0.7) ↗</label></div>
+            <div class="mini-stat mini-stat-info" style="cursor:pointer" onclick="miniStatFilter('anomalies','anom-class-filter','new_endpoint')" title="Filter new endpoints"><span id="anom-new-ep">0</span><label>New Endpoints ↗</label></div>
           </div>
           <ul id="anomaly-list" class="feed-list"></ul>
           <p class="empty-state" id="anomaly-empty">Waiting for anomaly scores from M08…</p>
@@ -549,12 +568,17 @@
               <h2>Data Loss Prevention</h2>
               <span class="panel-subtitle">Bulk extraction · data staging · blocklist violations</span>
             </div>
-            <span class="owner-tag">Dev 2</span>
+            <div class="panel-controls">
+              <input type="text" id="dlp-search" placeholder="Search user, destination…" class="filter-input">
+              <select id="dlp-rule-filter"><option value="all">All rules</option><option value="bulk">Bulk export</option><option value="staging">Data staging</option><option value="blocklist">Blocklist</option><option value="pii">PII exfil</option></select>
+              <select id="dlp-sev-filter"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option></select>
+              <button class="export-btn" onclick="exportCSV('dlp')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
-            <div class="mini-stat mini-stat-critical"><span id="dlp-bulk">0</span><label>Bulk Extractions</label></div>
-            <div class="mini-stat mini-stat-warn"><span id="dlp-staging">0</span><label>Data Staging</label></div>
-            <div class="mini-stat mini-stat-teal"><span id="dlp-blocklist">0</span><label>Blocklist Hits</label></div>
+            <div class="mini-stat mini-stat-critical" style="cursor:pointer" onclick="miniStatFilter('dlp','dlp-rule-filter','bulk')" title="Filter bulk"><span id="dlp-bulk">0</span><label>Bulk Extractions ↗</label></div>
+            <div class="mini-stat mini-stat-warn" style="cursor:pointer" onclick="miniStatFilter('dlp','dlp-rule-filter','staging')" title="Filter staging"><span id="dlp-staging">0</span><label>Data Staging ↗</label></div>
+            <div class="mini-stat mini-stat-teal" style="cursor:pointer" onclick="miniStatFilter('dlp','dlp-rule-filter','blocklist')" title="Filter blocklist"><span id="dlp-blocklist">0</span><label>Blocklist Hits ↗</label></div>
           </div>
           <ul id="dlp-list" class="feed-list"></ul>
           <p class="empty-state" id="dlp-empty">No DLP violations from M09 yet.</p>
@@ -568,7 +592,11 @@
               <h2>Shadow Integration Detector</h2>
               <span class="panel-subtitle">Unknown endpoints · unregistered SaaS · unauthorized connectors</span>
             </div>
-            <span class="owner-tag">Dev 2</span>
+            <div class="panel-controls">
+              <input type="text" id="shadow-search" placeholder="Search endpoint, user, IP…" class="filter-input">
+              <select id="shadow-sev-filter"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option></select>
+              <button class="export-btn" onclick="exportCSV('shadow')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
             <div class="mini-stat mini-stat-warn"><span id="shadow-total">0</span><label>Detections</label></div>
@@ -586,7 +614,12 @@
               <h2>SAP MCP Suite</h2>
               <span class="panel-subtitle">MCP tool registry · multi-stream consumer · event caching</span>
             </div>
-            <span class="owner-tag">Dev 3</span>
+            <div class="panel-controls">
+              <input type="text" id="sap-search" placeholder="Search tool, user, tenant…" class="filter-input">
+              <select id="sap-tool-filter"><option value="all">All tools</option><option value="read_table">read_table</option><option value="list_users">list_users</option><option value="get_auth_objects">get_auth_objects</option><option value="export_payroll_data">export_payroll_data</option><option value="change_user_auth">change_user_auth</option><option value="modify_auth_profile">modify_auth_profile</option><option value="delete_table_entries">delete_table_entries</option><option value="run_report">run_report</option></select>
+              <select id="sap-flag-filter"><option value="all">All events</option><option value="flagged">Flagged only</option><option value="clean">Clean only</option></select>
+              <button class="export-btn" onclick="exportCSV('sap')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
             <div class="mini-stat mini-stat-cyan"><span id="sap-total">0</span><label>Tool Invocations</label></div>
@@ -604,12 +637,16 @@
               <h2>Compliance Autopilot</h2>
               <span class="panel-subtitle">SOX · SOC2 · ISO 27001 · GDPR · continuous evidence collection</span>
             </div>
-            <span class="owner-tag">Dev 3</span>
+            <div class="panel-controls">
+              <select id="comp-fw-filter"><option value="all">All frameworks</option><option value="SOX">SOX</option><option value="GDPR">GDPR</option><option value="PCI-DSS">PCI-DSS</option><option value="NIST-CSF">NIST-CSF</option><option value="ISO27001">ISO27001</option><option value="HIPAA">HIPAA</option></select>
+              <select id="comp-result-filter"><option value="all">All results</option><option value="violation">Violations</option><option value="warning">Warnings</option><option value="pass">Passed</option></select>
+              <button class="export-btn" onclick="exportCSV('compliance')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
-            <div class="mini-stat mini-stat-critical"><span id="comp-violations">0</span><label>Violations</label></div>
-            <div class="mini-stat mini-stat-warn"><span id="comp-warnings">0</span><label>Warnings</label></div>
-            <div class="mini-stat mini-stat-ok"><span id="comp-passed">0</span><label>Passed</label></div>
+            <div class="mini-stat mini-stat-critical" style="cursor:pointer" onclick="miniStatFilter('compliance','comp-result-filter','violation')"><span id="comp-violations">0</span><label>Violations ↗</label></div>
+            <div class="mini-stat mini-stat-warn" style="cursor:pointer" onclick="miniStatFilter('compliance','comp-result-filter','warning')"><span id="comp-warnings">0</span><label>Warnings ↗</label></div>
+            <div class="mini-stat mini-stat-ok" style="cursor:pointer" onclick="miniStatFilter('compliance','comp-result-filter','pass')"><span id="comp-passed">0</span><label>Passed ↗</label></div>
             <div class="mini-stat mini-stat-info"><span id="comp-frameworks">0</span><label>Frameworks</label></div>
           </div>
           <div class="compliance-scorecard" id="compliance-scorecard"></div>
@@ -625,12 +662,17 @@
               <h2>Incident Response</h2>
               <span class="panel-subtitle">Playbook engine · alert correlation · automated containment</span>
             </div>
-            <span class="owner-tag">Dev 3</span>
+            <div class="panel-controls">
+              <input type="text" id="inc-search" placeholder="Search incident ID, title…" class="filter-input">
+              <select id="inc-status-filter"><option value="all">All statuses</option><option value="open">Open</option><option value="investigating">Investigating</option><option value="resolved">Resolved</option></select>
+              <select id="inc-sev-filter"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option></select>
+              <button class="export-btn" onclick="exportCSV('incidents')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
-            <div class="mini-stat mini-stat-critical"><span id="inc-open">0</span><label>Open</label></div>
-            <div class="mini-stat mini-stat-warn"><span id="inc-investigating">0</span><label>Investigating</label></div>
-            <div class="mini-stat mini-stat-ok"><span id="inc-resolved">0</span><label>Resolved</label></div>
+            <div class="mini-stat mini-stat-critical" style="cursor:pointer" onclick="miniStatFilter('incidents','inc-status-filter','open')"><span id="inc-open">0</span><label>Open ↗</label></div>
+            <div class="mini-stat mini-stat-warn" style="cursor:pointer" onclick="miniStatFilter('incidents','inc-status-filter','investigating')"><span id="inc-investigating">0</span><label>Investigating ↗</label></div>
+            <div class="mini-stat mini-stat-ok" style="cursor:pointer" onclick="miniStatFilter('incidents','inc-status-filter','resolved')"><span id="inc-resolved">0</span><label>Resolved ↗</label></div>
             <div class="mini-stat mini-stat-purple"><span id="inc-playbooks">0</span><label>Playbooks Run</label></div>
           </div>
           <div id="active-playbook-tracker" class="playbook-tracker hidden"></div>
@@ -646,13 +688,17 @@
               <h2>SBOM Scanner</h2>
               <span class="panel-subtitle">CycloneDX 1.4 · CVE detection · SAP ABAP static analysis</span>
             </div>
-            <span class="owner-tag">Dev 3</span>
+            <div class="panel-controls">
+              <input type="text" id="sbom-search" placeholder="Search package, target…" class="filter-input">
+              <select id="sbom-status-filter"><option value="all">All statuses</option><option value="VULNERABLE">Vulnerable</option><option value="CLEAN">Clean</option></select>
+              <button class="export-btn" onclick="exportCSV('sbom')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
             <div class="mini-stat mini-stat-info"><span id="sbom-total">0</span><label>Scans</label></div>
-            <div class="mini-stat mini-stat-critical"><span id="sbom-cve">0</span><label>CVEs Found</label></div>
-            <div class="mini-stat mini-stat-warn"><span id="sbom-insecure">0</span><label>Insecure RFC</label></div>
-            <div class="mini-stat mini-stat-ok"><span id="sbom-clean">0</span><label>Clean</label></div>
+            <div class="mini-stat mini-stat-critical" style="cursor:pointer" onclick="miniStatFilter('sbom','sbom-status-filter','VULNERABLE')"><span id="sbom-cve">0</span><label>CVEs Found ↗</label></div>
+            <div class="mini-stat mini-stat-warn" style="cursor:pointer" onclick="miniStatFilter('sbom','sbom-status-filter','VULNERABLE')"><span id="sbom-insecure">0</span><label>Insecure RFC ↗</label></div>
+            <div class="mini-stat mini-stat-ok" style="cursor:pointer" onclick="miniStatFilter('sbom','sbom-status-filter','CLEAN')"><span id="sbom-clean">0</span><label>Clean ↗</label></div>
           </div>
           <ul id="sbom-list" class="feed-list"></ul>
           <p class="empty-state" id="sbom-empty">Waiting for SBOM scan results from M13…</p>
@@ -666,7 +712,12 @@
               <h2>Rules Engine</h2>
               <span class="panel-subtitle">8 security rules · stateful counters · real-time evaluation</span>
             </div>
-            <span class="owner-tag">Dev 4</span>
+            <div class="panel-controls">
+              <input type="text" id="rules-search" placeholder="Search rule, user, IP…" class="filter-input">
+              <select id="rules-scenario-filter"><option value="all">All rules</option><option value="bulk_extraction">Bulk extraction</option><option value="off_hours_rfc">Off-hours RFC</option><option value="shadow_endpoint">Shadow endpoint</option><option value="velocity_anomaly">Velocity anomaly</option><option value="credential_abuse">Credential abuse</option><option value="privilege_escalation">Privilege escalation</option></select>
+              <select id="rules-sev-filter"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+              <button class="export-btn" onclick="exportCSV('rules')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
             <div class="mini-stat mini-stat-critical"><span id="rule-bulk">0</span><label>Bulk Extraction</label></div>
@@ -687,13 +738,18 @@
               <h2>Zero-Trust Fabric</h2>
               <span class="panel-subtitle">Device trust · geo-policy · MFA · risk scoring</span>
             </div>
-            <span class="owner-tag">Dev 4</span>
+            <div class="panel-controls">
+              <input type="text" id="zt-search" placeholder="Search user, IP…" class="filter-input">
+              <select id="zt-decision-filter"><option value="all">All decisions</option><option value="allow">Allowed</option><option value="deny">Denied</option><option value="challenge">Challenged</option></select>
+              <select id="zt-risk-filter"><option value="all">All risk levels</option><option value="high">High (&gt;0.7)</option><option value="medium">Medium (0.4–0.7)</option><option value="low">Low (&lt;0.4)</option></select>
+              <button class="export-btn" onclick="exportCSV('zt')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
-            <div class="mini-stat mini-stat-ok"><span id="zt-allow">0</span><label>Allowed</label></div>
-            <div class="mini-stat mini-stat-critical"><span id="zt-deny">0</span><label>Denied</label></div>
-            <div class="mini-stat mini-stat-warn"><span id="zt-challenge">0</span><label>Challenged</label></div>
-            <div class="mini-stat mini-stat-info"><span id="zt-avg-risk">—</span><label>Avg Risk</label></div>
+            <div class="mini-stat mini-stat-ok" style="cursor:pointer" onclick="miniStatFilter('zero-trust','zt-decision-filter','allow')"><span id="zt-allow">0</span><label>Allowed ↗</label></div>
+            <div class="mini-stat mini-stat-critical" style="cursor:pointer" onclick="miniStatFilter('zero-trust','zt-decision-filter','deny')"><span id="zt-deny">0</span><label>Denied ↗</label></div>
+            <div class="mini-stat mini-stat-warn" style="cursor:pointer" onclick="miniStatFilter('zero-trust','zt-decision-filter','challenge')"><span id="zt-challenge">0</span><label>Challenged ↗</label></div>
+            <div class="mini-stat mini-stat-info" style="cursor:pointer" onclick="miniStatFilter('zero-trust','zt-risk-filter','high')"><span id="zt-avg-risk">—</span><label>Avg Risk ↗</label></div>
           </div>
           <ul id="zt-list" class="feed-list"></ul>
           <p class="empty-state" id="zt-empty">Waiting for zero-trust evaluations from M04…</p>
@@ -707,12 +763,16 @@
               <h2>Credential Vault</h2>
               <span class="panel-subtitle">Lifecycle · rotation · issuance · revocation</span>
             </div>
-            <span class="owner-tag">Dev 4</span>
+            <div class="panel-controls">
+              <input type="text" id="cred-search" placeholder="Search key, tenant…" class="filter-input">
+              <select id="cred-action-filter"><option value="all">All actions</option><option value="issued">Issued</option><option value="rotated">Rotated</option><option value="revoked">Revoked</option><option value="accessed">Accessed</option></select>
+              <button class="export-btn" onclick="exportCSV('credentials')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
-            <div class="mini-stat mini-stat-ok"><span id="cred-issued">0</span><label>Issued</label></div>
-            <div class="mini-stat mini-stat-warn"><span id="cred-rotated">0</span><label>Rotated</label></div>
-            <div class="mini-stat mini-stat-critical"><span id="cred-revoked">0</span><label>Revoked</label></div>
+            <div class="mini-stat mini-stat-ok" style="cursor:pointer" onclick="miniStatFilter('credentials','cred-action-filter','issued')"><span id="cred-issued">0</span><label>Issued ↗</label></div>
+            <div class="mini-stat mini-stat-warn" style="cursor:pointer" onclick="miniStatFilter('credentials','cred-action-filter','rotated')"><span id="cred-rotated">0</span><label>Rotated ↗</label></div>
+            <div class="mini-stat mini-stat-critical" style="cursor:pointer" onclick="miniStatFilter('credentials','cred-action-filter','revoked')"><span id="cred-revoked">0</span><label>Revoked ↗</label></div>
           </div>
           <ul id="cred-list" class="feed-list"></ul>
           <p class="empty-state" id="cred-empty">Waiting for credential vault events from M06…</p>
@@ -726,14 +786,19 @@
               <h2>Multi-Cloud ISPM</h2>
               <span class="panel-subtitle">AWS · GCP · Azure · identity &amp; secrets posture</span>
             </div>
-            <span class="owner-tag">Dev 4</span>
+            <div class="panel-controls">
+              <input type="text" id="cloud-search" placeholder="Search resource, finding…" class="filter-input">
+              <select id="cloud-provider-filter"><option value="all">All providers</option><option value="aws">AWS</option><option value="gcp">GCP</option><option value="azure">Azure</option></select>
+              <select id="cloud-sev-filter"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option></select>
+              <button class="export-btn" onclick="exportCSV('cloud')">⬇ CSV</button>
+            </div>
           </div>
           <div class="mini-stats">
-            <div class="mini-stat mini-stat-critical"><span id="cloud-critical">0</span><label>Critical</label></div>
-            <div class="mini-stat mini-stat-warn"><span id="cloud-high">0</span><label>High Risk</label></div>
-            <div class="mini-stat mini-stat-info"><span id="cloud-aws">0</span><label>AWS</label></div>
-            <div class="mini-stat mini-stat-info"><span id="cloud-gcp">0</span><label>GCP</label></div>
-            <div class="mini-stat mini-stat-info"><span id="cloud-azure">0</span><label>Azure</label></div>
+            <div class="mini-stat mini-stat-critical" style="cursor:pointer" onclick="miniStatFilter('cloud','cloud-sev-filter','critical')"><span id="cloud-critical">0</span><label>Critical ↗</label></div>
+            <div class="mini-stat mini-stat-warn" style="cursor:pointer" onclick="miniStatFilter('cloud','cloud-sev-filter','high')"><span id="cloud-high">0</span><label>High Risk ↗</label></div>
+            <div class="mini-stat mini-stat-info" style="cursor:pointer" onclick="miniStatFilter('cloud','cloud-provider-filter','aws')"><span id="cloud-aws">0</span><label>AWS ↗</label></div>
+            <div class="mini-stat mini-stat-info" style="cursor:pointer" onclick="miniStatFilter('cloud','cloud-provider-filter','gcp')"><span id="cloud-gcp">0</span><label>GCP ↗</label></div>
+            <div class="mini-stat mini-stat-info" style="cursor:pointer" onclick="miniStatFilter('cloud','cloud-provider-filter','azure')"><span id="cloud-azure">0</span><label>Azure ↗</label></div>
           </div>
           <ul id="cloud-list" class="feed-list"></ul>
           <p class="empty-state" id="cloud-empty">Waiting for cloud posture findings from M15…</p>
@@ -785,6 +850,6 @@
     <!-- ══════════════════ TOAST NOTIFICATIONS ══════════════════ -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="./app.js?v=11" defer></script>
+    <script src="./app.js?v=12" defer></script>
   </body>
 </html>
