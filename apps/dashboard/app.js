@@ -580,19 +580,19 @@ function updatePills(mods) {
 
 // ── Module grid ───────────────────────────────────────────────
 const ALL_MODS = {
-  "m01-api-gateway-shield":{dev:"Dev 1",type:"FastAPI"},
-  "m03-traffic-analyzer":{dev:"Dev 2",type:"Consumer"},
-  "m08-anomaly-detection":{dev:"Dev 2",type:"Consumer"},
-  "m09-dlp":{dev:"Dev 2",type:"Consumer"},
-  "m11-shadow-integration":{dev:"Dev 2",type:"Consumer"},
-  "m05-sap-mcp-suite":{dev:"Dev 3",type:"FastAPI"},
-  "m07-compliance-autopilot":{dev:"Dev 3",type:"FastAPI"},
-  "m10-incident-response":{dev:"Dev 3",type:"FastAPI"},
-  "m13-sbom-scanner":{dev:"Dev 3",type:"FastAPI"},
-  "m04-zero-trust-fabric":{dev:"Dev 4",type:"FastAPI"},
-  "m06-credential-vault":{dev:"Dev 4",type:"FastAPI"},
-  "m12-rules-engine":{dev:"Dev 4",type:"FastAPI"},
-  "m15-multicloud-ispm":{dev:"Dev 4",type:"FastAPI"},
+  "m01-api-gateway-shield":{dev:"Threat Detection",type:"FastAPI"},
+  "m03-traffic-analyzer":{dev:"Threat Detection",type:"Consumer"},
+  "m08-anomaly-detection":{dev:"Threat Detection",type:"Consumer"},
+  "m12-rules-engine":{dev:"Threat Detection",type:"FastAPI"},
+  "m09-dlp":{dev:"Data Protection",type:"Consumer"},
+  "m06-credential-vault":{dev:"Data Protection",type:"FastAPI"},
+  "m11-shadow-integration":{dev:"Data Protection",type:"Consumer"},
+  "m07-compliance-autopilot":{dev:"Governance",type:"FastAPI"},
+  "m10-incident-response":{dev:"Governance",type:"FastAPI"},
+  "m13-sbom-scanner":{dev:"Governance",type:"FastAPI"},
+  "m04-zero-trust-fabric":{dev:"Infrastructure",type:"FastAPI"},
+  "m05-sap-mcp-suite":{dev:"Infrastructure",type:"FastAPI"},
+  "m15-multicloud-ispm":{dev:"Infrastructure",type:"FastAPI"},
 };
 function renderModuleGrid(mods) {
   if (!ui.moduleGrid) return;
