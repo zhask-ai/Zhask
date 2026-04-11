@@ -188,7 +188,7 @@
           Audit Log
         </button>
 
-        <span class="nav-group-label">Dev 1 + Dev 2</span>
+        <span class="nav-group-label">Threat Detection</span>
         <button class="nav-btn" data-tab="gateway" id="nav-gateway">
           <span class="nav-chip chip-red">M01</span>
           <span>Gateway</span>
@@ -197,20 +197,26 @@
           <span class="nav-chip chip-purple">M08</span>
           <span>Anomaly</span>
         </button>
+        <button class="nav-btn" data-tab="rules" id="nav-rules">
+          <span class="nav-chip chip-blue">M12</span>
+          <span>Rules</span>
+        </button>
+
+        <span class="nav-group-label">Data Protection</span>
         <button class="nav-btn" data-tab="dlp" id="nav-dlp">
           <span class="nav-chip chip-teal">M09</span>
           <span>DLP</span>
         </button>
+        <button class="nav-btn" data-tab="credentials" id="nav-credentials">
+          <span class="nav-chip chip-amber">M06</span>
+          <span>Credentials</span>
+        </button>
         <button class="nav-btn" data-tab="shadow" id="nav-shadow">
           <span class="nav-chip chip-orange">M11</span>
-          <span>Shadow</span>
+          <span>Shadow IT</span>
         </button>
 
-        <span class="nav-group-label">Dev 3</span>
-        <button class="nav-btn" data-tab="sap" id="nav-sap">
-          <span class="nav-chip chip-cyan">M05</span>
-          <span>SAP MCP</span>
-        </button>
+        <span class="nav-group-label">Governance & Risk</span>
         <button class="nav-btn" data-tab="compliance" id="nav-compliance">
           <span class="nav-chip chip-cyan">M07</span>
           <span>Compliance</span>
@@ -220,22 +226,18 @@
           <span>Incidents</span>
         </button>
         <button class="nav-btn" data-tab="sbom" id="nav-sbom">
-          <span class="nav-chip chip-cyan">M13</span>
+          <span class="nav-chip chip-purple">M13</span>
           <span>SBOM</span>
         </button>
 
-        <span class="nav-group-label">Dev 4</span>
-        <button class="nav-btn" data-tab="rules" id="nav-rules">
-          <span class="nav-chip chip-blue">M12</span>
-          <span>Rules</span>
-        </button>
+        <span class="nav-group-label">Infrastructure</span>
         <button class="nav-btn" data-tab="zero-trust" id="nav-zero-trust">
           <span class="nav-chip chip-blue">M04</span>
           <span>Zero-Trust</span>
         </button>
-        <button class="nav-btn" data-tab="credentials" id="nav-credentials">
-          <span class="nav-chip chip-amber">M06</span>
-          <span>Credentials</span>
+        <button class="nav-btn" data-tab="sap" id="nav-sap">
+          <span class="nav-chip chip-cyan">M05</span>
+          <span>SAP MCP</span>
         </button>
         <button class="nav-btn" data-tab="cloud" id="nav-cloud">
           <span class="nav-chip chip-pink">M15</span>
@@ -308,6 +310,7 @@
 
         <!-- ══════════════════ STAT CARDS ══════════════════ -->
         <section class="cards" id="stat-cards">
+          <!-- Core metrics -->
           <article class="card card-critical">
             <h2>Total Alerts</h2><p id="total-alerts">0</p>
             <span class="card-sub" id="trend-alerts">—</span>
@@ -320,53 +323,61 @@
             <h2>Avg Latency</h2><p id="avg-latency">0.0s</p>
             <span class="card-sub">alert pipeline</span>
           </article>
-          <article class="card card-anomaly">
-            <h2>Anomalies</h2><p id="anomaly-count">0</p>
-            <span class="card-sub">M08 · Dev 2</span>
-          </article>
-          <article class="card card-dlp">
-            <h2>DLP Violations</h2><p id="dlp-count">0</p>
-            <span class="card-sub">M09 · Dev 2</span>
-          </article>
-          <article class="card card-shadow">
-            <h2>Shadow Endpoints</h2><p id="shadow-count">0</p>
-            <span class="card-sub">M11 · Dev 2</span>
-          </article>
-          <article class="card card-sap">
-            <h2>SAP Events</h2><p id="sap-count">0</p>
-            <span class="card-sub">M05 · Dev 3</span>
-          </article>
-          <article class="card card-compliance">
-            <h2>Compliance</h2><p id="compliance-count">0</p>
-            <span class="card-sub">M07 · Dev 3</span>
-          </article>
-          <article class="card card-incident">
-            <h2>Incidents</h2><p id="incident-count">0</p>
-            <span class="card-sub">M10 · Dev 3</span>
-          </article>
-          <article class="card card-sbom">
-            <h2>SBOM Scans</h2><p id="sbom-count">0</p>
-            <span class="card-sub">M13 · Dev 3</span>
-          </article>
-          <article class="card card-zt">
-            <h2>Zero-Trust</h2><p id="zt-count">0</p>
-            <span class="card-sub">M04 · Dev 4</span>
-          </article>
-          <article class="card card-vault">
-            <h2>Credentials</h2><p id="cred-count">0</p>
-            <span class="card-sub">M06 · Dev 4</span>
-          </article>
-          <article class="card card-cloud">
-            <h2>Cloud Findings</h2><p id="cloud-count">0</p>
-            <span class="card-sub">M15 · Dev 4</span>
-          </article>
+
+          <!-- Threat Detection -->
           <article class="card card-gateway">
             <h2>Gateway Req</h2><p id="gw-total-count">0</p>
-            <span class="card-sub">M01 · Dev 1</span>
+            <span class="card-sub">Threat Detection</span>
+          </article>
+          <article class="card card-anomaly">
+            <h2>Anomalies</h2><p id="anomaly-count">0</p>
+            <span class="card-sub">Threat Detection</span>
           </article>
           <article class="card card-rules">
             <h2>Rule Triggers</h2><p id="rules-count">0</p>
-            <span class="card-sub">M12 · Dev 4</span>
+            <span class="card-sub">Threat Detection</span>
+          </article>
+
+          <!-- Data Protection -->
+          <article class="card card-dlp">
+            <h2>DLP Violations</h2><p id="dlp-count">0</p>
+            <span class="card-sub">Data Protection</span>
+          </article>
+          <article class="card card-vault">
+            <h2>Credentials</h2><p id="cred-count">0</p>
+            <span class="card-sub">Data Protection</span>
+          </article>
+          <article class="card card-shadow">
+            <h2>Shadow Endpoints</h2><p id="shadow-count">0</p>
+            <span class="card-sub">Data Protection</span>
+          </article>
+
+          <!-- Governance & Risk -->
+          <article class="card card-compliance">
+            <h2>Compliance</h2><p id="compliance-count">0</p>
+            <span class="card-sub">Governance</span>
+          </article>
+          <article class="card card-incident">
+            <h2>Incidents</h2><p id="incident-count">0</p>
+            <span class="card-sub">Governance</span>
+          </article>
+          <article class="card card-sbom">
+            <h2>SBOM Scans</h2><p id="sbom-count">0</p>
+            <span class="card-sub">Governance</span>
+          </article>
+
+          <!-- Infrastructure -->
+          <article class="card card-zt">
+            <h2>Zero-Trust</h2><p id="zt-count">0</p>
+            <span class="card-sub">Infrastructure</span>
+          </article>
+          <article class="card card-sap">
+            <h2>SAP Events</h2><p id="sap-count">0</p>
+            <span class="card-sub">Infrastructure</span>
+          </article>
+          <article class="card card-cloud">
+            <h2>Cloud Findings</h2><p id="cloud-count">0</p>
+            <span class="card-sub">Infrastructure</span>
           </article>
         </section>
 
