@@ -17,6 +17,8 @@ let alerts=[], auditRows=[], anomalies=[], sapEvents=[], compEvents=[],
 
 // ── Demo engine ───────────────────────────────────────────────
 const demo = { active:false, tick:0, scIdx:0, phIdx:0, phTick:0, ctx:null, iid:null };
+// Per-module stopped set — tracks which modules the user has individually stopped
+const stoppedModules = new Set();
 let _incID = 1000;
 
 // ── KPI state ─────────────────────────────────────────────────
@@ -1719,21 +1721,28 @@ function renderLauncher(processes) {
   if (!grid) return;
   const notice = $("launcher-notice");
 
-  if (demo.active) {
-    if (notice) notice.style.display="block";
-    grid.innerHTML = Object.entries(ALL_MODS).map(([name,info])=>`
-      <div class="launcher-card">
+  if (demo.active || stoppedModules.size > 0 || !processes || processes.length === 0) {
+    if (notice) notice.style.display = "block";
+    const engineRunning = demo.active;
+    grid.innerHTML = Object.entries(ALL_MODS).map(([name, info]) => {
+      const stopped = stoppedModules.has(name) || !engineRunning;
+      const dot   = stopped ? "stopped" : "running";
+      const meta  = stopped
+        ? `<span style="color:#ff4757">⏹ Stopped</span>`
+        : `${info.type} · <span style="color:#00e5a0">● LIVE</span>`;
+      return `<div class="launcher-card">
         <div class="launcher-card-header">
-          <div class="launcher-dot running"></div>
+          <div class="launcher-dot ${dot}"></div>
           <span class="launcher-name">${name}</span>
           <span class="launcher-tag">${info.dev}</span>
         </div>
-        <div class="launcher-meta">${info.type} · <span style="color:#00e5a0">● LIVE</span></div>
+        <div class="launcher-meta">${meta}</div>
         <div class="launcher-actions">
-          <button class="launch-btn launch-btn-stop" onclick="showToast('Module running in real-time mode','info',2000)">■ Stop</button>
-          <button class="launch-btn launch-btn-start" onclick="showToast('Module running in real-time mode','info',2000)">▶ Start</button>
+          <button class="launch-btn launch-btn-stop" onclick="stopModule('${name}')" ${stopped?"disabled style='opacity:.4'":""}>■ Stop</button>
+          <button class="launch-btn launch-btn-start" onclick="startModule('${name}')" ${!stopped?"disabled style='opacity:.4'":""}>▶ Start</button>
         </div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
     return;
   }
 
@@ -1767,29 +1776,71 @@ function logLauncher(msg) {
 }
 function clearLauncherLog() { const l=$("launcher-log"); if(l) l.textContent="No logs yet."; }
 
-async function startModule(name) {
-  try {
-    const r = await fetch(`${API_BASE}/api/modules/start`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({module:name})});
-    const d = await r.json();
-    logLauncher(`Started ${name}: ${d.status||"ok"}`);
-    showToast(`▶ ${name} started`, "success", 3000);
-  } catch { showToast(`Cannot reach backend — running in local mode`,"warning",3000); }
+function startModule(name) {
+  // Try real backend first; fall back to engine control
+  fetch(`${API_BASE}/api/modules/start`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({module:name})})
+    .then(r=>r.json()).then(d=>{ logLauncher(`Started ${name}: ${d.status||"ok"}`); })
+    .catch(()=>{});
+  // Always control the local engine
+  stoppedModules.delete(name);
+  const allStopped = Object.keys(ALL_MODS).every(m => stoppedModules.has(m));
+  if (!demo.active && !allStopped) {
+    // Re-start engine if it was fully stopped
+    demo.active = true;
+    demo.iid = setInterval(demoTick, POLL_MS);
+  }
+  logLauncher(`[${new Date().toLocaleTimeString()}] ▶ ${name} started`);
+  showToast(`▶ ${name} is now live`, "success", 3000);
+  renderLauncher(launcherProcesses);
+  updateAllUI();
 }
-async function stopModule(name) {
-  try {
-    const r = await fetch(`${API_BASE}/api/modules/stop`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({module:name})});
-    const d = await r.json();
-    logLauncher(`Stopped ${name}: ${d.status||"ok"}`);
-    showToast(`■ ${name} stopped`, "warning", 3000);
-  } catch { showToast(`Cannot reach backend — running in local mode`,"warning",3000); }
+
+function stopModule(name) {
+  // Try real backend first; fall back to engine control
+  fetch(`${API_BASE}/api/modules/stop`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({module:name})})
+    .then(r=>r.json()).then(d=>{ logLauncher(`Stopped ${name}: ${d.status||"ok"}`); })
+    .catch(()=>{});
+  // Always control the local engine
+  stoppedModules.add(name);
+  // If every module is stopped, pause the whole engine
+  const allStopped = Object.keys(ALL_MODS).every(m => stoppedModules.has(m));
+  if (allStopped && demo.iid) {
+    clearInterval(demo.iid);
+    demo.iid = null;
+    demo.active = false;
+    if (ui.backendStatus) ui.backendStatus.textContent = "STOPPED";
+    if (ui.statusDot) ui.statusDot.className = "status-dot offline";
+  }
+  logLauncher(`[${new Date().toLocaleTimeString()}] ■ ${name} stopped`);
+  showToast(`■ ${name} stopped`, "warning", 3000);
+  renderLauncher(launcherProcesses);
+  updateAllUI();
 }
-async function startAll() {
-  if (demo.active) { showToast("Running in local mode — backend not connected","warning",3000); return; }
-  for (const name of Object.keys(ALL_MODS)) await startModule(name);
+
+function startAll() {
+  stoppedModules.clear();
+  if (!demo.active) {
+    demo.active = true;
+    if (!demo.iid) demo.iid = setInterval(demoTick, POLL_MS);
+    demoTick(); // immediate tick so data appears instantly
+  }
+  if (ui.backendStatus) ui.backendStatus.textContent = "LIVE";
+  if (ui.statusDot) ui.statusDot.className = "status-dot online";
+  logLauncher(`[${new Date().toLocaleTimeString()}] ▶ All modules started`);
+  showToast("▶ All 13 modules started — real-time data streaming", "success", 4000);
+  renderLauncher(launcherProcesses);
+  updateAllUI();
 }
-async function stopAll() {
-  if (demo.active) { showToast("Running in local mode — backend not connected","warning",3000); return; }
-  for (const name of Object.keys(ALL_MODS)) await stopModule(name);
+
+function stopAll() {
+  Object.keys(ALL_MODS).forEach(m => stoppedModules.add(m));
+  if (demo.iid) { clearInterval(demo.iid); demo.iid = null; }
+  demo.active = false;
+  if (ui.backendStatus) ui.backendStatus.textContent = "STOPPED";
+  if (ui.statusDot) ui.statusDot.className = "status-dot offline";
+  logLauncher(`[${new Date().toLocaleTimeString()}] ■ All modules stopped`);
+  showToast("■ All modules stopped — data stream paused", "warning", 4000);
+  renderLauncher(launcherProcesses);
 }
 
 async function fetchLauncherData() {
