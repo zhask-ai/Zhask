@@ -9,35 +9,35 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.88em' font-size='85'>◆</text></svg>" />
     <style>
       /* ── Scenario Banner ── */
-      .scenario-banner{display:flex;align-items:center;gap:1.5rem;padding:0.6rem 1.25rem;background:var(--panel);border:1px solid var(--border);border-radius:8px;margin-bottom:0.75rem;flex-wrap:wrap;box-shadow:var(--shadow-sm)}
+      .scenario-banner{display:flex;align-items:center;gap:0.75rem;padding:0.35rem 0.9rem;background:var(--panel);border:1px solid var(--border);border-radius:6px;margin-bottom:0.5rem;flex-wrap:wrap;font-size:0.72rem}
       .scenario-live-dot{width:8px;height:8px;border-radius:50%;background:var(--critical);animation:pulse-dot 1.2s infinite;flex-shrink:0}
       @keyframes pulse-dot{0%,100%{box-shadow:0 0 0 0 rgba(255,71,87,0.7)}70%{box-shadow:0 0 0 6px rgba(255,71,87,0)}}
-      .scenario-badge{font-size:0.65rem;font-weight:700;letter-spacing:0.08em;padding:2px 8px;border-radius:4px}
+      .scenario-badge{font-size:0.55rem;font-weight:700;letter-spacing:0.08em;padding:1px 6px;border-radius:3px}
       .badge-threat{background:rgba(239,68,68,0.1);color:var(--critical)}
       .badge-monitoring{background:rgba(16,185,129,0.1);color:var(--ok)}
-      .scenario-name{font-weight:600;color:var(--text-hi);font-size:0.85rem}
+      .scenario-name{font-weight:600;color:var(--text-hi);font-size:0.72rem}
       .scenario-banner-center{display:flex;align-items:center;gap:0.75rem;flex:1;min-width:200px}
-      .scenario-phase-label{font-size:0.7rem;color:var(--text-dim)}
-      .scenario-phase-text{font-size:0.75rem;font-weight:600;color:var(--accent)}
+      .scenario-phase-label{font-size:0.6rem;color:var(--text-dim)}
+      .scenario-phase-text{font-size:0.65rem;font-weight:600;color:var(--accent)}
       .scenario-progress-track{flex:1;height:4px;background:var(--border-subtle);border-radius:2px;overflow:hidden}
       .scenario-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--critical));border-radius:2px;transition:width 0.5s ease}
-      .scenario-banner-right{display:flex;align-items:center;gap:0.5rem;font-size:0.75rem}
+      .scenario-banner-right{display:flex;align-items:center;gap:0.35rem;font-size:0.62rem}
       .scenario-meta{color:var(--text-dim)}
-      .scenario-attacker-ip,.scenario-attacker-user{background:var(--bg-raised);padding:1px 6px;border-radius:3px;font-size:0.72rem;color:var(--orange)}
+      .scenario-attacker-ip,.scenario-attacker-user{background:var(--bg-raised);padding:1px 4px;border-radius:3px;font-size:0.62rem;color:var(--orange)}
 
       /* ── Executive KPIs ── */
-      .exec-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1rem}
+      .exec-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:0.6rem;margin-bottom:0.75rem}
       @media(max-width:900px){.exec-kpi-row{grid-template-columns:repeat(2,1fr)}}
       @media(max-width:500px){.exec-kpi-row{grid-template-columns:1fr}}
-      .exec-kpi-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;position:relative;overflow:hidden;box-shadow:var(--shadow-sm)}
-      .exec-kpi-card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px}
+      .exec-kpi-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:0.65rem 0.9rem;position:relative;overflow:hidden;box-shadow:var(--shadow-sm)}
+      .exec-kpi-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px}
       .exec-kpi-blocked::before{background:var(--critical)}
       .exec-kpi-money::before{background:var(--ok)}
       .exec-kpi-score::before{background:var(--purple)}
       .exec-kpi-mttd::before{background:var(--orange)}
-      .exec-kpi-value{font-size:2rem;font-weight:800;color:var(--text-hi);line-height:1;margin-bottom:0.25rem;font-variant-numeric:tabular-nums}
-      .exec-kpi-label{font-size:0.75rem;font-weight:600;color:var(--text-mid);text-transform:uppercase;letter-spacing:0.05em}
-      .exec-kpi-sub{font-size:0.68rem;color:var(--text-dim);margin-top:0.25rem}
+      .exec-kpi-value{font-size:1.35rem;font-weight:700;color:var(--text-hi);line-height:1;margin-bottom:0.15rem;font-variant-numeric:tabular-nums}
+      .exec-kpi-label{font-size:0.62rem;font-weight:600;color:var(--text-mid);text-transform:uppercase;letter-spacing:0.05em}
+      .exec-kpi-sub{font-size:0.58rem;color:var(--text-dim);margin-top:0.15rem}
 
       /* ── Compliance Scorecard ── */
       .compliance-scorecard{margin:0.5rem 0 1rem;display:flex;flex-direction:column;gap:0.4rem}
