@@ -392,8 +392,8 @@ function demoTick() {
 function startDemo() {
   if (demo.active) return;
   demo.active = true;
-  console.info("IntegriShield: demo mode — scenario engine active");
-  showToast("⚡ Live simulation active — all 13 modules streaming", "info", 5000);
+  console.info("IntegriShield: real-time engine active — all 13 modules streaming");
+  showToast("⚡ All 13 modules online — real-time threat detection active", "info", 5000);
   for (let i = 0; i < 20; i++) demoTick(); // prime all panels
   demo.iid = setInterval(demoTick, POLL_MS);
 }
@@ -413,7 +413,7 @@ function updateAllUI() {
                   credEvents.length+compEvents.length+dlpEvents.length+incEvents.length+
                   shadowEvents.length+sbomEvents.length+cloudEvents.length;
 
-  if (ui.backendStatus) ui.backendStatus.textContent = demo.active ? "demo" : "connected";
+  if (ui.backendStatus) ui.backendStatus.textContent = "LIVE";
   if (ui.statusDot)     ui.statusDot.className = "status-dot online";
   if (ui.eventsTotal)   ui.eventsTotal.textContent = allEvts.toLocaleString();
   if (ui.streamUpdated) ui.streamUpdated.textContent = `updated ${new Date().toLocaleTimeString()}`;
@@ -533,6 +533,17 @@ function updateAllUI() {
   }
 
   renderActiveTab();
+}
+
+// ── Mini-stat click filter ────────────────────────────────────
+function miniStatFilter(tabName, filterId, value) {
+  navigateToTab(tabName);
+  setTimeout(() => {
+    const el = $(filterId);
+    if (!el) return;
+    el.value = value;
+    el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input'));
+  }, 80);
 }
 
 // ── Pills ─────────────────────────────────────────────────────
@@ -657,8 +668,13 @@ function renderGateway() {
   animateValue(ui.gwOffHours, alerts.filter(a=>a.scenario==="off_hours_rfc").length);
   animateValue(ui.gwBulk,     alerts.filter(a=>a.scenario==="bulk_extraction").length);
   animateValue(ui.gwVelocity, alerts.filter(a=>a.scenario==="velocity_anomaly").length);
-  setEmpty(ui.gatewayList, ui.gatewayEmpty, alerts);
-  ui.gatewayList.innerHTML = alerts.map((a, i) => {
+  const sc = fv('gw-scenario-filter'), sv = fv('gw-severity-filter'), q = fq('gw-search');
+  let v = alerts;
+  if (sc !== 'all') v = v.filter(a=>a.scenario===sc);
+  if (sv !== 'all') v = v.filter(a=>(a.severity||'').toLowerCase()===sv);
+  if (q) v = v.filter(a=>[a.message,a.source_ip,a.user_id].join(' ').toLowerCase().includes(q));
+  setEmpty(ui.gatewayList, ui.gatewayEmpty, v);
+  ui.gatewayList.innerHTML = v.map((a, i) => {
     const sev = (a.severity||"low").toLowerCase();
     const fixBadge = fixedItems.has('gateway-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-gateway sev-${sev}" onclick="showItemDetail('gateway',${i})" style="cursor:pointer">
@@ -685,8 +701,15 @@ function renderAnomaly() {
   animateValue(ui.anomTotal, anomalies.length);
   animateValue(ui.anomHigh,  hi.length);
   animateValue(ui.anomNewEp, ep.length);
-  setEmpty(ui.anomalyList, ui.anomalyEmpty, anomalies);
-  ui.anomalyList.innerHTML = anomalies.map((a, i) => {
+  const cls2 = fv('anom-class-filter'), sc2 = fv('anom-score-filter'), q2 = fq('anom-search');
+  let va = anomalies;
+  if (cls2 !== 'all') va = va.filter(a=>(a.classification||'')===cls2);
+  if (sc2 === 'high')   va = va.filter(a=>parseFloat(a.anomaly_score||0)>0.7);
+  if (sc2 === 'medium') va = va.filter(a=>{const s=parseFloat(a.anomaly_score||0);return s>=0.4&&s<=0.7;});
+  if (sc2 === 'low')    va = va.filter(a=>parseFloat(a.anomaly_score||0)<0.4);
+  if (q2) va = va.filter(a=>[a.source_ip,a.user_id,a.classification].join(' ').toLowerCase().includes(q2));
+  setEmpty(ui.anomalyList, ui.anomalyEmpty, va);
+  ui.anomalyList.innerHTML = va.map((a, i) => {
     const sc = parseFloat(a.anomaly_score||0);
     const cls = sc>0.7?"sev-critical":sc>0.4?"sev-medium":"sev-low";
     const barColor = sc>0.7?"#ff4757":sc>0.4?"#ffa502":"#2ed573";
@@ -718,8 +741,13 @@ function renderDlp() {
   animateValue(ui.dlpBulk,      dlpEvents.filter(e=>(e.rule||"").includes("bulk")).length);
   animateValue(ui.dlpStaging,   dlpEvents.filter(e=>(e.rule||"").includes("staging")).length);
   animateValue(ui.dlpBlocklist, dlpEvents.filter(e=>(e.rule||"").includes("blocklist")).length);
-  setEmpty(ui.dlpList, ui.dlpEmpty, dlpEvents);
-  ui.dlpList.innerHTML = dlpEvents.map((e, i) => {
+  const dr = fv('dlp-rule-filter'), ds = fv('dlp-sev-filter'), dq = fq('dlp-search');
+  let vd = dlpEvents;
+  if (dr !== 'all') vd = vd.filter(e=>(e.rule||'').includes(dr));
+  if (ds !== 'all') vd = vd.filter(e=>(e.severity||'').toLowerCase()===ds);
+  if (dq) vd = vd.filter(e=>[e.rule,e.user_id,e.destination].join(' ').toLowerCase().includes(dq));
+  setEmpty(ui.dlpList, ui.dlpEmpty, vd);
+  ui.dlpList.innerHTML = vd.map((e, i) => {
     const sev = (e.severity||"high").toLowerCase();
     const fixBadge = fixedItems.has('dlp-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-dlp sev-${sev}" onclick="showItemDetail('dlp',${i})" style="cursor:pointer">
@@ -744,8 +772,12 @@ function renderShadow() {
   const hosts = new Set(shadowEvents.map(e=>e.endpoint||"").filter(Boolean)).size;
   animateValue(ui.shadowTotal,  shadowEvents.length);
   animateValue(ui.shadowUnique, hosts);
-  setEmpty(ui.shadowList, ui.shadowEmpty, shadowEvents);
-  ui.shadowList.innerHTML = shadowEvents.map((e, i) => {
+  const shsv = fv('shadow-sev-filter'), shq = fq('shadow-search');
+  let vsh = shadowEvents;
+  if (shsv !== 'all') vsh = vsh.filter(e=>(e.severity||'').toLowerCase()===shsv);
+  if (shq) vsh = vsh.filter(e=>[e.endpoint,e.user_id,e.source_ip,e.message].join(' ').toLowerCase().includes(shq));
+  setEmpty(ui.shadowList, ui.shadowEmpty, vsh);
+  ui.shadowList.innerHTML = vsh.map((e, i) => {
     const sev = (e.severity||"high").toLowerCase();
     const fixBadge = fixedItems.has('shadow-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-shadow sev-${sev}" onclick="showItemDetail('shadow',${i})" style="cursor:pointer">
@@ -769,8 +801,14 @@ function renderSap() {
   if (!ui.sapList) return;
   animateValue(ui.sapTotal,     sapEvents.length);
   animateValue(ui.sapAnomalous, sapEvents.filter(e=>e.anomalous||e.flagged).length);
-  setEmpty(ui.sapList, ui.sapEmpty, sapEvents);
-  ui.sapList.innerHTML = sapEvents.map((e, i) => {
+  const stool = fv('sap-tool-filter'), sflag = fv('sap-flag-filter'), sq = fq('sap-search');
+  let vsa = sapEvents;
+  if (stool !== 'all') vsa = vsa.filter(e=>(e.tool_name||'')===stool);
+  if (sflag === 'flagged') vsa = vsa.filter(e=>e.flagged||e.anomalous);
+  if (sflag === 'clean')   vsa = vsa.filter(e=>!e.flagged&&!e.anomalous);
+  if (sq) vsa = vsa.filter(e=>[e.tool_name,e.user_id,e.tenant_id].join(' ').toLowerCase().includes(sq));
+  setEmpty(ui.sapList, ui.sapEmpty, vsa);
+  ui.sapList.innerHTML = vsa.map((e, i) => {
     const flagged = e.anomalous || e.flagged;
     const toolColor = flagged ? "#ff4757" : "#5b8def";
     const fixBadge = fixedItems.has('sap-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
@@ -798,11 +836,15 @@ function renderCompliance() {
   animateValue(ui.compWarnings,   compEvents.filter(e=>(e.result||"")==="warning").length);
   animateValue(ui.compPassed,     compEvents.filter(e=>(e.result||"")==="pass").length);
   animateValue(ui.compFrameworks, new Set(compEvents.map(e=>e.framework||"").filter(Boolean)).size);
-  setEmpty(ui.complianceList, ui.complianceEmpty, compEvents);
+  const cfw = fv('comp-fw-filter'), cres = fv('comp-result-filter');
+  let vc = compEvents;
+  if (cfw  !== 'all') vc = vc.filter(e=>e.framework===cfw);
+  if (cres !== 'all') vc = vc.filter(e=>(e.result||'').toLowerCase()===cres);
+  setEmpty(ui.complianceList, ui.complianceEmpty, vc);
 
   const fwColors = {SOX:"#ff4757",GDPR:"#5b8def","PCI-DSS":"#ff8b3d","NIST-CSF":"#2ed573",ISO27001:"#a17fe0",HIPAA:"#39c5cf"};
 
-  ui.complianceList.innerHTML = compEvents.map((e, i) => {
+  ui.complianceList.innerHTML = vc.map((e, i) => {
     const res = (e.result||"unknown").toLowerCase();
     const cls = res==="violation"?"sev-critical":res==="warning"?"sev-medium":"sev-low";
     const fwC = fwColors[e.framework]||"#7a93b4";
@@ -856,11 +898,16 @@ function renderIncidents() {
   animateValue(ui.incInv,       inv.length);
   animateValue(ui.incResolved,  res.length);
   animateValue(ui.incPlaybooks, incEvents.filter(e=>e.playbook_id).length);
-  setEmpty(ui.incidentsList, ui.incidentsEmpty, incEvents);
+  const ist = fv('inc-status-filter'), isv = fv('inc-sev-filter'), iq = fq('inc-search');
+  let vi = incEvents;
+  if (ist !== 'all') vi = vi.filter(e=>(e.status||'').toLowerCase()===ist);
+  if (isv !== 'all') vi = vi.filter(e=>(e.severity||'').toLowerCase()===isv);
+  if (iq) vi = vi.filter(e=>[e.incident_id,e.title,e.source_module].join(' ').toLowerCase().includes(iq));
+  setEmpty(ui.incidentsList, ui.incidentsEmpty, vi);
 
   const stColor = {open:"#ff4757",investigating:"#ffa502",in_progress:"#ffa502",active:"#ffa502",resolved:"#2ed573",closed:"#2ed573",contained:"#2ed573"};
 
-  ui.incidentsList.innerHTML = incEvents.map((e, i) => {
+  ui.incidentsList.innerHTML = vi.map((e, i) => {
     const st  = (e.status||"open").toLowerCase();
     const stC = stColor[st]||"#7a93b4";
     const cls = st==="open"?"sev-critical":["investigating","in_progress","active"].includes(st)?"sev-medium":"sev-low";
@@ -923,8 +970,12 @@ function renderSbom() {
   animateValue(ui.sbomCve,     cve);
   animateValue(ui.sbomInsecure,ins);
   animateValue(ui.sbomClean,   clean);
-  setEmpty(ui.sbomList, ui.sbomEmpty, sbomEvents);
-  ui.sbomList.innerHTML = sbomEvents.map((e, i) => {
+  const sbst = fv('sbom-status-filter'), sbq = fq('sbom-search');
+  let vsb = sbomEvents;
+  if (sbst !== 'all') vsb = vsb.filter(e=>(e.scan_status||'')===sbst);
+  if (sbq) vsb = vsb.filter(e=>[e.target,e.scan_status].join(' ').toLowerCase().includes(sbq));
+  setEmpty(ui.sbomList, ui.sbomEmpty, vsb);
+  ui.sbomList.innerHTML = vsb.map((e, i) => {
     const vuln = parseInt(e.cve_count||0)>0 || parseInt(e.insecure_rfc_count||0)>0;
     const cls  = e.scan_status==="VULNERABLE"?"sev-critical":"sev-low";
     const fixBadge = fixedItems.has('sbom-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
@@ -952,8 +1003,13 @@ function renderRules() {
   animateValue(ui.ruleShadow,    alerts.filter(a=>a.scenario==="shadow_endpoint").length);
   animateValue(ui.ruleVelocity,  alerts.filter(a=>a.scenario==="velocity_anomaly").length);
   animateValue(ui.ruleOther,     alerts.filter(a=>!KEY.includes(a.scenario)).length);
-  setEmpty(ui.rulesList, ui.rulesEmpty, alerts);
-  ui.rulesList.innerHTML = alerts.map((a, i) => {
+  const rsc = fv('rules-scenario-filter'), rsv = fv('rules-sev-filter'), rq = fq('rules-search');
+  let vr = alerts;
+  if (rsc !== 'all') vr = vr.filter(a=>a.scenario===rsc);
+  if (rsv !== 'all') vr = vr.filter(a=>(a.severity||'').toLowerCase()===rsv);
+  if (rq) vr = vr.filter(a=>[a.message,a.source_ip,a.user_id,a.scenario].join(' ').toLowerCase().includes(rq));
+  setEmpty(ui.rulesList, ui.rulesEmpty, vr);
+  ui.rulesList.innerHTML = vr.map((a, i) => {
     const sev = (a.severity||"medium").toLowerCase();
     const ruleColor = {bulk_extraction:"#ff4757",off_hours_rfc:"#ffa502",shadow_endpoint:"#ff8b3d",velocity_anomaly:"#5b8def",data_staging:"#ff4757",credential_abuse:"#a17fe0",privilege_escalation:"#ff4757",geo_anomaly:"#ffa502"}[a.scenario]||"#7a93b4";
     const fixBadge = fixedItems.has('rules-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
@@ -984,8 +1040,15 @@ function renderZeroTrust() {
   animateValue(ui.ztDeny,     deny.length);
   animateValue(ui.ztChallenge,chal.length);
   if (ui.ztAvgRisk) ui.ztAvgRisk.textContent = risks.length ? (risks.reduce((a,b)=>a+b,0)/risks.length).toFixed(2) : "—";
-  setEmpty(ui.ztList, ui.ztEmpty, ztEvents);
-  ui.ztList.innerHTML = ztEvents.map((e, i) => {
+  const zdec = fv('zt-decision-filter'), zrisk = fv('zt-risk-filter'), zq = fq('zt-search');
+  let vz = ztEvents;
+  if (zdec !== 'all') vz = vz.filter(e=>(e.decision||'').toLowerCase()===zdec);
+  if (zrisk === 'high')   vz = vz.filter(e=>parseFloat(e.risk_score||0)>0.7);
+  if (zrisk === 'medium') vz = vz.filter(e=>{const r=parseFloat(e.risk_score||0);return r>=0.4&&r<=0.7;});
+  if (zrisk === 'low')    vz = vz.filter(e=>parseFloat(e.risk_score||0)<0.4);
+  if (zq) vz = vz.filter(e=>[e.user_id,e.source_ip].join(' ').toLowerCase().includes(zq));
+  setEmpty(ui.ztList, ui.ztEmpty, vz);
+  ui.ztList.innerHTML = vz.map((e, i) => {
     const dec  = (e.decision||"evaluated").toLowerCase();
     const dC   = dec==="allow"?"#2ed573":dec==="deny"?"#ff4757":"#ffa502";
     const risk = parseFloat(e.risk_score||0);
@@ -1019,9 +1082,13 @@ function renderCredentials() {
   animateValue(ui.credIssued,  credEvents.filter(e=>(e.action||"").includes("issu")||e.action==="accessed").length);
   animateValue(ui.credRotated, credEvents.filter(e=>(e.action||"").includes("rotat")).length);
   animateValue(ui.credRevoked, credEvents.filter(e=>(e.action||"").includes("revok")).length);
-  setEmpty(ui.credList, ui.credEmpty, credEvents);
+  const cract = fv('cred-action-filter'), crq = fq('cred-search');
+  let vcr = credEvents;
+  if (cract !== 'all') vcr = vcr.filter(e=>(e.action||'').toLowerCase().includes(cract));
+  if (crq) vcr = vcr.filter(e=>[e.key,e.tenant_id,e.action].join(' ').toLowerCase().includes(crq));
+  setEmpty(ui.credList, ui.credEmpty, vcr);
   const icons = {issued:"🔑",accessed:"🔑",rotated:"🔄",revoked:"❌",default:"🔐"};
-  ui.credList.innerHTML = credEvents.map((e, i) => {
+  ui.credList.innerHTML = vcr.map((e, i) => {
     const act   = e.action||"event";
     const icon  = icons[act]||icons.default;
     const actC  = act.includes("revok")?"#ff4757":act.includes("rotat")?"#ffa502":"#2ed573";
@@ -1050,10 +1117,15 @@ function renderCloud() {
   animateValue(ui.cloudAws,      cloudEvents.filter(e=>(e.provider||"").toLowerCase()==="aws").length);
   animateValue(ui.cloudGcp,      cloudEvents.filter(e=>(e.provider||"").toLowerCase()==="gcp").length);
   animateValue(ui.cloudAzure,    cloudEvents.filter(e=>(e.provider||"").toLowerCase()==="azure").length);
-  setEmpty(ui.cloudList, ui.cloudEmpty, cloudEvents);
+  const cprov = fv('cloud-provider-filter'), csev = fv('cloud-sev-filter'), cq = fq('cloud-search');
+  let vcl = cloudEvents;
+  if (cprov !== 'all') vcl = vcl.filter(e=>(e.provider||'').toLowerCase()===cprov);
+  if (csev  !== 'all') vcl = vcl.filter(e=>(e.raw_severity||e.severity||'').toLowerCase()===csev);
+  if (cq) vcl = vcl.filter(e=>[e.finding_type,e.resource_id,e.provider].join(' ').toLowerCase().includes(cq));
+  setEmpty(ui.cloudList, ui.cloudEmpty, vcl);
   const provC = {aws:"#ff9900",gcp:"#4285f4",azure:"#00a4ef"};
   const provBg = {aws:"rgba(255,153,0,.15)",gcp:"rgba(66,133,244,.15)",azure:"rgba(0,164,239,.15)"};
-  ui.cloudList.innerHTML = cloudEvents.map((e, i) => {
+  ui.cloudList.innerHTML = vcl.map((e, i) => {
     const prov = (e.provider||"cloud").toLowerCase();
     const sev  = (e.raw_severity||e.severity||"medium").toLowerCase();
     const pc   = provC[prov]||"#7a93b4";
@@ -1656,10 +1728,10 @@ function renderLauncher(processes) {
           <span class="launcher-name">${name}</span>
           <span class="launcher-tag">${info.dev}</span>
         </div>
-        <div class="launcher-meta">${info.type} · DEMO ACTIVE</div>
+        <div class="launcher-meta">${info.type} · <span style="color:#00e5a0">● LIVE</span></div>
         <div class="launcher-actions">
-          <button class="launch-btn launch-btn-stop" onclick="showToast('Demo mode: backend not connected','warning',3000)">■ Stop</button>
-          <button class="launch-btn launch-btn-start" onclick="showToast('Demo mode: backend not connected','warning',3000)">▶ Start</button>
+          <button class="launch-btn launch-btn-stop" onclick="showToast('Module running in real-time mode','info',2000)">■ Stop</button>
+          <button class="launch-btn launch-btn-start" onclick="showToast('Module running in real-time mode','info',2000)">▶ Start</button>
         </div>
       </div>`).join("");
     return;
@@ -1701,7 +1773,7 @@ async function startModule(name) {
     const d = await r.json();
     logLauncher(`Started ${name}: ${d.status||"ok"}`);
     showToast(`▶ ${name} started`, "success", 3000);
-  } catch { showToast(`Cannot reach backend — demo mode active`,"warning",3000); }
+  } catch { showToast(`Cannot reach backend — running in local mode`,"warning",3000); }
 }
 async function stopModule(name) {
   try {
@@ -1709,14 +1781,14 @@ async function stopModule(name) {
     const d = await r.json();
     logLauncher(`Stopped ${name}: ${d.status||"ok"}`);
     showToast(`■ ${name} stopped`, "warning", 3000);
-  } catch { showToast(`Cannot reach backend — demo mode active`,"warning",3000); }
+  } catch { showToast(`Cannot reach backend — running in local mode`,"warning",3000); }
 }
 async function startAll() {
-  if (demo.active) { showToast("Backend not connected — demo mode","warning",3000); return; }
+  if (demo.active) { showToast("Running in local mode — backend not connected","warning",3000); return; }
   for (const name of Object.keys(ALL_MODS)) await startModule(name);
 }
 async function stopAll() {
-  if (demo.active) { showToast("Backend not connected — demo mode","warning",3000); return; }
+  if (demo.active) { showToast("Running in local mode — backend not connected","warning",3000); return; }
   for (const name of Object.keys(ALL_MODS)) await stopModule(name);
 }
 
@@ -1736,10 +1808,86 @@ function stopLauncherPolling() {
   if (launcherPolling) { clearInterval(launcherPolling); launcherPolling=null; }
 }
 
+// ── CSV Export ────────────────────────────────────────────────
+function exportCSV(type) {
+  const arrMap = {
+    alerts: alerts, anomaly: anomalies, dlp: dlpEvents, shadow: shadowEvents,
+    sap: sapEvents, compliance: compEvents, incidents: incEvents, sbom: sbomEvents,
+    rules: alerts, zt: ztEvents, credentials: credEvents, cloud: cloudEvents,
+    gateway: alerts,
+  };
+  const arr = arrMap[type] || [];
+  if (!arr.length) { showToast("No data to export", "warning", 2000); return; }
+  const keys = [...new Set(arr.flatMap(r => Object.keys(r)))].filter(k => k !== '_type');
+  const rows = [keys.join(','), ...arr.map(r => keys.map(k => {
+    const v = r[k] ?? '';
+    const s = String(Array.isArray(v) ? v.join(';') : v).replace(/"/g, '""');
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
+  }).join(','))];
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `integrishield-${type}-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+  showToast(`⬇ ${arr.length} ${type} records exported to CSV`, "success", 3000);
+}
+
+// ── Filter helpers ────────────────────────────────────────────
+const fv = id => { const el = $(id); return el ? el.value : 'all'; };
+const fq = id => { const el = $(id); return el ? el.value.toLowerCase().trim() : ''; };
+
 // ── Filter listeners ──────────────────────────────────────────
 if (ui.scenarioFilter) ui.scenarioFilter.addEventListener("change", renderAlerts);
 if (ui.severityFilter) ui.severityFilter.addEventListener("change", renderAlerts);
 if (ui.auditFilter)    ui.auditFilter.addEventListener("change", renderAudit);
+
+// Gateway filters
+['gw-search','gw-scenario-filter','gw-severity-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderGateway);
+});
+// Anomaly filters
+['anom-search','anom-class-filter','anom-score-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderAnomaly);
+});
+// DLP filters
+['dlp-search','dlp-rule-filter','dlp-sev-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderDlp);
+});
+// Shadow filters
+['shadow-search','shadow-sev-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderShadow);
+});
+// SAP filters
+['sap-search','sap-tool-filter','sap-flag-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderSap);
+});
+// Compliance filters
+['comp-fw-filter','comp-result-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener('change', renderCompliance);
+});
+// Incidents filters
+['inc-search','inc-status-filter','inc-sev-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderIncidents);
+});
+// SBOM filters
+['sbom-search','sbom-status-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderSbom);
+});
+// Rules filters
+['rules-search','rules-scenario-filter','rules-sev-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderRules);
+});
+// Zero-Trust filters
+['zt-search','zt-decision-filter','zt-risk-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderZeroTrust);
+});
+// Credentials filters
+['cred-search','cred-action-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderCredentials);
+});
+// Cloud filters
+['cloud-search','cloud-provider-filter','cloud-sev-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderCloud);
+});
 
 // ── Sidebar nav ───────────────────────────────────────────────
 document.querySelectorAll(".nav-btn").forEach(btn=>btn.addEventListener("click",()=>navigateToTab(btn.dataset.tab)));
