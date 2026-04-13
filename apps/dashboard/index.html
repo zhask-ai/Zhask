@@ -412,7 +412,7 @@
           <div class="panel-header">
             <div class="panel-title-row">
               <h2>⚡ Module Launcher</h2>
-              <span class="panel-subtitle">Start and stop individual modules — requires local backend running</span>
+              <span class="panel-subtitle">Control the demo engine — start/stop all modules or manage individually</span>
             </div>
             <div style="display:flex;gap:0.5rem">
               <button class="launch-btn launch-btn-start" onclick="startAll()">▶ Start All</button>
@@ -420,12 +420,17 @@
             </div>
           </div>
 
-          <!-- Quick start: Redis first -->
+          <!-- Engine status bar -->
+          <div class="launcher-status-bar" id="launcher-status-bar">
+            <span class="launcher-dot stopped"></span>
+            <span style="font-weight:600;color:var(--text-dim)">Demo Engine: <strong>STOPPED</strong></span>
+            <span style="margin-left:auto;font-size:.72rem;color:var(--text-dim)">0 / 13 modules active</span>
+          </div>
+
+          <!-- Quick start notice -->
           <div class="launcher-notice" id="launcher-notice">
-            <span>⚠️</span>
-            <span>Backend not connected — start the backend first:
-              <code>python3 apps/dashboard/backend/server.py</code>
-            </span>
+            <span>💡</span>
+            <span>Click <strong>▶ Start All</strong> above to launch the demo with simulated real-time threat data across all 13 modules.</span>
           </div>
 
           <!-- Module cards grid -->
@@ -528,7 +533,7 @@
             <div class="mini-stat mini-stat-info" style="cursor:pointer" onclick="miniStatFilter('gateway','gw-scenario-filter','velocity_anomaly')" title="Filter velocity"><span id="gw-velocity">0</span><label>Velocity Alerts ↗</label></div>
           </div>
           <ul id="gateway-list" class="feed-list"></ul>
-          <p class="empty-state" id="gateway-empty">Waiting for API call events from M01 stream…</p>
+          <p class="empty-state" id="gateway-empty">No gateway events yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ ANOMALY M08 ══════════════ -->
@@ -552,7 +557,7 @@
             <div class="mini-stat mini-stat-info" style="cursor:pointer" onclick="miniStatFilter('anomalies','anom-class-filter','new_endpoint')" title="Filter new endpoints"><span id="anom-new-ep">0</span><label>New Endpoints ↗</label></div>
           </div>
           <ul id="anomaly-list" class="feed-list"></ul>
-          <p class="empty-state" id="anomaly-empty">Waiting for anomaly scores from M08…</p>
+          <p class="empty-state" id="anomaly-empty">No anomaly data yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ DLP M09 ══════════════ -->
@@ -576,7 +581,7 @@
             <div class="mini-stat mini-stat-teal" style="cursor:pointer" onclick="miniStatFilter('dlp','dlp-rule-filter','blocklist')" title="Filter blocklist"><span id="dlp-blocklist">0</span><label>Blocklist Hits ↗</label></div>
           </div>
           <ul id="dlp-list" class="feed-list"></ul>
-          <p class="empty-state" id="dlp-empty">No DLP violations from M09 yet.</p>
+          <p class="empty-state" id="dlp-empty">No DLP violations yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ SHADOW M11 ══════════════ -->
@@ -598,7 +603,7 @@
             <div class="mini-stat mini-stat-critical"><span id="shadow-unique">0</span><label>Unique Hosts</label></div>
           </div>
           <ul id="shadow-list" class="feed-list"></ul>
-          <p class="empty-state" id="shadow-empty">No shadow endpoints from M11 yet.</p>
+          <p class="empty-state" id="shadow-empty">No shadow endpoints yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ SAP MCP M05 ══════════════ -->
@@ -621,7 +626,7 @@
             <div class="mini-stat mini-stat-warn"><span id="sap-anomalous">0</span><label>Anomalous</label></div>
           </div>
           <ul id="sap-list" class="feed-list"></ul>
-          <p class="empty-state" id="sap-empty">Waiting for SAP MCP events from M05…</p>
+          <p class="empty-state" id="sap-empty">No SAP MCP events yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ COMPLIANCE M07 ══════════════ -->
@@ -646,7 +651,7 @@
           </div>
           <div class="compliance-scorecard" id="compliance-scorecard"></div>
           <ul id="compliance-list" class="feed-list"></ul>
-          <p class="empty-state" id="compliance-empty">Waiting for compliance findings from M07…</p>
+          <p class="empty-state" id="compliance-empty">No compliance findings yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ INCIDENTS M10 ══════════════ -->
@@ -672,7 +677,7 @@
           </div>
           <div id="active-playbook-tracker" class="playbook-tracker hidden"></div>
           <ul id="incidents-list" class="feed-list"></ul>
-          <p class="empty-state" id="incidents-empty">Waiting for incident events from M10…</p>
+          <p class="empty-state" id="incidents-empty">No incident events yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ SBOM M13 ══════════════ -->
@@ -696,7 +701,7 @@
             <div class="mini-stat mini-stat-ok" style="cursor:pointer" onclick="miniStatFilter('sbom','sbom-status-filter','CLEAN')"><span id="sbom-clean">0</span><label>Clean ↗</label></div>
           </div>
           <ul id="sbom-list" class="feed-list"></ul>
-          <p class="empty-state" id="sbom-empty">Waiting for SBOM scan results from M13…</p>
+          <p class="empty-state" id="sbom-empty">No SBOM scan results yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ RULES M12 ══════════════ -->
@@ -722,7 +727,7 @@
             <div class="mini-stat mini-stat-purple"><span id="rule-other">0</span><label>Other Rules</label></div>
           </div>
           <ul id="rules-list" class="feed-list"></ul>
-          <p class="empty-state" id="rules-empty">Waiting for rule triggers from M12…</p>
+          <p class="empty-state" id="rules-empty">No rule triggers yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ ZERO-TRUST M04 ══════════════ -->
@@ -747,7 +752,7 @@
             <div class="mini-stat mini-stat-info" style="cursor:pointer" onclick="miniStatFilter('zero-trust','zt-risk-filter','high')"><span id="zt-avg-risk">—</span><label>Avg Risk ↗</label></div>
           </div>
           <ul id="zt-list" class="feed-list"></ul>
-          <p class="empty-state" id="zt-empty">Waiting for zero-trust evaluations from M04…</p>
+          <p class="empty-state" id="zt-empty">No zero-trust evaluations yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ CREDENTIALS M06 ══════════════ -->
@@ -770,7 +775,7 @@
             <div class="mini-stat mini-stat-critical" style="cursor:pointer" onclick="miniStatFilter('credentials','cred-action-filter','revoked')"><span id="cred-revoked">0</span><label>Revoked ↗</label></div>
           </div>
           <ul id="cred-list" class="feed-list"></ul>
-          <p class="empty-state" id="cred-empty">Waiting for credential vault events from M06…</p>
+          <p class="empty-state" id="cred-empty">No credential events yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ CLOUD M15 ══════════════ -->
@@ -796,7 +801,7 @@
             <div class="mini-stat mini-stat-info" style="cursor:pointer" onclick="miniStatFilter('cloud','cloud-provider-filter','azure')"><span id="cloud-azure">0</span><label>Azure ↗</label></div>
           </div>
           <ul id="cloud-list" class="feed-list"></ul>
-          <p class="empty-state" id="cloud-empty">Waiting for cloud posture findings from M15…</p>
+          <p class="empty-state" id="cloud-empty">No cloud findings yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
         <!-- ══════════════ MODULE STREAM STATUS ══════════════ -->

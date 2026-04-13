@@ -2167,3 +2167,32 @@ tbody tr:hover {
   .topbar-right { gap: 0.3rem; font-size: 0.72rem; }
   .live-clock { min-width: 60px; font-size: 0.7rem; }
 }
+
+/* ── Launcher Status Bar ── */
+.launcher-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-hi);
+}
+
+/* ── Link button inside empty states ── */
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  text-decoration: underline;
+  padding: 0;
+}
+.link-btn:hover {
+  color: var(--text-hi);
+}
