@@ -402,6 +402,7 @@ function demoTick() {
     }
   }
   demo.tick++;
+  kpiBlocked += _int(1,3);
   updateAllUI();
 }
 
@@ -416,7 +417,9 @@ function startDemo() {
 
 function stopDemo() {
   if (demo.iid) clearInterval(demo.iid);
+  demo.iid = null;
   demo.active = false;
+  const b = $("scenario-banner"); if (b) b.classList.add("hidden");
 }
 
 // ── Update all UI ─────────────────────────────────────────────
@@ -429,8 +432,10 @@ function updateAllUI() {
                   credEvents.length+compEvents.length+dlpEvents.length+incEvents.length+
                   shadowEvents.length+sbomEvents.length+cloudEvents.length;
 
-  if (ui.backendStatus) ui.backendStatus.textContent = "LIVE";
-  if (ui.statusDot)     ui.statusDot.className = "status-dot online";
+  if (demo.active) {
+    if (ui.backendStatus) ui.backendStatus.textContent = "DEMO MODE";
+    if (ui.statusDot)     ui.statusDot.className = "status-dot online";
+  }
   if (ui.eventsTotal)   ui.eventsTotal.textContent = allEvts.toLocaleString();
   if (ui.streamUpdated) ui.streamUpdated.textContent = `updated ${new Date().toLocaleTimeString()}`;
 
@@ -511,8 +516,7 @@ function updateAllUI() {
   updatePills(modStatus);
   if (ui.moduleGrid) renderModuleGrid(modStatus);
 
-  // Exec KPIs
-  kpiBlocked += _int(1,3);
+  // Exec KPIs (kpiBlocked is incremented in demoTick only)
   if (ui.kpiBlocked) animateValue(ui.kpiBlocked, kpiBlocked);
   if (ui.kpiSaved) {
     const s = kpiBlocked * 1558;
@@ -643,9 +647,10 @@ function renderAlerts() {
   if (sc !== "all") v = v.filter(a => a.scenario === sc);
   if (sv !== "all") v = v.filter(a => a.severity === sv);
   setEmpty(ui.alertsList, ui.alertsEmpty, v);
-  ui.alertsList.innerHTML = v.map((a, i) => {
+  ui.alertsList.innerHTML = v.map((a) => {
+    const idx = alerts.indexOf(a);
     const sev = (a.severity||"low").toLowerCase();
-    return `<li class="alert-item sev-${sev} clickable-item" onclick="showAlertDetail(${i})">
+    return `<li class="alert-item sev-${sev} clickable-item" onclick="showAlertDetail(${idx})">
       <div class="alert-item-row">
         <strong>${sev.toUpperCase()}</strong>
         <span class="panel-subtitle">${scl(a.scenario)}</span>
@@ -690,10 +695,11 @@ function renderGateway() {
   if (sv !== 'all') v = v.filter(a=>(a.severity||'').toLowerCase()===sv);
   if (q) v = v.filter(a=>[a.message,a.source_ip,a.user_id].join(' ').toLowerCase().includes(q));
   setEmpty(ui.gatewayList, ui.gatewayEmpty, v);
-  ui.gatewayList.innerHTML = v.map((a, i) => {
+  ui.gatewayList.innerHTML = v.map((a) => {
+    const idx = alerts.indexOf(a);
     const sev = (a.severity||"low").toLowerCase();
-    const fixBadge = fixedItems.has('gateway-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-gateway sev-${sev}" onclick="showItemDetail('gateway',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('gateway-'+(a.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-gateway sev-${sev}" onclick="showItemDetail('gateway',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>RFC CALL</strong> <span class="panel-subtitle">${scl(a.scenario)}</span>
         <span class="sev-badge sev-${sev}" style="margin-left:auto">${sev.toUpperCase()}</span>
@@ -725,12 +731,13 @@ function renderAnomaly() {
   if (sc2 === 'low')    va = va.filter(a=>parseFloat(a.anomaly_score||0)<0.4);
   if (q2) va = va.filter(a=>[a.source_ip,a.user_id,a.classification].join(' ').toLowerCase().includes(q2));
   setEmpty(ui.anomalyList, ui.anomalyEmpty, va);
-  ui.anomalyList.innerHTML = va.map((a, i) => {
+  ui.anomalyList.innerHTML = va.map((a) => {
+    const idx = anomalies.indexOf(a);
     const sc = parseFloat(a.anomaly_score||0);
     const cls = sc>0.7?"sev-critical":sc>0.4?"sev-medium":"sev-low";
     const barColor = sc>0.7?"#ff4757":sc>0.4?"#ffa502":"#2ed573";
-    const fixBadge = fixedItems.has('anomaly-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-anomaly ${cls}" onclick="showItemDetail('anomaly',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('anomaly-'+(a.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-anomaly ${cls}" onclick="showItemDetail('anomaly',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>ANOMALY</strong>
         <span class="panel-subtitle">${a.classification||"unclassified"}</span>
@@ -763,10 +770,11 @@ function renderDlp() {
   if (ds !== 'all') vd = vd.filter(e=>(e.severity||'').toLowerCase()===ds);
   if (dq) vd = vd.filter(e=>[e.rule,e.user_id,e.destination].join(' ').toLowerCase().includes(dq));
   setEmpty(ui.dlpList, ui.dlpEmpty, vd);
-  ui.dlpList.innerHTML = vd.map((e, i) => {
+  ui.dlpList.innerHTML = vd.map((e) => {
+    const idx = dlpEvents.indexOf(e);
     const sev = (e.severity||"high").toLowerCase();
-    const fixBadge = fixedItems.has('dlp-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-dlp sev-${sev}" onclick="showItemDetail('dlp',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('dlp-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-dlp sev-${sev}" onclick="showItemDetail('dlp',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>${(e.rule||"DLP VIOLATION").toUpperCase().replace(/_/g," ")}</strong>
         <span class="sev-badge sev-${sev}" style="margin-left:auto">${sev.toUpperCase()}</span>
@@ -793,10 +801,11 @@ function renderShadow() {
   if (shsv !== 'all') vsh = vsh.filter(e=>(e.severity||'').toLowerCase()===shsv);
   if (shq) vsh = vsh.filter(e=>[e.endpoint,e.user_id,e.source_ip,e.message].join(' ').toLowerCase().includes(shq));
   setEmpty(ui.shadowList, ui.shadowEmpty, vsh);
-  ui.shadowList.innerHTML = vsh.map((e, i) => {
+  ui.shadowList.innerHTML = vsh.map((e) => {
+    const idx = shadowEvents.indexOf(e);
     const sev = (e.severity||"high").toLowerCase();
-    const fixBadge = fixedItems.has('shadow-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-shadow sev-${sev}" onclick="showItemDetail('shadow',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('shadow-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-shadow sev-${sev}" onclick="showItemDetail('shadow',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>SHADOW ENDPOINT</strong>
         <code style="font-size:.75rem;background:rgba(255,139,61,.15);color:#ff8b3d;padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.endpoint||"unknown"}</code>
@@ -824,11 +833,12 @@ function renderSap() {
   if (sflag === 'clean')   vsa = vsa.filter(e=>!e.flagged&&!e.anomalous);
   if (sq) vsa = vsa.filter(e=>[e.tool_name,e.user_id,e.tenant_id].join(' ').toLowerCase().includes(sq));
   setEmpty(ui.sapList, ui.sapEmpty, vsa);
-  ui.sapList.innerHTML = vsa.map((e, i) => {
+  ui.sapList.innerHTML = vsa.map((e) => {
+    const idx = sapEvents.indexOf(e);
     const flagged = e.anomalous || e.flagged;
     const toolColor = flagged ? "#ff4757" : "#5b8def";
-    const fixBadge = fixedItems.has('sap-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-sap ${flagged?"sev-critical":""}" onclick="showItemDetail('sap',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('sap-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-sap ${flagged?"sev-critical":""}" onclick="showItemDetail('sap',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>SAP MCP</strong>
         <code style="font-size:.73rem;background:${flagged?"rgba(255,71,87,.15)":"rgba(91,141,239,.12)"};color:${toolColor};padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.tool_name||"tool"}</code>
@@ -860,12 +870,13 @@ function renderCompliance() {
 
   const fwColors = {SOX:"#ff4757",GDPR:"#5b8def","PCI-DSS":"#ff8b3d","NIST-CSF":"#2ed573",ISO27001:"#a17fe0",HIPAA:"#39c5cf"};
 
-  ui.complianceList.innerHTML = vc.map((e, i) => {
+  ui.complianceList.innerHTML = vc.map((e) => {
+    const idx = compEvents.indexOf(e);
     const res = (e.result||"unknown").toLowerCase();
     const cls = res==="violation"?"sev-critical":res==="warning"?"sev-medium":"sev-low";
     const fwC = fwColors[e.framework]||"#7a93b4";
-    const fixBadge = fixedItems.has('comp-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-compliance ${cls}" onclick="showItemDetail('comp',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('comp-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-compliance ${cls}" onclick="showItemDetail('comp',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>${res.toUpperCase()}</strong>
         <span style="background:${fwC}22;color:${fwC};font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:.5rem">${e.framework||"—"}</span>
@@ -923,12 +934,13 @@ function renderIncidents() {
 
   const stColor = {open:"#ff4757",investigating:"#ffa502",in_progress:"#ffa502",active:"#ffa502",resolved:"#2ed573",closed:"#2ed573",contained:"#2ed573"};
 
-  ui.incidentsList.innerHTML = vi.map((e, i) => {
+  ui.incidentsList.innerHTML = vi.map((e) => {
+    const idx = incEvents.indexOf(e);
     const st  = (e.status||"open").toLowerCase();
     const stC = stColor[st]||"#7a93b4";
     const cls = st==="open"?"sev-critical":["investigating","in_progress","active"].includes(st)?"sev-medium":"sev-low";
-    const fixBadge = fixedItems.has('incident-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-incident ${cls}" onclick="showItemDetail('incident',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('incident-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-incident ${cls}" onclick="showItemDetail('incident',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>${e.incident_id||"INC-?"}</strong>
         <span class="panel-subtitle" style="margin-left:.4rem">${e.title||"incident"}</span>
@@ -991,11 +1003,12 @@ function renderSbom() {
   if (sbst !== 'all') vsb = vsb.filter(e=>(e.scan_status||'')===sbst);
   if (sbq) vsb = vsb.filter(e=>[e.target,e.scan_status].join(' ').toLowerCase().includes(sbq));
   setEmpty(ui.sbomList, ui.sbomEmpty, vsb);
-  ui.sbomList.innerHTML = vsb.map((e, i) => {
+  ui.sbomList.innerHTML = vsb.map((e) => {
+    const idx = sbomEvents.indexOf(e);
     const vuln = parseInt(e.cve_count||0)>0 || parseInt(e.insecure_rfc_count||0)>0;
     const cls  = e.scan_status==="VULNERABLE"?"sev-critical":"sev-low";
-    const fixBadge = fixedItems.has('sbom-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-sbom ${cls}" onclick="showItemDetail('sbom',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('sbom-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-sbom ${cls}" onclick="showItemDetail('sbom',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <span style="font-size:.7rem;font-weight:700;background:${vuln?"rgba(255,71,87,.2)":"rgba(46,213,115,.15)"};color:${vuln?"#ff4757":"#2ed573"};padding:2px 8px;border-radius:4px">${e.scan_status||"SCAN"}</span>
         <code style="font-size:.73rem;background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px;margin-left:.5rem;color:#b0c4de">${e.target||"—"}</code>
@@ -1025,11 +1038,12 @@ function renderRules() {
   if (rsv !== 'all') vr = vr.filter(a=>(a.severity||'').toLowerCase()===rsv);
   if (rq) vr = vr.filter(a=>[a.message,a.source_ip,a.user_id,a.scenario].join(' ').toLowerCase().includes(rq));
   setEmpty(ui.rulesList, ui.rulesEmpty, vr);
-  ui.rulesList.innerHTML = vr.map((a, i) => {
+  ui.rulesList.innerHTML = vr.map((a) => {
+    const idx = alerts.indexOf(a);
     const sev = (a.severity||"medium").toLowerCase();
     const ruleColor = {bulk_extraction:"#ff4757",off_hours_rfc:"#ffa502",shadow_endpoint:"#ff8b3d",velocity_anomaly:"#5b8def",data_staging:"#ff4757",credential_abuse:"#a17fe0",privilege_escalation:"#ff4757",geo_anomaly:"#ffa502"}[a.scenario]||"#7a93b4";
-    const fixBadge = fixedItems.has('rules-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-rules sev-${sev}" onclick="showItemDetail('rules',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('rules-'+(a.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-rules sev-${sev}" onclick="showItemDetail('rules',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <span style="font-size:.7rem;font-weight:700;background:${ruleColor}22;color:${ruleColor};padding:2px 8px;border-radius:4px">${scl(a.scenario)||"RULE"}</span>
         <span class="sev-badge sev-${sev}" style="margin-left:.4rem">${sev.toUpperCase()}</span>
@@ -1064,14 +1078,15 @@ function renderZeroTrust() {
   if (zrisk === 'low')    vz = vz.filter(e=>parseFloat(e.risk_score||0)<0.4);
   if (zq) vz = vz.filter(e=>[e.user_id,e.source_ip].join(' ').toLowerCase().includes(zq));
   setEmpty(ui.ztList, ui.ztEmpty, vz);
-  ui.ztList.innerHTML = vz.map((e, i) => {
+  ui.ztList.innerHTML = vz.map((e) => {
+    const idx = ztEvents.indexOf(e);
     const dec  = (e.decision||"evaluated").toLowerCase();
     const dC   = dec==="allow"?"#2ed573":dec==="deny"?"#ff4757":"#ffa502";
     const risk = parseFloat(e.risk_score||0);
     let fc = [];
     try { fc = Array.isArray(e.failed_controls) ? e.failed_controls : JSON.parse(e.failed_controls||"[]"); } catch {}
-    const fixBadge = fixedItems.has('zt-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-zt-${dec}" onclick="showItemDetail('zt',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('zt-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-zt-${dec}" onclick="showItemDetail('zt',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <span style="font-size:.72rem;font-weight:700;background:${dC}22;color:${dC};padding:2px 9px;border-radius:4px">${dec.toUpperCase()}</span>
         <span style="margin-left:.6rem;font-size:.75rem;color:#b0c4de">risk: <strong style="color:${risk>0.7?"#ff4757":risk>0.4?"#ffa502":"#2ed573"}">${risk.toFixed(3)}</strong></span>
@@ -1104,12 +1119,13 @@ function renderCredentials() {
   if (crq) vcr = vcr.filter(e=>[e.key,e.tenant_id,e.action].join(' ').toLowerCase().includes(crq));
   setEmpty(ui.credList, ui.credEmpty, vcr);
   const icons = {issued:"🔑",accessed:"🔑",rotated:"🔄",revoked:"❌",default:"🔐"};
-  ui.credList.innerHTML = vcr.map((e, i) => {
+  ui.credList.innerHTML = vcr.map((e) => {
+    const idx = credEvents.indexOf(e);
     const act   = e.action||"event";
     const icon  = icons[act]||icons.default;
     const actC  = act.includes("revok")?"#ff4757":act.includes("rotat")?"#ffa502":"#2ed573";
-    const fixBadge = fixedItems.has('cred-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-credential" onclick="showItemDetail('cred',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('cred-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-credential" onclick="showItemDetail('cred',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <span style="font-size:.85rem">${icon}</span>
         <strong style="color:${actC};margin-left:.3rem">${act.toUpperCase()}</strong>
@@ -1141,13 +1157,14 @@ function renderCloud() {
   setEmpty(ui.cloudList, ui.cloudEmpty, vcl);
   const provC = {aws:"#ff9900",gcp:"#4285f4",azure:"#00a4ef"};
   const provBg = {aws:"rgba(255,153,0,.15)",gcp:"rgba(66,133,244,.15)",azure:"rgba(0,164,239,.15)"};
-  ui.cloudList.innerHTML = vcl.map((e, i) => {
+  ui.cloudList.innerHTML = vcl.map((e) => {
+    const idx = cloudEvents.indexOf(e);
     const prov = (e.provider||"cloud").toLowerCase();
     const sev  = (e.raw_severity||e.severity||"medium").toLowerCase();
     const pc   = provC[prov]||"#7a93b4";
     const pb   = provBg[prov]||"rgba(255,255,255,.06)";
-    const fixBadge = fixedItems.has('cloud-'+i) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
-    return `<li class="alert-item ev-cloud sev-${sev}" onclick="showItemDetail('cloud',${i})" style="cursor:pointer">
+    const fixBadge = fixedItems.has('cloud-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    return `<li class="alert-item ev-cloud sev-${sev}" onclick="showItemDetail('cloud',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <span style="font-size:.7rem;font-weight:700;background:${pb};color:${pc};padding:2px 8px;border-radius:4px">${prov.toUpperCase()}</span>
         <code style="font-size:.7rem;background:rgba(255,71,87,.1);color:#ff8b8b;padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.finding_type||"FINDING"}</code>
@@ -1165,7 +1182,7 @@ function renderCloud() {
 }
 
 // ── Universal item detail + fix system ────────────────────────
-const fixedItems = new Set(); // "type-idx" keys of resolved items
+const fixedItems = new Set(); // "type-ts" keys of resolved items (ts-based to survive prepends)
 
 function showItemDetail(type, idx) {
   const arrMap = {
@@ -1176,7 +1193,7 @@ function showItemDetail(type, idx) {
   };
   const arr = arrMap[type]; if (!arr) return;
   const ev = arr[idx];      if (!ev)  return;
-  const fixKey = `${type}-${idx}`;
+  const fixKey = ev.ts ? `${type}-${ev.ts}` : `${type}-${idx}`;
   const alreadyFixed = fixedItems.has(fixKey);
 
   const overlay = $("detail-overlay"); if (!overlay) return;
@@ -1528,7 +1545,8 @@ function applyFix(type, idx) {
   };
   const arr = arrMap[type]; if (!arr || !arr[idx]) return;
   const ev  = arr[idx];
-  fixedItems.add(`${type}-${idx}`);
+  const fixKey = ev.ts ? `${type}-${ev.ts}` : `${type}-${idx}`;
+  fixedItems.add(fixKey);
 
   // Visual feedback in drawer
   const drwBadge = $("drw-badge"), drwTitle = $("drw-title");
@@ -1604,13 +1622,15 @@ function navigateToTab(tabName) {
   if (target) target.classList.remove("hidden");
   document.querySelector(".main-content")?.scrollTo({top:0,behavior:"smooth"});
 
-  // Show overview sections only on alerts tab
+  // Show stat cards & charts only on alerts tab; scenario banner on all tabs when demo active
   const onAlerts = tabName === "alerts";
-  ["stat-cards","exec-kpis","scenario-banner"].forEach(id => {
+  ["stat-cards","exec-kpis"].forEach(id => {
     const el = $(id); if(el) el.classList.toggle("hidden", !onAlerts);
   });
   document.querySelectorAll(".chart-row, .module-health-section")
     .forEach(el=>el.classList.toggle("hidden", !onAlerts));
+  const bannerEl = $("scenario-banner");
+  if (bannerEl) bannerEl.classList.toggle("hidden", !demo.active);
 
   if (tabName==="launcher") startLauncherPolling(); else stopLauncherPolling();
   renderActiveTab();
@@ -1735,8 +1755,20 @@ function renderLauncher(processes) {
   if (!grid) return;
   const notice = $("launcher-notice");
 
+  // Update status bar
+  const statusBar = $("launcher-status-bar");
+  if (statusBar) {
+    const totalMods = Object.keys(ALL_MODS).length;
+    const activeMods = totalMods - stoppedModules.size;
+    const running = demo.active;
+    statusBar.innerHTML = `
+      <span class="launcher-dot ${running?"running":"stopped"}"></span>
+      <span style="font-weight:600;color:${running?"var(--ok)":"var(--text-dim)"}">Demo Engine: <strong>${running?"RUNNING":"STOPPED"}</strong></span>
+      <span style="margin-left:auto;font-size:.72rem;color:var(--text-dim)">${running?activeMods:0} / ${totalMods} modules active</span>`;
+  }
+
   if (demo.active || stoppedModules.size > 0 || !processes || processes.length === 0) {
-    if (notice) notice.style.display = "block";
+    if (notice) notice.style.display = demo.active ? "none" : "block";
     const engineRunning = demo.active;
     grid.innerHTML = Object.entries(ALL_MODS).map(([name, info]) => {
       const stopped = stoppedModules.has(name) || !engineRunning;
@@ -1802,7 +1834,10 @@ function startModule(name) {
     // Re-start engine if it was fully stopped
     demo.active = true;
     demo.iid = setInterval(demoTick, POLL_MS);
+    demoTick(); // immediate data
   }
+  if (ui.backendStatus) ui.backendStatus.textContent = "DEMO MODE";
+  if (ui.statusDot) ui.statusDot.className = "status-dot online";
   logLauncher(`[${new Date().toLocaleTimeString()}] ▶ ${name} started`);
   showToast(`▶ ${name} is now live`, "success", 3000);
   renderLauncher(launcherProcesses);
@@ -1824,6 +1859,7 @@ function stopModule(name) {
     demo.active = false;
     if (ui.backendStatus) ui.backendStatus.textContent = "STOPPED";
     if (ui.statusDot) ui.statusDot.className = "status-dot offline";
+    const b = $("scenario-banner"); if (b) b.classList.add("hidden");
   }
   logLauncher(`[${new Date().toLocaleTimeString()}] ■ ${name} stopped`);
   showToast(`■ ${name} stopped`, "warning", 3000);
@@ -1838,10 +1874,10 @@ function startAll() {
     if (!demo.iid) demo.iid = setInterval(demoTick, POLL_MS);
     demoTick(); // immediate tick so data appears instantly
   }
-  if (ui.backendStatus) ui.backendStatus.textContent = "LIVE";
+  if (ui.backendStatus) ui.backendStatus.textContent = "DEMO MODE";
   if (ui.statusDot) ui.statusDot.className = "status-dot online";
   logLauncher(`[${new Date().toLocaleTimeString()}] ▶ All modules started`);
-  showToast("▶ All 13 modules started — real-time data streaming", "success", 4000);
+  showToast("▶ All 13 modules started — real-time threat detection active", "success", 4000);
   renderLauncher(launcherProcesses);
   updateAllUI();
 }
@@ -1852,6 +1888,7 @@ function stopAll() {
   demo.active = false;
   if (ui.backendStatus) ui.backendStatus.textContent = "STOPPED";
   if (ui.statusDot) ui.statusDot.className = "status-dot offline";
+  const b = $("scenario-banner"); if (b) b.classList.add("hidden");
   logLauncher(`[${new Date().toLocaleTimeString()}] ■ All modules stopped`);
   showToast("■ All modules stopped — data stream paused", "warning", 4000);
   renderLauncher(launcherProcesses);
@@ -2011,8 +2048,10 @@ async function syncData() {
     updateAllUI();
 
   } catch {
-    if (!demo.active) startDemo();
-    else demoTick();
+    // Backend not available — maintain current state, do NOT auto-start demo
+    if (ui.backendStatus) ui.backendStatus.textContent = demo.active ? "DEMO MODE" : "DEMO READY";
+    if (ui.statusDot) ui.statusDot.className = demo.active ? "status-dot online" : "status-dot offline";
+    if (demo.active) updateAllUI();
   }
 }
 
@@ -2020,17 +2059,10 @@ async function syncData() {
 function init() {
   initCharts();
   staggerCards();
-
-  // Ensure scenario banner and exec KPIs are visible on alerts tab
-  const onAlerts = document.querySelector(".nav-btn.active")?.dataset.tab === "alerts";
-  if (!onAlerts) {
-    ["stat-cards","exec-kpis","scenario-banner"].forEach(id=>{ const e=$(id); if(e) e.classList.add("hidden"); });
-    document.querySelectorAll(".chart-row,.module-health-section").forEach(e=>e.classList.add("hidden"));
-  }
-
+  navigateToTab("launcher"); // Open on Launcher — user must click Start
   syncData();
   setInterval(syncData, POLL_MS);
-  setTimeout(()=>showToast("IntegriShield SOC · Press ⌘K to navigate · Click any alert for detail","info",6000), 800);
+  setTimeout(()=>showToast("IntegriShield SOC · Click ▶ Start All in Launcher to begin · Press ⌘K to navigate","info",8000), 800);
 }
 
 init();
