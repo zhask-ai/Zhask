@@ -414,9 +414,10 @@
               <h2>⚡ Module Launcher</h2>
               <span class="panel-subtitle">Control the demo engine — start/stop all modules or manage individually</span>
             </div>
-            <div style="display:flex;gap:0.5rem">
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
               <button class="launch-btn launch-btn-start" onclick="startAll()">▶ Start All</button>
               <button class="launch-btn launch-btn-stop"  onclick="stopAll()">■ Stop All</button>
+              <button id="auto-tour-btn" class="export-btn" onclick="toggleAutoTour()" style="background:rgba(139,92,246,0.1);border-color:rgba(139,92,246,0.3);color:#a78bfa;padding:0.38rem 0.9rem;font-size:0.75rem;font-weight:600;border-radius:6px;cursor:pointer;transition:all 0.2s;white-space:nowrap">▶ Auto Tour</button>
             </div>
           </div>
 
@@ -521,7 +522,7 @@
             </div>
             <div class="panel-controls">
               <input type="text" id="gw-search" placeholder="Search IP, user, message…" class="filter-input">
-              <select id="gw-scenario-filter"><option value="all">All types</option><option value="off_hours_rfc">Off-hours RFC</option><option value="bulk_extraction">Bulk extraction</option><option value="velocity_anomaly">Velocity anomaly</option><option value="shadow_endpoint">Shadow endpoint</option><option value="credential_abuse">Credential abuse</option></select>
+              <select id="gw-scenario-filter"><option value="all">All types</option><option value="off_hours_rfc">Off-hours RFC</option><option value="bulk_extraction">Bulk extraction</option><option value="velocity_anomaly">Velocity anomaly</option><option value="shadow_endpoint">Shadow endpoint</option><option value="credential_abuse">Credential abuse</option><option value="data_staging">Data staging</option><option value="geo_anomaly">Geo anomaly</option><option value="privilege_escalation">Privilege escalation</option></select>
               <select id="gw-severity-filter"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
               <button class="export-btn" onclick="exportCSV('gateway')">⬇ CSV</button>
             </div>
@@ -773,6 +774,7 @@
             <div class="mini-stat mini-stat-ok" style="cursor:pointer" onclick="miniStatFilter('credentials','cred-action-filter','issued')"><span id="cred-issued">0</span><label>Issued ↗</label></div>
             <div class="mini-stat mini-stat-warn" style="cursor:pointer" onclick="miniStatFilter('credentials','cred-action-filter','rotated')"><span id="cred-rotated">0</span><label>Rotated ↗</label></div>
             <div class="mini-stat mini-stat-critical" style="cursor:pointer" onclick="miniStatFilter('credentials','cred-action-filter','revoked')"><span id="cred-revoked">0</span><label>Revoked ↗</label></div>
+            <div class="mini-stat mini-stat-info" style="cursor:pointer" onclick="miniStatFilter('credentials','cred-action-filter','accessed')"><span id="cred-accessed">0</span><label>Accessed ↗</label></div>
           </div>
           <ul id="cred-list" class="feed-list"></ul>
           <p class="empty-state" id="cred-empty">No credential events yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>

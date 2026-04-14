@@ -16,10 +16,20 @@ let alerts=[], auditRows=[], anomalies=[], sapEvents=[], compEvents=[],
     ztEvents=[], credEvents=[], cloudEvents=[], prevAlertCount=0;
 
 // ── Demo engine ───────────────────────────────────────────────
-const demo = { active:false, tick:0, scIdx:0, phIdx:0, phTick:0, ctx:null, iid:null };
+const demo = { active:false, tick:0, scIdx:0, phIdx:0, phTick:0, ctx:null, iid:null, ramping:false, rampTimeout:null };
 // Per-module stopped set — tracks which modules the user has individually stopped
 const stoppedModules = new Set();
 let _incID = 1000;
+
+// ── Notification badge state ──────────────────────────────────
+const tabEventCounts = {};
+const tabLastViewed  = {};
+let currentTab = 'launcher';
+const typeToTab = {
+  alert:'alerts', anomaly:'anomalies', sap:'sap', zt:'zero-trust',
+  cred:'credentials', comp:'compliance', dlp:'dlp', inc:'incidents',
+  shadow:'shadow', sbom:'sbom', cloud:'cloud', audit:'audit',
+};
 
 // ── KPI state ─────────────────────────────────────────────────
 let kpiBlocked = 2847;
@@ -77,7 +87,7 @@ const ui = {
   rulesList:$("rules-list"), rulesEmpty:$("rules-empty"),
   ztAllow:$("zt-allow"), ztDeny:$("zt-deny"), ztChallenge:$("zt-challenge"), ztAvgRisk:$("zt-avg-risk"),
   ztList:$("zt-list"), ztEmpty:$("zt-empty"),
-  credIssued:$("cred-issued"), credRotated:$("cred-rotated"), credRevoked:$("cred-revoked"),
+  credIssued:$("cred-issued"), credRotated:$("cred-rotated"), credRevoked:$("cred-revoked"), credAccessed:$("cred-accessed"),
   credList:$("cred-list"), credEmpty:$("cred-empty"),
   cloudCritical:$("cloud-critical"), cloudHigh:$("cloud-high"),
   cloudAws:$("cloud-aws"), cloudGcp:$("cloud-gcp"), cloudAzure:$("cloud-azure"),
@@ -371,7 +381,12 @@ function demoTick() {
     sbom:"m13-sbom-scanner", cloud:"m15-multicloud-ispm",
   };
 
-  for (const ev of evts) {
+  // Filter events for stopped modules before pushing
+  const activeEvts = evts.filter(ev => {
+    const mod = auditMap[ev._type];
+    return !mod || !stoppedModules.has(mod);
+  });
+  for (const ev of activeEvts) {
     const t = ev._type; delete ev._type;
     if (t==="alert")   push(alerts, ev, 80);
     if (t==="anomaly") push(anomalies, ev, 60);
@@ -386,6 +401,9 @@ function demoTick() {
     if (t==="cloud")   push(cloudEvents, ev, 60);
     if (t==="audit")   push(auditRows, ev, 60);
     else if (auditMap[t]) push(auditRows, {actor:auditMap[t],action:t+"_event",module:auditMap[t],status:"ok",ts:ev.ts}, 60);
+    // Increment badge counts for tabs not currently viewed
+    const tab = typeToTab[t] || (t==="audit" ? "audit" : null);
+    if (tab) tabEventCounts[tab] = (tabEventCounts[tab] || 0) + 1;
   }
 
   // Advance phase/scenario
@@ -406,19 +424,36 @@ function demoTick() {
   updateAllUI();
 }
 
+function rampUp(onDone) {
+  let remaining = 8;
+  demo.ramping = true;
+  (function tick() {
+    demoTick();
+    if (--remaining > 0) {
+      demo.rampTimeout = setTimeout(tick, 300);
+    } else {
+      demo.ramping = false;
+      demo.rampTimeout = null;
+      if (onDone) onDone();
+    }
+  })();
+}
+
 function startDemo() {
   if (demo.active) return;
   demo.active = true;
   console.info("IntegriShield: real-time engine active — all 13 modules streaming");
   showToast("⚡ All 13 modules online — real-time threat detection active", "info", 5000);
-  for (let i = 0; i < 20; i++) demoTick(); // prime all panels
-  demo.iid = setInterval(demoTick, POLL_MS);
+  rampUp(() => { demo.iid = setInterval(demoTick, POLL_MS); });
 }
 
 function stopDemo() {
   if (demo.iid) clearInterval(demo.iid);
+  clearTimeout(demo.rampTimeout); demo.ramping = false; demo.rampTimeout = null;
   demo.iid = null;
   demo.active = false;
+  stopAutoTour();
+  clearAllBadges();
   const b = $("scenario-banner"); if (b) b.classList.add("hidden");
 }
 
@@ -528,7 +563,11 @@ function updateAllUI() {
     const adj  = Math.max(72, Math.round(sc2.reduce((a,b)=>a+b,0)/sc2.length - viol*0.5));
     ui.kpiCompliance.textContent = `${adj}%`;
   }
-  if (ui.kpiMttd) ui.kpiMttd.textContent = "3.2s";
+  if (ui.kpiMttd) {
+    const base = 2.0 + Math.random() * 2.5;
+    const load = Math.min(alerts.length / 50, 1.0) * 0.8;
+    ui.kpiMttd.textContent = (base + load).toFixed(1) + 's';
+  }
 
   // Scenario banner
   if (ui.scenarioBanner && demo.active) {
@@ -553,6 +592,7 @@ function updateAllUI() {
   }
 
   renderActiveTab();
+  updateBadges();
 }
 
 // ── Mini-stat click filter ────────────────────────────────────
@@ -966,7 +1006,7 @@ function renderPlaybookTracker() {
   if (!inc) { el.classList.add("hidden"); return; }
   el.classList.remove("hidden");
   const steps = PLAYBOOK_STEPS[inc.playbook_id]||[];
-  const done  = Math.min(steps.length, Math.floor(demo.tick/3) % (steps.length+1));
+  const done  = Math.min(steps.length, Math.floor(demo.tick/3));
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.7rem;flex-wrap:wrap">
       <span style="font-size:.65rem;font-weight:700;background:rgba(91,141,239,.18);color:#5b8def;padding:2px 8px;border-radius:4px">🎯 PLAYBOOK RUNNING</span>
@@ -1110,9 +1150,10 @@ function renderZeroTrust() {
 // ── CREDENTIALS M06 ───────────────────────────────────────────
 function renderCredentials() {
   if (!ui.credList) return;
-  animateValue(ui.credIssued,  credEvents.filter(e=>(e.action||"").includes("issu")||e.action==="accessed").length);
+  animateValue(ui.credIssued,  credEvents.filter(e=>(e.action||"").includes("issu")).length);
   animateValue(ui.credRotated, credEvents.filter(e=>(e.action||"").includes("rotat")).length);
   animateValue(ui.credRevoked, credEvents.filter(e=>(e.action||"").includes("revok")).length);
+  animateValue(ui.credAccessed, credEvents.filter(e=>(e.action||"")==="accessed").length);
   const cract = fv('cred-action-filter'), crq = fq('cred-search');
   let vcr = credEvents;
   if (cract !== 'all') vcr = vcr.filter(e=>(e.action||'').toLowerCase().includes(cract));
@@ -1611,10 +1652,95 @@ function demoAction(action, param) {
   closeDetailDrawer();
 }
 
+// ── Auto-Tour ─────────────────────────────────────────────────
+let autoTourInterval = null, autoTourIdx = 0, autoTourActive = false;
+const TOUR_TABS = ['alerts','gateway','anomalies','rules','dlp','credentials',
+  'shadow','compliance','incidents','sbom','zero-trust','sap','cloud'];
+
+function toggleAutoTour() {
+  if (autoTourActive) {
+    autoTourActive = false;
+    clearInterval(autoTourInterval); autoTourInterval = null;
+    const b = $("auto-tour-btn"); if (b) { b.textContent = "▶ Auto Tour"; b.classList.remove("tour-active"); }
+    showToast("Auto Tour stopped", "info", 2000);
+    return;
+  }
+  if (!demo.active) { showToast("Start the demo first", "warning", 2000); return; }
+  autoTourActive = true;
+  autoTourIdx = 0;
+  // navigate immediately to first tab
+  _tourNav(TOUR_TABS[autoTourIdx++ % TOUR_TABS.length]);
+  autoTourInterval = setInterval(() => {
+    _tourNav(TOUR_TABS[autoTourIdx++ % TOUR_TABS.length]);
+  }, 6000);
+  const b = $("auto-tour-btn"); if (b) { b.textContent = "■ Stop Tour"; b.classList.add("tour-active"); }
+  showToast("Auto Tour — cycling tabs every 6s. Click any tab to stop.", "info", 4000);
+}
+
+function _tourNav(tab) {
+  // Internal navigation used by auto-tour (doesn't stop the tour)
+  const btn = document.querySelector(`.nav-btn[data-tab="${tab}"]`);
+  if (!btn) return;
+  currentTab = tab;
+  tabLastViewed[tab] = tabEventCounts[tab] || 0;
+  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  document.querySelectorAll(".tab-content").forEach(c=>c.classList.add("hidden"));
+  const target = $(`tab-${tab}`);
+  if (target) target.classList.remove("hidden");
+  document.querySelector(".main-content")?.scrollTo({top:0,behavior:"smooth"});
+  const onAlerts = tab === "alerts";
+  ["stat-cards","exec-kpis"].forEach(id => { const el=$(id); if(el) el.classList.toggle("hidden",!onAlerts); });
+  document.querySelectorAll(".chart-row, .module-health-section").forEach(el=>el.classList.toggle("hidden",!onAlerts));
+  const bannerEl = $("scenario-banner"); if (bannerEl) bannerEl.classList.toggle("hidden", !demo.active);
+  if (tab==="launcher") startLauncherPolling(); else stopLauncherPolling();
+  renderActiveTab();
+  updateBadges();
+}
+
+function stopAutoTour() {
+  if (!autoTourActive) return;
+  autoTourActive = false;
+  clearInterval(autoTourInterval); autoTourInterval = null;
+  const b = $("auto-tour-btn"); if (b) { b.textContent = "▶ Auto Tour"; b.classList.remove("tour-active"); }
+}
+
+// ── Badge helpers ─────────────────────────────────────────────
+function updateBadges() {
+  for (const [tab, total] of Object.entries(tabEventCounts)) {
+    const unseen = total - (tabLastViewed[tab] || 0);
+    const btn = document.getElementById(`nav-${tab}`);
+    if (!btn) continue;
+    let badge = btn.querySelector('.nav-badge');
+    if (unseen > 0 && tab !== currentTab) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'nav-badge';
+        btn.appendChild(badge);
+      }
+      badge.textContent = unseen > 99 ? '99+' : String(unseen);
+      badge.classList.remove('hidden');
+    } else if (badge) {
+      badge.classList.add('hidden');
+    }
+  }
+}
+
+function clearAllBadges() {
+  Object.keys(tabEventCounts).forEach(k => { tabEventCounts[k] = 0; });
+  Object.keys(tabLastViewed).forEach(k => { tabLastViewed[k] = 0; });
+  document.querySelectorAll('.nav-badge').forEach(b => b.classList.add('hidden'));
+}
+
 // ── Navigate ──────────────────────────────────────────────────
 function navigateToTab(tabName) {
+  // Stop auto-tour when user manually navigates
+  stopAutoTour();
   const btn = document.querySelector(`.nav-btn[data-tab="${tabName}"]`);
   if (!btn) return;
+  // Snapshot badge counts for this tab (clears its badge)
+  currentTab = tabName;
+  tabLastViewed[tabName] = tabEventCounts[tabName] || 0;
   document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
   btn.classList.add("active");
   document.querySelectorAll(".tab-content").forEach(c=>c.classList.add("hidden"));
@@ -1634,6 +1760,7 @@ function navigateToTab(tabName) {
 
   if (tabName==="launcher") startLauncherPolling(); else stopLauncherPolling();
   renderActiveTab();
+  updateBadges();
   closeSidebar();
   closeCommandPalette();
 }
@@ -1833,8 +1960,12 @@ function startModule(name) {
   if (!demo.active && !allStopped) {
     // Re-start engine if it was fully stopped
     demo.active = true;
-    demo.iid = setInterval(demoTick, POLL_MS);
-    demoTick(); // immediate data
+    if (alerts.length === 0) {
+      rampUp(() => { if (!demo.iid) demo.iid = setInterval(demoTick, POLL_MS); });
+    } else {
+      demo.iid = setInterval(demoTick, POLL_MS);
+      demoTick();
+    }
   }
   if (ui.backendStatus) ui.backendStatus.textContent = "DEMO MODE";
   if (ui.statusDot) ui.statusDot.className = "status-dot online";
@@ -1871,8 +2002,7 @@ function startAll() {
   stoppedModules.clear();
   if (!demo.active) {
     demo.active = true;
-    if (!demo.iid) demo.iid = setInterval(demoTick, POLL_MS);
-    demoTick(); // immediate tick so data appears instantly
+    rampUp(() => { if (!demo.iid) demo.iid = setInterval(demoTick, POLL_MS); });
   }
   if (ui.backendStatus) ui.backendStatus.textContent = "DEMO MODE";
   if (ui.statusDot) ui.statusDot.className = "status-dot online";
@@ -1885,7 +2015,10 @@ function startAll() {
 function stopAll() {
   Object.keys(ALL_MODS).forEach(m => stoppedModules.add(m));
   if (demo.iid) { clearInterval(demo.iid); demo.iid = null; }
+  clearTimeout(demo.rampTimeout); demo.ramping = false; demo.rampTimeout = null;
   demo.active = false;
+  stopAutoTour();
+  clearAllBadges();
   if (ui.backendStatus) ui.backendStatus.textContent = "STOPPED";
   if (ui.statusDot) ui.statusDot.className = "status-dot offline";
   const b = $("scenario-banner"); if (b) b.classList.add("hidden");

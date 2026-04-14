@@ -2196,3 +2196,37 @@ tbody tr:hover {
 .link-btn:hover {
   color: var(--text-hi);
 }
+
+/* ── Auto-Tour button active state ──────────────────────────── */
+#auto-tour-btn.tour-active {
+  background: rgba(139, 92, 246, 0.25) !important;
+  border-color: rgba(139, 92, 246, 0.6) !important;
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.3);
+}
+
+/* ── Sidebar notification badges ─────────────────────────────── */
+.nav-badge {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--critical);
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 700;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+  animation: badgePop 0.2s ease-out;
+}
+.nav-badge.hidden { display: none; }
+@keyframes badgePop {
+  from { transform: translateY(-50%) scale(0.5); opacity: 0; }
+  to   { transform: translateY(-50%) scale(1);   opacity: 1; }
+}
