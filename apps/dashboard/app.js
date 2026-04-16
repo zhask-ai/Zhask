@@ -439,26 +439,29 @@ function demoTick() {
   updateAllUI();
 }
 
+// Gentle warm-up: fire just a few ticks with a growing gap so events
+// trickle in naturally instead of dumping everything at once.
 function rampUp(onDone) {
-  let remaining = 8;
+  const WARMUP_DELAYS = [700, 1100, 1600, 2200]; // ~5.6s total, 4 events
   demo.ramping = true;
+  let step = 0;
   (function tick() {
-    demoTick();
-    if (--remaining > 0) {
-      demo.rampTimeout = setTimeout(tick, 300);
-    } else {
+    if (step >= WARMUP_DELAYS.length) {
       demo.ramping = false;
       demo.rampTimeout = null;
       if (onDone) onDone();
+      return;
     }
+    demoTick();
+    demo.rampTimeout = setTimeout(tick, WARMUP_DELAYS[step++]);
   })();
 }
 
 function startDemo() {
   if (demo.active) return;
   demo.active = true;
-  console.info("IntegriShield: real-time engine active — all 15 modules streaming");
-  showToast("⚡ All 15 modules online — real-time threat detection active", "info", 5000);
+  console.info("IntegriShield: real-time engine warming up — all 15 modules streaming");
+  showToast("⚡ 15 modules online — events will stream in live", "info", 5000);
   rampUp(() => { demo.iid = setInterval(demoTick, POLL_MS); });
 }
 
