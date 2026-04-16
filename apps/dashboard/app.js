@@ -22,7 +22,7 @@ const stoppedModules = new Set();
 let _incID = 1000;
 
 // ── KPI state ─────────────────────────────────────────────────
-let kpiBlocked = 2847;
+let kpiBlocked = 0;
 const FW_SCORES = { SOX:94, GDPR:87, "PCI-DSS":91, "NIST-CSF":96, ISO27001:89, HIPAA:93 };
 
 // ── DOM ───────────────────────────────────────────────────────
@@ -396,13 +396,25 @@ function startDemo() {
   demo.active = true;
   console.info("IntegriShield: real-time engine active — all 13 modules streaming");
   showToast("⚡ All 13 modules online — real-time threat detection active", "info", 5000);
-  for (let i = 0; i < 20; i++) demoTick(); // prime all panels
+  demoTick(); // first tick fires immediately — starts from 1
   demo.iid = setInterval(demoTick, POLL_MS);
 }
 
 function stopDemo() {
   if (demo.iid) clearInterval(demo.iid);
   demo.active = false;
+}
+
+// ── Reset all data (clean start from 1) ───────────────────────
+function resetAllData() {
+  alerts.length = 0; auditRows.length = 0; anomalies.length = 0;
+  sapEvents.length = 0; compEvents.length = 0; dlpEvents.length = 0;
+  incEvents.length = 0; shadowEvents.length = 0; sbomEvents.length = 0;
+  ztEvents.length = 0; credEvents.length = 0; cloudEvents.length = 0;
+  alertTimeline.length = 0;
+  prevAlertCount = 0; kpiBlocked = 0; _incID = 1000;
+  counterCache.clear();
+  demo.tick = 0; demo.scIdx = 0; demo.phIdx = 0; demo.phTick = 0; demo.ctx = null;
 }
 
 // ── Update all UI ─────────────────────────────────────────────
@@ -1819,17 +1831,20 @@ function stopModule(name) {
 
 function startAll() {
   stoppedModules.clear();
-  if (!demo.active) {
-    demo.active = true;
-    if (!demo.iid) demo.iid = setInterval(demoTick, POLL_MS);
-    demoTick(); // immediate tick so data appears instantly
-  }
+  // Stop existing engine and wipe all data — fresh start from 1
+  if (demo.iid) { clearInterval(demo.iid); demo.iid = null; }
+  demo.active = false;
+  resetAllData();
+  updateAllUI();
+  // Restart engine
+  demo.active = true;
+  demoTick(); // first event fires immediately → alert count starts at 1
+  demo.iid = setInterval(demoTick, POLL_MS);
   if (ui.backendStatus) ui.backendStatus.textContent = "LIVE";
   if (ui.statusDot) ui.statusDot.className = "status-dot online";
-  logLauncher(`[${new Date().toLocaleTimeString()}] ▶ All modules started`);
+  logLauncher(`[${new Date().toLocaleTimeString()}] ▶ All modules started — counters reset to 0`);
   showToast("▶ All 13 modules started — real-time data streaming", "success", 4000);
   renderLauncher(launcherProcesses);
-  updateAllUI();
 }
 
 function stopAll() {
