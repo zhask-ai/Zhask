@@ -13,7 +13,8 @@ const POLL_MS = 2500;
 // ── State ─────────────────────────────────────────────────────
 let alerts=[], auditRows=[], anomalies=[], sapEvents=[], compEvents=[],
     dlpEvents=[], incEvents=[], shadowEvents=[], sbomEvents=[],
-    ztEvents=[], credEvents=[], cloudEvents=[], prevAlertCount=0;
+    ztEvents=[], credEvents=[], cloudEvents=[], prevAlertCount=0,
+    connEvents=[], trafficEvents=[], webhookEvents=[];
 
 // ── Demo engine ───────────────────────────────────────────────
 const demo = { active:false, tick:0, scIdx:0, phIdx:0, phTick:0, ctx:null, iid:null, ramping:false, rampTimeout:null };
@@ -29,6 +30,7 @@ const typeToTab = {
   alert:'alerts', anomaly:'anomalies', sap:'sap', zt:'zero-trust',
   cred:'credentials', comp:'compliance', dlp:'dlp', inc:'incidents',
   shadow:'shadow', sbom:'sbom', cloud:'cloud', audit:'audit',
+  conn:'connectors', traffic:'traffic', webhook:'webhooks',
 };
 
 // ── KPI state ─────────────────────────────────────────────────
@@ -371,6 +373,15 @@ function demoTick() {
       evts.push(_evt("sbom",{target:_rnd(_D.sbomPkgs),scan_status:Math.random()>0.6?"CLEAN":"VULNERABLE",cve_count:_int(0,8),insecure_rfc_count:_int(0,3)}));
     if (Math.random() > 0.6)
       evts.push(_evt("cloud",{provider:_rnd(_D.providers),finding_type:_rnd(_D.findings),raw_severity:_rnd(["high","medium","low"]),resource_id:_rnd(_D.resources),risk_score:_flt(0.3,0.8)}));
+    // M02 Connector Sentinel
+    if (Math.random() > 0.55)
+      evts.push(_evt("conn",{platform:_rnd(["sap_btp","mulesoft","boomi","workato"]),connector:_rnd(["SAP-S4HANA-Cloud","MuleSoft-HTTP","Boomi-SFTP","BTP-RFC-Dest"]),status:Math.random()>0.75?"alert":Math.random()>0.5?"misconfigured":"healthy",finding:_rnd(["Credential leak in config","Unauthorized data flow","TLS 1.0 detected","Open port 8080","Over-privileged OAuth scope","Clean"]),source_system:_rnd(["S4H-PROD","BTP-EU10","ARIBA","SUCCESSFACTORS"]),dest_system:_rnd(["SALESFORCE","WORKDAY","DATABRICKS","S3-BUCKET"])}));
+    // M03 Traffic Analyzer
+    if (Math.random() > 0.5)
+      evts.push(_evt("traffic",{source:_rnd(["S4H-PROD","BTP-EU10","ARIBA"]),destination:_rnd(["SALESFORCE","WORKDAY","DATABRICKS","EXTERNAL-API"]),classification:_rnd(["PII","PHI","FINANCIAL","STANDARD"]),direction:_rnd(["inbound","outbound"]),bytes:_int(50000,5000000),fields_detected:_rnd(["EMAIL,PHONE","SSN,DOB","IBAN,BIC","PRODUCT_ID"]),policy_violation:Math.random()>0.7}));
+    // M14 Webhook Gateway
+    if (Math.random() > 0.6)
+      evts.push(_evt("webhook",{source:_rnd(["github","slack","pagerduty","custom"]),event_type:_rnd(["push","alert","incident.trigger","order.created","payment.received"]),result:_rnd(["accepted","accepted","accepted","rejected","rate_limited"]),signature_valid:Math.random()>0.15,source_ip:_rnd(_D.ipsExt),latency_ms:_int(5,80)}));
   }
 
   const push = (arr, item, max=80) => { arr.unshift(item); if (arr.length>max) arr.pop(); };
@@ -379,6 +390,7 @@ function demoTick() {
     zt:"m04-zero-trust-fabric", cred:"m06-credential-vault", comp:"m07-compliance-autopilot",
     dlp:"m09-dlp", inc:"m10-incident-response", shadow:"m11-shadow-integration",
     sbom:"m13-sbom-scanner", cloud:"m15-multicloud-ispm",
+    conn:"m02-connector-sentinel", traffic:"m03-traffic-analyzer", webhook:"m14-webhook-gateway",
   };
 
   // Filter events for stopped modules before pushing
@@ -399,6 +411,9 @@ function demoTick() {
     if (t==="shadow")  push(shadowEvents, ev, 40);
     if (t==="sbom")    push(sbomEvents, ev, 40);
     if (t==="cloud")   push(cloudEvents, ev, 60);
+    if (t==="conn")    push(connEvents, ev, 60);
+    if (t==="traffic") push(trafficEvents, ev, 60);
+    if (t==="webhook") push(webhookEvents, ev, 60);
     if (t==="audit")   push(auditRows, ev, 60);
     else if (auditMap[t]) push(auditRows, {actor:auditMap[t],action:t+"_event",module:auditMap[t],status:"ok",ts:ev.ts}, 60);
     // Increment badge counts for tabs not currently viewed
@@ -442,8 +457,8 @@ function rampUp(onDone) {
 function startDemo() {
   if (demo.active) return;
   demo.active = true;
-  console.info("IntegriShield: real-time engine active — all 13 modules streaming");
-  showToast("⚡ All 13 modules online — real-time threat detection active", "info", 5000);
+  console.info("IntegriShield: real-time engine active — all 15 modules streaming");
+  showToast("⚡ All 15 modules online — real-time threat detection active", "info", 5000);
   rampUp(() => { demo.iid = setInterval(demoTick, POLL_MS); });
 }
 
@@ -540,12 +555,20 @@ function updateAllUI() {
 
   // Pills
   const modStatus = {
-    "m01-api-gateway-shield":{events:total},  "m03-traffic-analyzer":{events:_int(10,40)},
-    "m08-anomaly-detection":{events:anomalies.length},  "m09-dlp":{events:dlpEvents.length},
-    "m11-shadow-integration":{events:shadowEvents.length}, "m05-sap-mcp-suite":{events:sapEvents.length},
-    "m07-compliance-autopilot":{events:compEvents.length},"m10-incident-response":{events:incEvents.length},
-    "m13-sbom-scanner":{events:sbomEvents.length},"m04-zero-trust-fabric":{events:ztEvents.length},
-    "m06-credential-vault":{events:credEvents.length},"m12-rules-engine":{events:total},
+    "m01-api-gateway-shield":{events:total},
+    "m02-connector-sentinel":{events:connEvents.length},
+    "m03-traffic-analyzer":{events:trafficEvents.length||_int(10,40)},
+    "m04-zero-trust-fabric":{events:ztEvents.length},
+    "m05-sap-mcp-suite":{events:sapEvents.length},
+    "m06-credential-vault":{events:credEvents.length},
+    "m07-compliance-autopilot":{events:compEvents.length},
+    "m08-anomaly-detection":{events:anomalies.length},
+    "m09-dlp":{events:dlpEvents.length},
+    "m10-incident-response":{events:incEvents.length},
+    "m11-shadow-integration":{events:shadowEvents.length},
+    "m12-rules-engine":{events:total},
+    "m13-sbom-scanner":{events:sbomEvents.length},
+    "m14-webhook-gateway":{events:webhookEvents.length},
     "m15-multicloud-ispm":{events:cloudEvents.length},
   };
   updatePills(modStatus);
@@ -608,12 +631,14 @@ function miniStatFilter(tabName, filterId, value) {
 
 // ── Pills ─────────────────────────────────────────────────────
 const PILL_MAP = {
-  "m01-api-gateway-shield":"m01","m04-zero-trust-fabric":"m04",
+  "m01-api-gateway-shield":"m01","m02-connector-sentinel":"m02",
+  "m03-traffic-analyzer":"m03","m04-zero-trust-fabric":"m04",
   "m05-sap-mcp-suite":"m05","m06-credential-vault":"m06",
   "m07-compliance-autopilot":"m07","m08-anomaly-detection":"m08",
   "m09-dlp":"m09","m10-incident-response":"m10",
   "m11-shadow-integration":"m11","m12-rules-engine":"m12",
-  "m13-sbom-scanner":"m13","m15-multicloud-ispm":"m15",
+  "m13-sbom-scanner":"m13","m14-webhook-gateway":"m14",
+  "m15-multicloud-ispm":"m15",
 };
 function updatePills(mods) {
   for (const [mod,id] of Object.entries(PILL_MAP)) {
@@ -624,7 +649,9 @@ function updatePills(mods) {
 
 // ── Module grid ───────────────────────────────────────────────
 const ALL_MODS = {
-  "m01-api-gateway-shield":{dev:"Threat Detection",type:"FastAPI"},
+  "m01-api-gateway-shield":{dev:"Ingestion",type:"FastAPI"},
+  "m02-connector-sentinel":{dev:"Ingestion",type:"Consumer"},
+  "m14-webhook-gateway":{dev:"Ingestion",type:"FastAPI"},
   "m03-traffic-analyzer":{dev:"Threat Detection",type:"Consumer"},
   "m08-anomaly-detection":{dev:"Threat Detection",type:"Consumer"},
   "m12-rules-engine":{dev:"Threat Detection",type:"FastAPI"},
@@ -661,6 +688,7 @@ function renderActiveTab() {
     sap: renderSap, compliance: renderCompliance, incidents: renderIncidents,
     sbom: renderSbom, rules: renderRules, "zero-trust": renderZeroTrust,
     credentials: renderCredentials, cloud: renderCloud,
+    connectors: renderConnectors, traffic: renderTraffic, webhooks: renderWebhooks,
     launcher: () => renderLauncher(launcherProcesses),
   };
   (map[btn.dataset.tab] || (() => {}))();
@@ -2007,7 +2035,7 @@ function startAll() {
   if (ui.backendStatus) ui.backendStatus.textContent = "DEMO MODE";
   if (ui.statusDot) ui.statusDot.className = "status-dot online";
   logLauncher(`[${new Date().toLocaleTimeString()}] ▶ All modules started`);
-  showToast("▶ All 13 modules started — real-time threat detection active", "success", 4000);
+  showToast("▶ All 15 modules started — real-time threat detection active", "success", 4000);
   renderLauncher(launcherProcesses);
   updateAllUI();
 }
@@ -2043,13 +2071,198 @@ function stopLauncherPolling() {
   if (launcherPolling) { clearInterval(launcherPolling); launcherPolling=null; }
 }
 
+// ── CONNECTORS M02 ───────────────────────────────────────────
+function renderConnectors() {
+  const list  = $("conn-list"), empty = $("conn-empty");
+  const total = $("conn-total"), alerts_ = $("conn-alerts");
+  const misc  = $("conn-misconfig"), healthy = $("conn-healthy");
+  if (!list) return;
+  if (total)   animateValue(total,   connEvents.length);
+  if (alerts_) animateValue(alerts_, connEvents.filter(e=>e.status==="alert").length);
+  if (misc)    animateValue(misc,    connEvents.filter(e=>e.status==="misconfigured").length);
+  if (healthy) animateValue(healthy, connEvents.filter(e=>e.status==="healthy").length);
+  const plat = fv('conn-platform-filter'), stat = fv('conn-status-filter'), q = fq('conn-search');
+  let v = connEvents;
+  if (plat !== 'all') v = v.filter(e=>e.platform===plat);
+  if (stat !== 'all') v = v.filter(e=>e.status===stat);
+  if (q) v = v.filter(e=>[e.connector,e.source_system,e.dest_system,e.finding].join(' ').toLowerCase().includes(q));
+  setEmpty(list, empty, v);
+  const statC = {alert:"#ff4757",misconfigured:"#ffa502",healthy:"#2ed573"};
+  list.innerHTML = v.map(e => {
+    const sc = statC[e.status]||"#7a93b4";
+    const platLabel = {sap_btp:"SAP BTP",mulesoft:"MuleSoft",boomi:"Boomi",workato:"Workato"}[e.platform]||e.platform;
+    return `<li class="alert-item">
+      <div class="alert-item-row">
+        <span style="font-size:.7rem;font-weight:700;background:${sc}22;color:${sc};padding:2px 8px;border-radius:4px">${(e.status||"unknown").toUpperCase()}</span>
+        <span style="margin-left:.5rem;font-size:.78rem;color:#b0c4de;font-weight:600">${e.connector||"—"}</span>
+        <span style="margin-left:.4rem;font-size:.68rem;background:rgba(76,130,247,.12);color:#7a9fd4;padding:1px 6px;border-radius:3px">${platLabel}</span>
+        <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">${e.source_system||"—"} → ${e.dest_system||"—"}</div>
+      <div class="alert-item-meta" style="color:${e.status==='healthy'?'#4a6280':'#e0904a'}">${e.finding||"—"}</div>
+    </li>`;
+  }).join("");
+}
+
+// ── TRAFFIC ANALYZER M03 ─────────────────────────────────────
+function renderTraffic() {
+  const list  = $("traffic-list"), empty = $("traffic-empty");
+  const total = $("traffic-total"), pii = $("traffic-pii");
+  const phi   = $("traffic-phi"), vol = $("traffic-volume");
+  if (!list) return;
+  if (total) animateValue(total, trafficEvents.length);
+  if (pii)   animateValue(pii,   trafficEvents.filter(e=>e.classification==="PII").length);
+  if (phi)   animateValue(phi,   trafficEvents.filter(e=>e.classification==="PHI").length);
+  const totalBytes = trafficEvents.reduce((s,e)=>s+(+e.bytes||0),0);
+  if (vol) vol.textContent = totalBytes>1e6?`${(totalBytes/1e6).toFixed(1)} MB`:`${(totalBytes/1e3).toFixed(0)} KB`;
+  const cls = fv('traffic-class-filter'), dir = fv('traffic-dir-filter'), q = fq('traffic-search');
+  let v = trafficEvents;
+  if (cls !== 'all') v = v.filter(e=>e.classification===cls);
+  if (dir !== 'all') v = v.filter(e=>e.direction===dir);
+  if (q) v = v.filter(e=>[e.source,e.destination,e.classification,e.fields_detected].join(' ').toLowerCase().includes(q));
+  setEmpty(list, empty, v);
+  const clsC = {PII:"#ff4757",PHI:"#ff8b3d",FINANCIAL:"#ffa502",STANDARD:"#2ed573"};
+  list.innerHTML = v.map(e => {
+    const cc = clsC[e.classification]||"#7a93b4";
+    const bytes = +e.bytes||0;
+    const byteStr = bytes>1e6?`${(bytes/1e6).toFixed(1)} MB`:`${(bytes/1e3).toFixed(0)} KB`;
+    return `<li class="alert-item ${e.policy_violation?'sev-high':''}">
+      <div class="alert-item-row">
+        <span style="font-size:.7rem;font-weight:700;background:${cc}22;color:${cc};padding:2px 8px;border-radius:4px">${e.classification||"STANDARD"}</span>
+        <span style="margin-left:.5rem;font-size:.75rem;color:#b0c4de">${e.source||"—"} → ${e.destination||"—"}</span>
+        <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">Direction: ${e.direction||"—"} · Volume: <strong style="color:#b0c4de">${byteStr}</strong> · Fields: <code style="font-size:.68rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px">${e.fields_detected||"—"}</code></div>
+      ${e.policy_violation?`<div class="alert-item-meta" style="color:#ff8b3d">⚠ Policy violation — sensitive data transmitted without DLP approval</div>`:""}
+    </li>`;
+  }).join("");
+}
+
+// ── WEBHOOK GATEWAY M14 ──────────────────────────────────────
+function renderWebhooks() {
+  const list  = $("wh-list"), empty = $("wh-empty");
+  const total = $("wh-total"), acc = $("wh-accepted");
+  const rej   = $("wh-rejected"), rl = $("wh-rate-limited");
+  if (!list) return;
+  if (total) animateValue(total, webhookEvents.length);
+  if (acc)   animateValue(acc,   webhookEvents.filter(e=>e.result==="accepted").length);
+  if (rej)   animateValue(rej,   webhookEvents.filter(e=>e.result==="rejected").length);
+  if (rl)    animateValue(rl,    webhookEvents.filter(e=>e.result==="rate_limited").length);
+  const res = fv('wh-result-filter'), src = fv('wh-source-filter'), q = fq('wh-search');
+  let v = webhookEvents;
+  if (res !== 'all') v = v.filter(e=>e.result===res);
+  if (src !== 'all') v = v.filter(e=>e.source===src);
+  if (q) v = v.filter(e=>[e.source,e.event_type,e.source_ip].join(' ').toLowerCase().includes(q));
+  setEmpty(list, empty, v);
+  const resC = {accepted:"#2ed573",rejected:"#ff4757",rate_limited:"#ffa502"};
+  list.innerHTML = v.map(e => {
+    const rc = resC[e.result]||"#7a93b4";
+    const sigC = e.signature_valid?"#2ed573":"#ff4757";
+    return `<li class="alert-item ${e.result==='rejected'?'sev-high':''}">
+      <div class="alert-item-row">
+        <span style="font-size:.7rem;font-weight:700;background:${rc}22;color:${rc};padding:2px 8px;border-radius:4px">${(e.result||"unknown").toUpperCase().replace('_',' ')}</span>
+        <span style="margin-left:.5rem;font-size:.75rem;color:#b0c4de;font-weight:600">${e.source||"—"}</span>
+        <code style="margin-left:.4rem;font-size:.68rem;background:rgba(255,255,255,.06);padding:1px 6px;border-radius:3px;color:#b0c4de">${e.event_type||"—"}</code>
+        <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">IP: ${e.source_ip||"—"} · Signature: <span style="color:${sigC}">${e.signature_valid?"✓ Valid":"✗ Invalid"}</span> · Latency: ${e.latency_ms||0}ms</div>
+    </li>`;
+  }).join("");
+}
+
+// ── CLAUDE CHAT ───────────────────────────────────────────────
+let chatOpen = false;
+const chatHistory = [];
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  const panel = $("chat-panel");
+  if (panel) panel.classList.toggle("hidden", !chatOpen);
+  if (chatOpen) {
+    const inp = $("chat-input");
+    if (inp) setTimeout(() => inp.focus(), 100);
+    const badge = $("chat-fab-badge");
+    if (badge) badge.style.display = "none";
+  }
+}
+
+function chatKeyDown(e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+}
+
+function sendSuggestion(el) {
+  const inp = $("chat-input");
+  if (inp) { inp.value = el.textContent; sendChatMessage(); }
+}
+
+async function sendChatMessage() {
+  const inp  = $("chat-input");
+  const send = $("chat-send");
+  const msgs = $("chat-messages");
+  if (!inp || !msgs) return;
+  const text = inp.value.trim();
+  if (!text) return;
+
+  // Append user message
+  inp.value = "";
+  inp.style.height = "auto";
+  msgs.innerHTML += `<div class="chat-msg user">${escHtml(text)}</div>`;
+
+  // Typing indicator
+  const typingId = "chat-typing-" + Date.now();
+  msgs.innerHTML += `<div class="chat-msg typing" id="${typingId}">Claude is thinking…</div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+
+  if (send) send.disabled = true;
+  chatHistory.push({ role: "user", content: text });
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, history: chatHistory.slice(-6) }),
+    });
+    const data = await resp.json();
+
+    const typing = $(typingId);
+    if (typing) typing.remove();
+
+    if (data.error) {
+      msgs.innerHTML += `<div class="chat-msg assistant" style="color:#ff8b8b">${escHtml(data.error)}</div>`;
+    } else {
+      // Tool pills
+      let toolHtml = "";
+      if (data.tool_calls && data.tool_calls.length) {
+        toolHtml = `<div style="margin-bottom:.4rem;display:flex;flex-wrap:wrap;gap:.2rem">` +
+          data.tool_calls.map(t => `<span class="chat-tool-pill">⚙ ${t.tool}</span>`).join("") +
+          `</div>`;
+      }
+      const answer = escHtml(data.response || "No response.").replace(/\n/g, "<br>");
+      msgs.innerHTML += `<div class="chat-msg assistant">${toolHtml}${answer}</div>`;
+      chatHistory.push({ role: "assistant", content: data.response || "" });
+    }
+  } catch (err) {
+    const typing = $(typingId);
+    if (typing) typing.remove();
+    msgs.innerHTML += `<div class="chat-msg assistant" style="color:#ff8b8b">Could not reach the backend. Make sure the dashboard server is running on port 8787 and ANTHROPIC_API_KEY is set.</div>`;
+  }
+
+  msgs.scrollTop = msgs.scrollHeight;
+  if (send) send.disabled = false;
+  if (inp) inp.focus();
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
 // ── CSV Export ────────────────────────────────────────────────
 function exportCSV(type) {
   const arrMap = {
     alerts: alerts, anomaly: anomalies, dlp: dlpEvents, shadow: shadowEvents,
     sap: sapEvents, compliance: compEvents, incidents: incEvents, sbom: sbomEvents,
     rules: alerts, zt: ztEvents, credentials: credEvents, cloud: cloudEvents,
-    gateway: alerts,
+    gateway: alerts, connectors: connEvents, traffic: trafficEvents, webhooks: webhookEvents,
   };
   const arr = arrMap[type] || [];
   if (!arr.length) { showToast("No data to export", "warning", 2000); return; }
@@ -2122,6 +2335,18 @@ if (ui.auditFilter)    ui.auditFilter.addEventListener("change", renderAudit);
 // Cloud filters
 ['cloud-search','cloud-provider-filter','cloud-sev-filter'].forEach(id => {
   const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderCloud);
+});
+// Connector filters
+['conn-search','conn-platform-filter','conn-status-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderConnectors);
+});
+// Traffic filters
+['traffic-search','traffic-class-filter','traffic-dir-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderTraffic);
+});
+// Webhook filters
+['wh-search','wh-result-filter','wh-source-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderWebhooks);
 });
 
 // ── Theme toggle ──────────────────────────────────────────────
