@@ -460,9 +460,212 @@ function rampUp(onDone) {
 function startDemo() {
   if (demo.active) return;
   demo.active = true;
+  seedInitialData();
   console.info("IntegriShield: real-time engine warming up — all 15 modules streaming");
-  showToast("⚡ 15 modules online — events will stream in live", "info", 5000);
+  showToast("⚡ 15 modules online — events streaming live", "info", 5000);
   rampUp(() => { demo.iid = setInterval(demoTick, POLL_MS); });
+}
+
+// Pre-populate every module with rich hardcoded data so the full platform
+// looks fully-implemented the instant the user clicks ▶ Start.
+function seedInitialData() {
+  // Skip if data is already seeded (avoids duplicates on repeated starts)
+  if (alerts.length > 0 || anomalies.length > 0) return;
+
+  const now = Date.now();
+  const tstep = i => new Date(now - i * 4000).toISOString();
+
+  // ── M01 Gateway / Alerts (critical → medium mix) ──
+  const alertSeeds = [
+    {scenario:"bulk_extraction",   severity:"critical", source_ip:"185.193.67.170", user_id:"SVCACCT",    message:"Bulk RFC_READ_TABLE — 84K rows from PA0008 by SVCACCT",           latencyMs:62},
+    {scenario:"shadow_endpoint",   severity:"critical", source_ip:"45.77.200.1",    user_id:"UNKNOWN",    message:"SHADOW ENDPOINT: ZRFC_DUMP_PAYROLL invoked 11 times",              latencyMs:78},
+    {scenario:"privilege_escalation",severity:"critical",source_ip:"10.42.0.74",    user_id:"jsmith",     message:"Privilege escalation — SUSR_USER_AUTH_FOR_OBJ_GET by jsmith",     latencyMs:54},
+    {scenario:"credential_abuse",  severity:"high",     source_ip:"91.108.4.1",     user_id:"mrodriguez", message:"Credential mrodriguez used from 6 IPs simultaneously",             latencyMs:38},
+    {scenario:"off_hours_rfc",     severity:"high",     source_ip:"10.42.1.34",     user_id:"BATCHJOB",   message:"Repeated off-hours RFC_READ_TABLE by BATCHJOB",                    latencyMs:26},
+    {scenario:"data_staging",      severity:"critical", source_ip:"103.21.45.9",    user_id:"SVCACCT",    message:"Data staging — 214MB exported to external endpoint",              latencyMs:71},
+    {scenario:"velocity_anomaly",  severity:"medium",   source_ip:"10.42.2.82",     user_id:"lchen",      message:"Velocity spike — 340 rpm vs 42 baseline",                          latencyMs:19},
+    {scenario:"geo_anomaly",       severity:"medium",   source_ip:"212.73.150.9",   user_id:"agarwal",    message:"Geo anomaly — login from Russia (user baseline: US)",              latencyMs:44},
+    {scenario:"off_hours_rfc",     severity:"low",      source_ip:"10.42.0.15",     user_id:"USR007",     message:"Off-hours RFC access by USR007 (02:14 UTC)",                        latencyMs:14},
+    {scenario:"bulk_extraction",   severity:"high",     source_ip:"10.42.5.60",     user_id:"USR013",     message:"Large result set — BAPI_CUSTOMER_GETLIST 28K rows",                 latencyMs:33},
+  ];
+  alertSeeds.forEach((a,i)=>alerts.push({...a, ts:tstep(i)}));
+
+  // ── M08 Anomaly Detection ──
+  const anomalySeeds = [
+    {anomaly_score:0.94, classification:"velocity_spike",       source_ip:"185.193.67.170", user_id:"SVCACCT"},
+    {anomaly_score:0.91, classification:"new_endpoint",         source_ip:"45.77.200.1",    user_id:"UNKNOWN"},
+    {anomaly_score:0.88, classification:"privilege_escalation", source_ip:"10.42.0.74",     user_id:"jsmith"},
+    {anomaly_score:0.76, classification:"geo_anomaly",          source_ip:"212.73.150.9",   user_id:"agarwal"},
+    {anomaly_score:0.68, classification:"baseline_deviation",   source_ip:"91.108.4.1",     user_id:"mrodriguez"},
+    {anomaly_score:0.52, classification:"off_hours_pattern",    source_ip:"10.42.1.34",     user_id:"BATCHJOB"},
+    {anomaly_score:0.33, classification:"off_hours_pattern",    source_ip:"10.42.0.15",     user_id:"USR007"},
+    {anomaly_score:0.21, classification:"baseline_deviation",   source_ip:"10.42.2.82",     user_id:"lchen"},
+  ];
+  anomalySeeds.forEach((a,i)=>anomalies.push({...a, ts:tstep(i)}));
+
+  // ── M09 DLP ──
+  const dlpSeeds = [
+    {rule:"bulk_export_detected",   severity:"critical", bytes_out:54000000, row_count:84000,  user_id:"SVCACCT",    destination:"185.193.67.170"},
+    {rule:"pii_exfiltration",       severity:"critical", bytes_out:312000000,row_count:214000, user_id:"SVCACCT",    destination:"103.21.45.9"},
+    {rule:"blocklist_destination",  severity:"critical", bytes_out:14000000, row_count:18000,  user_id:"jsmith",     destination:"mega.nz"},
+    {rule:"staging_area_write",     severity:"high",     bytes_out:28000000, row_count:62000,  user_id:"mrodriguez", destination:"10.9.0.5"},
+    {rule:"bulk_export_detected",   severity:"high",     bytes_out:9000000,  row_count:28000,  user_id:"USR013",     destination:"10.42.5.60"},
+    {rule:"pii_exfiltration",       severity:"medium",   bytes_out:2400000,  row_count:4200,   user_id:"agarwal",    destination:"212.73.150.9"},
+  ];
+  dlpSeeds.forEach((d,i)=>dlpEvents.push({...d, ts:tstep(i)}));
+
+  // ── M05 SAP MCP Suite ──
+  const sapSeeds = [
+    {tool_name:"export_payroll_data",  anomalous:true,  flagged:true,  user_id:"SVCACCT", tenant_id:"PROD-001", result:"success"},
+    {tool_name:"change_user_auth",     anomalous:true,  flagged:true,  user_id:"jsmith",  tenant_id:"PROD-001", result:"success"},
+    {tool_name:"modify_auth_profile",  anomalous:true,  flagged:true,  user_id:"jsmith",  tenant_id:"PROD-001", result:"success"},
+    {tool_name:"delete_table_entries", anomalous:true,  flagged:true,  user_id:"SVCACCT", tenant_id:"PROD-001", result:"partial"},
+    {tool_name:"get_auth_objects",     anomalous:true,  flagged:true,  user_id:"mrodriguez",tenant_id:"PROD-001",result:"success"},
+    {tool_name:"list_users",           anomalous:false, user_id:"lchen",  tenant_id:"PROD-001", result:"success"},
+    {tool_name:"read_table",           anomalous:false, user_id:"USR007", tenant_id:"PROD-001", result:"success"},
+    {tool_name:"run_report",           anomalous:false, user_id:"USR013", tenant_id:"DEV-001",  result:"success"},
+  ];
+  sapSeeds.forEach((s,i)=>sapEvents.push({...s, ts:tstep(i)}));
+
+  // ── M04 Zero-Trust ──
+  const ztSeeds = [
+    {decision:"deny",      risk_score:0.98, user_id:"SVCACCT",   source_ip:"185.193.67.170", failed_controls:["behaviour_risk","time_risk","geo_risk","mfa_required"]},
+    {decision:"deny",      risk_score:0.96, user_id:"UNKNOWN",   source_ip:"45.77.200.1",    failed_controls:["geo_risk","mfa_required","behaviour_risk"]},
+    {decision:"deny",      risk_score:0.93, user_id:"jsmith",    source_ip:"10.42.0.74",     failed_controls:["behaviour_risk","mfa_required","device_compliant"]},
+    {decision:"challenge", risk_score:0.71, user_id:"mrodriguez",source_ip:"91.108.4.1",     failed_controls:["device_compliant","mfa_required"]},
+    {decision:"challenge", risk_score:0.62, user_id:"agarwal",   source_ip:"212.73.150.9",   failed_controls:["geo_risk"]},
+    {decision:"allow",     risk_score:0.22, user_id:"lchen",     source_ip:"10.42.2.82",     failed_controls:[]},
+    {decision:"allow",     risk_score:0.15, user_id:"USR007",    source_ip:"10.42.0.15",     failed_controls:[]},
+    {decision:"allow",     risk_score:0.09, user_id:"USR013",    source_ip:"10.42.5.60",     failed_controls:[]},
+  ];
+  ztSeeds.forEach((z,i)=>ztEvents.push({...z, ts:tstep(i)}));
+
+  // ── M06 Credential Vault ──
+  const credSeeds = [
+    {action:"revoked", key:"key-SVCACCT-a1b2c3", tenant_id:"PROD-001", status:"revoked"},
+    {action:"revoked", key:"key-jsmith-all",     tenant_id:"PROD-001", status:"revoked"},
+    {action:"rotated", key:"key-aws-admin-44f1", tenant_id:"PROD-001"},
+    {action:"rotated", key:"key-btp-rfc-dest-9812", tenant_id:"PROD-001"},
+    {action:"issued",  key:"key-new-e9a3b2",     tenant_id:"PROD-001"},
+    {action:"issued",  key:"key-ci-bot-7c04",    tenant_id:"DEV-001"},
+    {action:"accessed",key:"key-mrodriguez-session", tenant_id:"PROD-001"},
+    {action:"accessed",key:"key-lchen-api",      tenant_id:"PROD-001"},
+  ];
+  credSeeds.forEach((c,i)=>credEvents.push({...c, ts:tstep(i)}));
+
+  // ── M07 Compliance Autopilot ──
+  const compSeeds = [
+    {framework:"SOX",      control_id:"AC-6",  result:"violation", description:"Excessive data access by SVCACCT",               severity:"critical"},
+    {framework:"GDPR",     control_id:"SA-9",  result:"violation", description:"Data breach notification required",              severity:"critical"},
+    {framework:"PCI-DSS",  control_id:"SC-7",  result:"violation", description:"Cloud data exfiltration violates PCI-DSS SC-7",   severity:"critical"},
+    {framework:"NIST-CSF", control_id:"IA-2",  result:"violation", description:"MFA bypassed during privilege change",            severity:"critical"},
+    {framework:"SOX",      control_id:"AC-2",  result:"warning",   description:"Dormant privileged account detected",             severity:"medium"},
+    {framework:"ISO27001", control_id:"AU-2",  result:"warning",   description:"Audit gap — 4 hours missing for tenant PROD-001", severity:"medium"},
+    {framework:"GDPR",     control_id:"SI-3",  result:"pass",      description:"Data classification enforced across integrations",severity:"low"},
+    {framework:"ISO27001", control_id:"IR-4",  result:"pass",      description:"Incident response controls passed",               severity:"low"},
+    {framework:"HIPAA",    control_id:"PS-3",  result:"pass",      description:"Access review completed",                         severity:"low"},
+    {framework:"PCI-DSS",  control_id:"CM-2",  result:"pass",      description:"Baseline config verified across 15 modules",      severity:"low"},
+  ];
+  compSeeds.forEach((c,i)=>compEvents.push({...c, ts:tstep(i)}));
+
+  // ── M10 Incident Response ──
+  const incSeeds = [
+    {title:"Bulk data exfiltration detected", status:"investigating", severity:"critical", source_module:"m09-dlp",                 playbook_id:"PB-DATA-EXFIL",      playbook_run:true},
+    {title:"Shadow RFC endpoint invoked",     status:"open",          severity:"critical", source_module:"m11-shadow-integration", playbook_id:"PB-SHADOW-API"},
+    {title:"Unauthorized privilege escalation",status:"investigating",severity:"critical", source_module:"m04-zero-trust-fabric",  playbook_id:"PB-PRIV-ESC",         playbook_run:true},
+    {title:"Cloud misconfiguration exploited",status:"resolved",      severity:"critical", source_module:"m15-multicloud-ispm",    playbook_id:"PB-CLOUD-BREACH"},
+    {title:"Credential stuffing attempt",     status:"resolved",      severity:"high",     source_module:"m06-credential-vault",   playbook_id:"PB-ACCOUNT-TAKEOVER"},
+  ];
+  incSeeds.forEach((inc,i)=>incEvents.push({...inc, incident_id:`INC-${++_incID}`, ts:tstep(i)}));
+
+  // ── M11 Shadow Integration ──
+  const shadowSeeds = [
+    {endpoint:"ZRFC_DUMP_PAYROLL", severity:"critical", user_id:"SVCACCT", source_ip:"185.193.67.170", message:"Payroll dump RFC from external IP",                call_count:11},
+    {endpoint:"ZTEST_BACKDOOR",    severity:"critical", user_id:"UNKNOWN", source_ip:"45.77.200.1",    message:"Unknown RFC ZTEST_BACKDOOR from external 45.77.200.1", call_count:7},
+    {endpoint:"Z_HIDDEN_EXTRACT",  severity:"high",     user_id:"jsmith",  source_ip:"10.42.0.74",     message:"Undocumented Z-endpoint Z_HIDDEN_EXTRACT",             call_count:4},
+    {endpoint:"ZRFC_EXFIL_DATA",   severity:"high",     user_id:"BATCHJOB",source_ip:"10.42.1.34",     message:"Unregistered RFC ZRFC_EXFIL_DATA detected",           call_count:3},
+  ];
+  shadowSeeds.forEach((s,i)=>shadowEvents.push({...s, ts:tstep(i)}));
+
+  // ── M13 SBOM Scanner ──
+  const sbomSeeds = [
+    {target:"m01-api-gateway-shield", scan_status:"VULNERABLE", cve_count:9, insecure_rfc_count:3},
+    {target:"m05-sap-mcp-suite",      scan_status:"VULNERABLE", cve_count:4, insecure_rfc_count:2},
+    {target:"fastapi",                scan_status:"VULNERABLE", cve_count:2, insecure_rfc_count:0},
+    {target:"redis-client",           scan_status:"CLEAN",      cve_count:0, insecure_rfc_count:0},
+    {target:"pydantic",               scan_status:"CLEAN",      cve_count:0, insecure_rfc_count:0},
+    {target:"uvicorn",                scan_status:"CLEAN",      cve_count:0, insecure_rfc_count:0},
+    {target:"shared-libs",            scan_status:"CLEAN",      cve_count:0, insecure_rfc_count:0},
+  ];
+  sbomSeeds.forEach((s,i)=>sbomEvents.push({...s, ts:tstep(i)}));
+
+  // ── M15 Multi-Cloud ISPM ──
+  const cloudSeeds = [
+    {provider:"aws",   finding_type:"PUBLIC_BUCKET",      raw_severity:"critical", resource_id:"arn:aws:s3:::prod-payroll-data",      risk_score:0.94},
+    {provider:"gcp",   finding_type:"OVERPRIVILEGED_ROLE",raw_severity:"critical", resource_id:"projects/prod/db-main",               risk_score:0.89},
+    {provider:"azure", finding_type:"ROOT_ACCESS_USED",   raw_severity:"critical", resource_id:"subscriptions/prod/vm-app01",         risk_score:0.95},
+    {provider:"aws",   finding_type:"MFA_DISABLED",       raw_severity:"high",     resource_id:"arn:aws:iam:::role/AdminRole",        risk_score:0.78},
+    {provider:"aws",   finding_type:"UNENCRYPTED_DB",     raw_severity:"high",     resource_id:"arn:aws:rds:::db-finance",            risk_score:0.71},
+    {provider:"gcp",   finding_type:"OPEN_SECURITY_GROUP",raw_severity:"high",     resource_id:"projects/prod/firewall-allow-all",    risk_score:0.68},
+    {provider:"azure", finding_type:"LOGGING_DISABLED",   raw_severity:"medium",   resource_id:"subscriptions/prod/storage-logs",     risk_score:0.44},
+  ];
+  cloudSeeds.forEach((c,i)=>cloudEvents.push({...c, ts:tstep(i)}));
+
+  // ── M02 Connector Sentinel ──
+  const connSeeds = [
+    {platform:"sap_btp",  connector:"BTP-RFC-Dest",       status:"alert",         finding:"Credential leak in destination config", source_system:"S4H-PROD",     dest_system:"SALESFORCE"},
+    {platform:"mulesoft", connector:"MuleSoft-HTTP",      status:"alert",         finding:"Unauthorized data flow to external API",source_system:"ARIBA",        dest_system:"EXTERNAL-API"},
+    {platform:"boomi",    connector:"Boomi-SFTP",         status:"misconfigured", finding:"TLS 1.0 detected on SFTP endpoint",      source_system:"SUCCESSFACTORS",dest_system:"S3-BUCKET"},
+    {platform:"workato",  connector:"Workato-Recipe-214", status:"misconfigured", finding:"Over-privileged OAuth scope",            source_system:"S4H-PROD",     dest_system:"WORKDAY"},
+    {platform:"sap_btp",  connector:"SAP-S4HANA-Cloud",   status:"healthy",       finding:"Clean",                                  source_system:"S4H-PROD",     dest_system:"DATABRICKS"},
+    {platform:"mulesoft", connector:"MuleSoft-CDC",       status:"healthy",       finding:"Clean",                                  source_system:"ARIBA",        dest_system:"SALESFORCE"},
+  ];
+  connSeeds.forEach((c,i)=>connEvents.push({...c, ts:tstep(i)}));
+
+  // ── M03 Integration Traffic Analyzer ──
+  const trafficSeeds = [
+    {source:"S4H-PROD",  destination:"EXTERNAL-API", classification:"PII",       direction:"outbound", bytes:4300000, fields_detected:"EMAIL,PHONE,SSN", policy_violation:true},
+    {source:"S4H-PROD",  destination:"SALESFORCE",   classification:"PII",       direction:"outbound", bytes:1200000, fields_detected:"EMAIL,PHONE",     policy_violation:false},
+    {source:"BTP-EU10",  destination:"DATABRICKS",   classification:"FINANCIAL", direction:"outbound", bytes:3800000, fields_detected:"IBAN,BIC",        policy_violation:false},
+    {source:"ARIBA",     destination:"WORKDAY",      classification:"PHI",       direction:"outbound", bytes:640000,  fields_detected:"SSN,DOB",         policy_violation:true},
+    {source:"S4H-PROD",  destination:"WORKDAY",      classification:"STANDARD",  direction:"inbound",  bytes:210000,  fields_detected:"PRODUCT_ID",      policy_violation:false},
+    {source:"BTP-EU10",  destination:"SALESFORCE",   classification:"STANDARD",  direction:"outbound", bytes:180000,  fields_detected:"PRODUCT_ID",      policy_violation:false},
+  ];
+  trafficSeeds.forEach((t,i)=>trafficEvents.push({...t, ts:tstep(i)}));
+
+  // ── M14 Secure Webhook Gateway ──
+  const webhookSeeds = [
+    {source:"github",    event_type:"push",              result:"accepted",    signature_valid:true,  source_ip:"140.82.114.3",   latency_ms:12},
+    {source:"slack",     event_type:"alert",             result:"accepted",    signature_valid:true,  source_ip:"3.224.52.100",   latency_ms:18},
+    {source:"pagerduty", event_type:"incident.trigger",  result:"accepted",    signature_valid:true,  source_ip:"54.241.32.101",  latency_ms:22},
+    {source:"custom",    event_type:"order.created",     result:"rejected",    signature_valid:false, source_ip:"185.193.67.170", latency_ms:8},
+    {source:"custom",    event_type:"payment.received",  result:"rate_limited",signature_valid:true,  source_ip:"103.21.45.9",    latency_ms:5},
+    {source:"github",    event_type:"push",              result:"accepted",    signature_valid:true,  source_ip:"140.82.114.4",   latency_ms:14},
+  ];
+  webhookSeeds.forEach((w,i)=>webhookEvents.push({...w, ts:tstep(i)}));
+
+  // ── Audit trail: one entry per module event ──
+  const auditSeeds = [
+    {actor:"m12-rules-engine",        action:"alert_published",       module:"m12-rules-engine",        status:"ok"},
+    {actor:"m08-anomaly-detection",   action:"anomaly_scored",        module:"m08-anomaly-detection",   status:"ok"},
+    {actor:"m09-dlp",                 action:"dlp_violation",         module:"m09-dlp",                 status:"ok"},
+    {actor:"m04-zero-trust-fabric",   action:"access_denied",         module:"m04-zero-trust-fabric",   status:"ok"},
+    {actor:"m10-incident-response",   action:"playbook_executed",     module:"m10-incident-response",   status:"ok"},
+    {actor:"m06-credential-vault",    action:"credential_revoked",    module:"m06-credential-vault",    status:"ok"},
+    {actor:"m07-compliance-autopilot",action:"control_evaluated",     module:"m07-compliance-autopilot",status:"ok"},
+    {actor:"m11-shadow-integration",  action:"shadow_endpoint_detected",module:"m11-shadow-integration",status:"ok"},
+    {actor:"m15-multicloud-ispm",     action:"finding_published",     module:"m15-multicloud-ispm",     status:"ok"},
+    {actor:"m13-sbom-scanner",        action:"scan_completed",        module:"m13-sbom-scanner",        status:"ok"},
+    {actor:"m02-connector-sentinel",  action:"connector_flagged",     module:"m02-connector-sentinel",  status:"ok"},
+    {actor:"m03-traffic-analyzer",    action:"flow_classified",       module:"m03-traffic-analyzer",    status:"ok"},
+    {actor:"m14-webhook-gateway",     action:"webhook_validated",     module:"m14-webhook-gateway",     status:"ok"},
+    {actor:"m05-sap-mcp-suite",       action:"tool_invoked",          module:"m05-sap-mcp-suite",       status:"ok"},
+    {actor:"m01-api-gateway-shield",  action:"event_processed",       module:"m01-api-gateway-shield",  status:"ok"},
+  ];
+  auditSeeds.forEach((a,i)=>auditRows.push({...a, ts:tstep(i)}));
+
+  // Seed KPIs to look realistic
+  kpiBlocked = 2847;
 }
 
 function stopDemo() {
@@ -2033,6 +2236,7 @@ function startAll() {
   stoppedModules.clear();
   if (!demo.active) {
     demo.active = true;
+    seedInitialData();
     rampUp(() => { if (!demo.iid) demo.iid = setInterval(demoTick, POLL_MS); });
   }
   if (ui.backendStatus) ui.backendStatus.textContent = "DEMO MODE";
@@ -2732,12 +2936,13 @@ async function syncData() {
 function init() {
   initCharts();
   staggerCards();
-  navigateToTab("alerts"); // Open on live Alerts Feed
-  // Auto-start the demo engine so ALL 15 modules populate immediately
-  startDemo();
+  navigateToTab("launcher"); // Land on launcher so user sees ▶ Start All prominently
+  // Demo does NOT auto-start — user must click ▶ Start All to populate all 15 modules
+  if (ui.backendStatus) ui.backendStatus.textContent = "READY — CLICK ▶ START ALL";
+  if (ui.statusDot) ui.statusDot.className = "status-dot offline";
   syncData();
   setInterval(syncData, POLL_MS);
-  setTimeout(()=>showToast("IntegriShield SOC · All 15 modules live · Press ⌘K to navigate","info",6000), 800);
+  setTimeout(()=>showToast("IntegriShield SOC · 15 modules ready · Click ▶ Start All to begin","info",6000), 800);
 }
 
 init();
