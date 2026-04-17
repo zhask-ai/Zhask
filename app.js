@@ -107,22 +107,69 @@ function initCharts() {
   const gc = "var(--border-subtle)", tc = "var(--text-dim)";
 
   const actx = $("alert-chart").getContext("2d");
-  const ag = actx.createLinearGradient(0,0,0,190);
-  ag.addColorStop(0,"rgba(91,141,239,0.15)"); ag.addColorStop(1,"rgba(91,141,239,0)");
+  // Multi-stop gradient for high-contrast area fill (dark-mode safe)
+  const ag = actx.createLinearGradient(0,0,0,220);
+  ag.addColorStop(0, "rgba(34,211,238,0.55)");   // cyan-400 top
+  ag.addColorStop(0.5, "rgba(34,211,238,0.18)"); // mid fade
+  ag.addColorStop(1, "rgba(34,211,238,0.02)");   // bottom
+  // Per-severity fills for stacked mode
+  const mk = (top, mid) => { const g = actx.createLinearGradient(0,0,0,220);
+    g.addColorStop(0, top); g.addColorStop(1, mid); return g; };
+  const fillCrit = mk("rgba(239,68,68,0.55)",   "rgba(239,68,68,0.02)");
+  const fillHigh = mk("rgba(249,115,22,0.50)",  "rgba(249,115,22,0.02)");
+  const fillMed  = mk("rgba(250,204,21,0.40)",  "rgba(250,204,21,0.02)");
+  const fillLow  = mk("rgba(34,197,94,0.35)",   "rgba(34,197,94,0.02)");
+
   alertChart = new Chart(actx, {
     type:"line",
-    data:{ labels:[], datasets:[{ label:"Alerts", data:[], borderColor:"var(--accent)",
-      backgroundColor:ag, borderWidth:2, fill:true, tension:0.4, pointRadius:0,
-      pointHoverRadius:5, pointHoverBackgroundColor:"var(--accent)", pointHoverBorderColor:"var(--bg-card)", pointHoverBorderWidth:2 }] },
-    options:{ responsive:true, maintainAspectRatio:false, animation:{duration:400},
+    data:{ labels:[], datasets:[
+      // Primary aggregate line (bright cyan — ultra high contrast on dark)
+      { label:"Alerts / poll", data:[], borderColor:"#22d3ee",
+        backgroundColor:ag, borderWidth:2.5, fill:true, tension:0.38,
+        pointRadius:3, pointBackgroundColor:"#22d3ee",
+        pointBorderColor:"rgba(15,23,42,0.9)", pointBorderWidth:1.5,
+        pointHoverRadius:6, pointHoverBackgroundColor:"#67e8f9",
+        pointHoverBorderColor:"#0f172a", pointHoverBorderWidth:2,
+        // Glow on the line itself
+        borderCapStyle:"round", borderJoinStyle:"round",
+        segment: { borderColor: ctx => ctx.p1.parsed.y > ctx.p0.parsed.y ? "#22d3ee" : "#0ea5e9" }
+      },
+      // Stacked severity bands (hidden by default; call alertChart.show(i) to enable)
+      { label:"Critical", data:[], hidden:true, borderColor:"#ef4444", backgroundColor:fillCrit, borderWidth:1.5, fill:true, tension:0.35, pointRadius:0, pointHoverRadius:4, stack:"sev" },
+      { label:"High",     data:[], hidden:true, borderColor:"#f97316", backgroundColor:fillHigh, borderWidth:1.5, fill:true, tension:0.35, pointRadius:0, pointHoverRadius:4, stack:"sev" },
+      { label:"Medium",   data:[], hidden:true, borderColor:"#facc15", backgroundColor:fillMed,  borderWidth:1.5, fill:true, tension:0.35, pointRadius:0, pointHoverRadius:4, stack:"sev" },
+      { label:"Low",      data:[], hidden:true, borderColor:"#22c55e", backgroundColor:fillLow,  borderWidth:1.5, fill:true, tension:0.35, pointRadius:0, pointHoverRadius:4, stack:"sev" },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      animation:{duration:650, easing:"easeOutCubic"},
       interaction:{mode:"index",intersect:false},
       scales:{
-        x:{grid:{color:gc,drawBorder:false},ticks:{color:tc,font:{size:10,family:"Inter"},maxTicksLimit:8},border:{display:false}},
-        y:{beginAtZero:true,grid:{color:gc,drawBorder:false},ticks:{color:tc,font:{size:10,family:"Inter"},precision:0,maxTicksLimit:5},border:{display:false}}
+        x:{
+          grid:{color:"rgba(148,163,184,0.08)", drawBorder:false, drawTicks:false},
+          ticks:{color:"#94a3b8", font:{size:10, family:"Inter", weight:"500"}, maxTicksLimit:8, padding:6},
+          border:{display:false}
+        },
+        y:{
+          beginAtZero:true,
+          grid:{color:"rgba(148,163,184,0.10)", drawBorder:false, drawTicks:false, lineWidth:1},
+          ticks:{color:"#94a3b8", font:{size:10, family:"Inter", weight:"500"}, precision:0, maxTicksLimit:5, padding:8},
+          border:{display:false}
+        }
       },
-      plugins:{ legend:{display:false},
-        tooltip:{backgroundColor:"var(--panel-active)",titleColor:"var(--text-hi)",bodyColor:"var(--text-mid)",
-          borderColor:"var(--border)",borderWidth:1,cornerRadius:8,padding:10,titleFont:{weight:"600"},displayColors:false} } }
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:"rgba(15,23,42,0.96)",
+          titleColor:"#f8fafc", bodyColor:"#cbd5e1",
+          borderColor:"rgba(34,211,238,0.35)", borderWidth:1,
+          cornerRadius:10, padding:12,
+          titleFont:{weight:"700", size:11, family:"Inter"},
+          bodyFont:{size:11, family:"Inter"},
+          displayColors:true, boxPadding:4,
+          caretSize:6, caretPadding:8
+        }
+      }
+    }
   });
 
   severityChart = new Chart($("severity-chart").getContext("2d"), {
@@ -160,17 +207,140 @@ function initCharts() {
 
   const rgEl = $("risk-gauge-chart");
   if (rgEl) {
-    riskGaugeChart = new Chart(rgEl.getContext("2d"), {
+    const rctx = rgEl.getContext("2d");
+
+    // Gradient arc: green → yellow → orange → red (left-to-right, semicircle)
+    const buildArcGradient = () => {
+      const w = rgEl.width || 260;
+      const g = rctx.createLinearGradient(0, 0, w, 0);
+      g.addColorStop(0.00, "#22c55e"); // LOW (green)
+      g.addColorStop(0.35, "#facc15"); // MEDIUM (yellow)
+      g.addColorStop(0.65, "#f97316"); // HIGH (orange)
+      g.addColorStop(1.00, "#ef4444"); // CRITICAL (red)
+      return g;
+    };
+
+    // Plugin: draws threshold ticks (25/50/75), tick labels, a needle,
+    // and a glow for high/critical risk.
+    const gaugeDecor = {
+      id: "gaugeDecor",
+      afterDatasetsDraw(chart) {
+        const { ctx, chartArea } = chart;
+        const meta = chart.getDatasetMeta(0);
+        if (!meta?.data?.[0]) return;
+        const arc = meta.data[0];
+        const cx = arc.x, cy = arc.y;
+        const outerR = arc.outerRadius, innerR = arc.innerRadius;
+        const risk = chart.$risk ?? 0;
+
+        // --- Glow underlay for HIGH/CRITICAL ---
+        if (risk > 50) {
+          const glowColor = risk > 75 ? "rgba(239,68,68,0.55)" : "rgba(249,115,22,0.45)";
+          ctx.save();
+          ctx.shadowColor = glowColor;
+          ctx.shadowBlur = risk > 75 ? 34 : 22;
+          ctx.beginPath();
+          ctx.arc(cx, cy, (outerR+innerR)/2, Math.PI, 2*Math.PI);
+          ctx.lineWidth = (outerR-innerR) * 0.9;
+          ctx.strokeStyle = "rgba(0,0,0,0)";
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // --- Threshold tick marks at 25/50/75 ---
+        const ticks = [25, 50, 75];
+        ctx.save();
+        ctx.strokeStyle = "rgba(226,232,240,0.55)";
+        ctx.lineWidth = 1.5;
+        ticks.forEach(t => {
+          const a = Math.PI + (t/100)*Math.PI;
+          const x1 = cx + Math.cos(a) * (outerR + 2);
+          const y1 = cy + Math.sin(a) * (outerR + 2);
+          const x2 = cx + Math.cos(a) * (outerR + 8);
+          const y2 = cy + Math.sin(a) * (outerR + 8);
+          ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+        });
+        ctx.restore();
+
+        // --- Zone labels LOW / MED / HIGH / CRIT ---
+        ctx.save();
+        ctx.font = "600 9px Inter, system-ui, sans-serif";
+        ctx.fillStyle = "#94a3b8";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        const labelR = outerR + 14;
+        const labels = [
+          { p: 0.08, t: "LOW",  c: "#22c55e" },
+          { p: 0.38, t: "MED",  c: "#facc15" },
+          { p: 0.62, t: "HIGH", c: "#f97316" },
+          { p: 0.92, t: "CRIT", c: "#ef4444" },
+        ];
+        labels.forEach(({p,t,c}) => {
+          const a = Math.PI + p*Math.PI;
+          const x = cx + Math.cos(a) * labelR;
+          const y = cy + Math.sin(a) * labelR;
+          ctx.fillStyle = c;
+          ctx.fillText(t, x, y);
+        });
+        ctx.restore();
+
+        // --- Needle ---
+        const ang = Math.PI + (Math.min(Math.max(risk,0),100)/100) * Math.PI;
+        const needleLen = innerR + (outerR - innerR) * 0.92;
+        const tipX = cx + Math.cos(ang) * needleLen;
+        const tipY = cy + Math.sin(ang) * needleLen;
+        const baseAng = ang + Math.PI/2;
+        const baseW = 5;
+        const bx1 = cx + Math.cos(baseAng) * baseW;
+        const by1 = cy + Math.sin(baseAng) * baseW;
+        const bx2 = cx - Math.cos(baseAng) * baseW;
+        const by2 = cy - Math.sin(baseAng) * baseW;
+        ctx.save();
+        ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 6;
+        ctx.fillStyle = "#f1f5f9";
+        ctx.beginPath(); ctx.moveTo(tipX,tipY); ctx.lineTo(bx1,by1); ctx.lineTo(bx2,by2); ctx.closePath(); ctx.fill();
+        // Hub
+        ctx.beginPath(); ctx.arc(cx, cy, 5, 0, 2*Math.PI);
+        ctx.fillStyle = "#0f172a"; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = "#e2e8f0"; ctx.stroke();
+        ctx.restore();
+
+        // --- Big center number ---
+        ctx.save();
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = "800 26px Inter, system-ui, sans-serif";
+        const numColor = risk>75?"#ef4444":risk>50?"#f97316":risk>25?"#facc15":"#22c55e";
+        ctx.fillStyle = numColor;
+        if (risk > 75) { ctx.shadowColor = "rgba(239,68,68,0.7)"; ctx.shadowBlur = 14; }
+        ctx.fillText(`${risk}`, cx, cy - 18);
+        ctx.shadowBlur = 0;
+        ctx.font = "600 9px Inter, system-ui, sans-serif";
+        ctx.fillStyle = "#64748b";
+        ctx.fillText("RISK SCORE", cx, cy + 2);
+        ctx.restore();
+      }
+    };
+
+    riskGaugeChart = new Chart(rctx, {
       type:"doughnut",
-      data:{ datasets:[{ data:[0,100], backgroundColor:[
-        getComputedStyle(document.documentElement).getPropertyValue('--critical').trim() || "#ef4444",
-        "var(--border-subtle)"
-      ],
-        borderWidth:0, circumference:180, rotation:270 }] },
-      options:{ responsive:true, maintainAspectRatio:false, cutout:"75%",
-        animation:{duration:800},
-        plugins:{ legend:{display:false}, tooltip:{enabled:false} } }
+      data:{ datasets:[{
+        data:[0,100],
+        backgroundColor:[ buildArcGradient(), "rgba(51,65,85,0.35)" ],
+        borderWidth:0,
+        circumference:180,
+        rotation:270,
+        borderRadius: 2,
+        spacing: 0,
+      }] },
+      options:{
+        responsive:true, maintainAspectRatio:false, cutout:"72%",
+        animation:{duration:900, easing:"easeOutQuart"},
+        plugins:{ legend:{display:false}, tooltip:{enabled:false} }
+      },
+      plugins:[gaugeDecor]
     });
+    riskGaugeChart.$risk = 0;
+    riskGaugeChart._buildArcGradient = buildArcGradient;
   }
 }
 
@@ -747,16 +917,28 @@ function updateAllUI() {
     rulesChart.update("none");
   }
 
-  // Risk gauge
+  // Risk gauge — dynamic gradient arc + needle + glow
   if (riskGaugeChart) {
     const maxScore  = anomalies.length ? Math.max(...anomalies.map(a=>parseFloat(a.anomaly_score||0))) : 0;
     const risk      = Math.min(100, Math.round((crit/Math.max(total,1))*60 + maxScore*40));
-    const colors    = risk>75?["#ff4757","rgba(255,71,87,0.15)"]:risk>50?["#ff8b3d","rgba(255,139,61,0.15)"]:risk>25?["#ffa502","rgba(255,165,2,0.15)"]:["#2ed573","rgba(46,213,115,0.12)"];
     const riskLabel = risk>75?"CRITICAL":risk>50?"HIGH":risk>25?"MEDIUM":"LOW";
-    riskGaugeChart.data.datasets[0].data           = [risk,100-risk];
-    riskGaugeChart.data.datasets[0].backgroundColor = colors;
+    const labelColor = risk>75?"#ef4444":risk>50?"#f97316":risk>25?"#facc15":"#22c55e";
+
+    // Rebuild the per-render gradient so it stays crisp on resize.
+    const grad = riskGaugeChart._buildArcGradient
+      ? riskGaugeChart._buildArcGradient()
+      : labelColor;
+
+    riskGaugeChart.$risk = risk;
+    riskGaugeChart.data.datasets[0].data            = [risk, 100 - risk];
+    riskGaugeChart.data.datasets[0].backgroundColor = [grad, "rgba(51,65,85,0.35)"];
     riskGaugeChart.update("none");
-    if (ui.riskLabel) { ui.riskLabel.textContent = `${riskLabel} · ${risk}%`; ui.riskLabel.style.color = colors[0]; }
+
+    if (ui.riskLabel) {
+      ui.riskLabel.textContent = `${riskLabel}`;
+      ui.riskLabel.style.color = labelColor;
+      ui.riskLabel.classList.toggle("risk-pulse", risk > 75);
+    }
   }
 
   // Pills
