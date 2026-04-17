@@ -1711,10 +1711,10 @@ function showItemDetail(type, idx) {
     if (corrCount > 0) {
       corrHTML = `<div>
         <div class="drw-section-title">🔗 Correlated Events (${corrCount})</div>
-        ${corrAlerts.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(255,71,87,.08);color:#ff9aa2">⚠️ ALERT: ${x.message||x.scenario} — ${ts(x.ts)}</div>`).join("")}
-        ${corrAnom.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(161,127,224,.09);color:#c4a5f5">🧠 ANOMALY: score ${x.anomaly_score} · ${x.classification} — ${ts(x.ts)}</div>`).join("")}
-        ${corrDlp.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(57,197,207,.07);color:#67e8f9">🔒 DLP: ${x.rule} · ${byt(x.bytes_out)} — ${ts(x.ts)}</div>`).join("")}
-        ${corrZT.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(91,141,239,.09);color:#93bbff">🔐 ZERO-TRUST: ${(x.decision||"").toUpperCase()} · risk ${x.risk_score} — ${ts(x.ts)}</div>`).join("")}
+        ${corrAlerts.map(x=>`<div class="drw-corr drw-corr--alert">⚠️ ALERT: ${x.message||x.scenario} — ${ts(x.ts)}</div>`).join("")}
+        ${corrAnom.map(x=>`<div class="drw-corr drw-corr--anom">🧠 ANOMALY: score ${x.anomaly_score} · ${x.classification} — ${ts(x.ts)}</div>`).join("")}
+        ${corrDlp.map(x=>`<div class="drw-corr drw-corr--dlp">🔒 DLP: ${x.rule} · ${byt(x.bytes_out)} — ${ts(x.ts)}</div>`).join("")}
+        ${corrZT.map(x=>`<div class="drw-corr drw-corr--zt">🔐 ZERO-TRUST: ${(x.decision||"").toUpperCase()} · risk ${x.risk_score} — ${ts(x.ts)}</div>`).join("")}
       </div>`;
     }
   }
@@ -1726,16 +1726,14 @@ function showItemDetail(type, idx) {
     </div>
     <div>
       <div class="drw-section-title">🧠 What Is This?</div>
-      <div style="background:rgba(91,141,239,.07);border:1px solid rgba(91,141,239,.18);border-radius:6px;padding:.75rem;font-size:.78rem;color:#b0c4de;line-height:1.6">
-        ${explanation}
-      </div>
+      <div class="drw-explain">${explanation}</div>
     </div>
     <div>
       <div class="drw-section-title">🔧 How To Fix It</div>
-      <div style="display:flex;flex-direction:column;gap:.35rem">
-        ${fixSteps.map((s,i)=>`<div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.76rem;padding:.4rem .6rem;border-radius:5px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)">
-          <span style="flex-shrink:0;width:18px;height:18px;border-radius:50%;background:rgba(91,141,239,.2);color:#5b8def;font-weight:700;font-size:.65rem;display:flex;align-items:center;justify-content:center">${i+1}</span>
-          <span style="color:#b0c4de;line-height:1.5">${s}</span>
+      <div class="drw-fix-steps">
+        ${fixSteps.map((s,i)=>`<div class="drw-fix-step">
+          <span class="drw-fix-num">${i+1}</span>
+          <span class="drw-fix-text">${s}</span>
         </div>`).join("")}
       </div>
     </div>
@@ -1745,24 +1743,13 @@ function showItemDetail(type, idx) {
   if (drwActions) {
     if (alreadyFixed) {
       drwActions.innerHTML = `
-        <div style="flex:1;padding:.5rem .7rem;border:1px solid rgba(46,213,115,.3);border-radius:6px;background:rgba(46,213,115,.1);color:#2ed573;font-size:.76rem;font-weight:600;text-align:center">
-          ✓ Already resolved by IntegriShield
-        </div>
-        <button onclick="closeDetailDrawer()" style="padding:.5rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.06);color:#7a93b4;font-size:.76rem;cursor:pointer">Close</button>`;
+        <div class="drw-resolved-pill">✓ Already resolved by IntegriShield</div>
+        <button onclick="closeDetailDrawer()" class="drw-btn drw-btn--neutral">Close</button>`;
     } else {
       drwActions.innerHTML = `
-        <button onclick="applyFix('${type}',${idx})"
-          style="flex:1;padding:.55rem .8rem;border:none;border-radius:6px;background:linear-gradient(135deg,#2ed573,#5b8def);color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.03em;box-shadow:0 0 16px rgba(46,213,115,.35)">
-          ⚡ Fix It Now
-        </button>
-        <button onclick="demoActionAlt('block','${type}','${ev.source_ip||ev.user_id||""}')"
-          style="padding:.5rem .7rem;border:1px solid rgba(255,71,87,.3);border-radius:6px;background:rgba(255,71,87,.15);color:#ff4757;font-size:.76rem;font-weight:600;cursor:pointer">
-          🚫 Block
-        </button>
-        <button onclick="demoActionAlt('report','${type}','')"
-          style="padding:.5rem .7rem;border:1px solid rgba(91,141,239,.3);border-radius:6px;background:rgba(91,141,239,.14);color:#5b8def;font-size:.76rem;font-weight:600;cursor:pointer">
-          📄 Report
-        </button>
+        <button onclick="applyFix('${type}',${idx})" class="drw-btn drw-btn--fix">⚡ Fix It Now</button>
+        <button onclick="demoActionAlt('block','${type}','${ev.source_ip||ev.user_id||""}')" class="drw-btn drw-btn--block">🚫 Block</button>
+        <button onclick="demoActionAlt('report','${type}','')" class="drw-btn drw-btn--report">📄 Report</button>
       `;
     }
   }
