@@ -209,14 +209,23 @@ function initCharts() {
   if (rgEl) {
     const rctx = rgEl.getContext("2d");
 
-    // Gradient arc: green → yellow → orange → red (left-to-right, semicircle)
-    const buildArcGradient = () => {
-      const w = rgEl.width || 260;
-      const g = rctx.createLinearGradient(0, 0, w, 0);
-      g.addColorStop(0.00, "#22c55e"); // LOW (green)
-      g.addColorStop(0.35, "#facc15"); // MEDIUM (yellow)
-      g.addColorStop(0.65, "#f97316"); // HIGH (orange)
-      g.addColorStop(1.00, "#ef4444"); // CRITICAL (red)
+    // Dynamic arc color — changes zone based on current risk score.
+    // Returns a vertical 2-stop gradient of the zone color for subtle depth.
+    // Zones: LOW 0-25 green · MED 26-50 yellow · HIGH 51-75 orange · CRIT 76-100 red.
+    const ZONE_PALETTE = {
+      low:  { light: "#4ade80", base: "#22c55e", dark: "#16a34a" }, // green
+      med:  { light: "#fde047", base: "#facc15", dark: "#eab308" }, // yellow
+      high: { light: "#fb923c", base: "#f97316", dark: "#ea580c" }, // orange
+      crit: { light: "#f87171", base: "#ef4444", dark: "#dc2626" }, // red
+    };
+    const zoneFor = r => r > 75 ? "crit" : r > 50 ? "high" : r > 25 ? "med" : "low";
+    const buildArcGradient = (risk = 0) => {
+      const p = ZONE_PALETTE[zoneFor(risk)];
+      const h = rgEl.height || 160;
+      const g = rctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0.00, p.light); // shine highlight (top)
+      g.addColorStop(0.55, p.base);  // core zone color
+      g.addColorStop(1.00, p.dark);  // deeper edge
       return g;
     };
 
@@ -325,7 +334,7 @@ function initCharts() {
       type:"doughnut",
       data:{ datasets:[{
         data:[0,100],
-        backgroundColor:[ buildArcGradient(), "rgba(51,65,85,0.35)" ],
+        backgroundColor:[ buildArcGradient(0), "rgba(51,65,85,0.35)" ],
         borderWidth:0,
         circumference:180,
         rotation:270,
@@ -924,9 +933,10 @@ function updateAllUI() {
     const riskLabel = risk>75?"CRITICAL":risk>50?"HIGH":risk>25?"MEDIUM":"LOW";
     const labelColor = risk>75?"#ef4444":risk>50?"#f97316":risk>25?"#facc15":"#22c55e";
 
-    // Rebuild the per-render gradient so it stays crisp on resize.
+    // Rebuild the per-render gradient using the current risk so the arc color
+    // reflects the live zone (green → yellow → orange → red).
     const grad = riskGaugeChart._buildArcGradient
-      ? riskGaugeChart._buildArcGradient()
+      ? riskGaugeChart._buildArcGradient(risk)
       : labelColor;
 
     riskGaugeChart.$risk = risk;
