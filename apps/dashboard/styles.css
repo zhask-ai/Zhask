@@ -657,6 +657,62 @@ kbd {
   box-shadow: var(--shadow-md), 0 0 24px rgba(76, 130, 247, 0.06);
 }
 
+/* ─── Enterprise SOC polish: stronger dark-mode cards + live tick + pulse ── */
+[data-theme="dark"] .chart-panel {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 60%),
+    var(--bg-card);
+  border-color: rgba(71, 85, 105, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 1px 2px rgba(0,0,0,0.35);
+}
+[data-theme="dark"] .chart-panel:hover {
+  border-color: rgba(34, 211, 238, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 0 0 1px rgba(34,211,238,0.08),
+    0 8px 28px rgba(2, 132, 199, 0.18);
+}
+
+/* Panel accent strip — Splunk/Sentinel feel */
+.chart-panel::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(34,211,238,0.0) 8%,
+    rgba(34,211,238,0.55) 50%,
+    rgba(34,211,238,0.0) 92%,
+    transparent 100%);
+  opacity: 0.0;
+  transition: opacity var(--t);
+}
+.chart-panel:hover::before { opacity: 1; }
+
+/* Critical-risk pulse applied to the risk label text */
+@keyframes risk-pulse-kf {
+  0%, 100% { text-shadow: 0 0 0 rgba(239,68,68,0.0); transform: scale(1); }
+  50%      { text-shadow: 0 0 14px rgba(239,68,68,0.75); transform: scale(1.04); }
+}
+.risk-label.risk-pulse {
+  animation: risk-pulse-kf 1.4s ease-in-out infinite;
+  letter-spacing: 0.08em;
+}
+
+/* Live data heartbeat — tiny dot that breathes next to "Alert Timeline" */
+@keyframes live-heartbeat {
+  0%   { box-shadow: 0 0 0 0   rgba(34,211,238,0.55); }
+  70%  { box-shadow: 0 0 0 8px rgba(34,211,238,0);    }
+  100% { box-shadow: 0 0 0 0   rgba(34,211,238,0);    }
+}
+.dot-inline.live-dot {
+  background: #22d3ee !important;
+  animation: live-heartbeat 1.6s ease-out infinite;
+}
+
 .chart-wrap {
   position: relative;
   height: 150px;
