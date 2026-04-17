@@ -874,7 +874,44 @@ select:focus {
   flex-shrink: 0;
 }
 
-.chip-default  { background: rgba(12, 18, 32, 0.6);  color: var(--text-muted); border: 1px solid var(--border); }
+.chip-default  { background: var(--bg-raised);  color: var(--text); border: 1px solid var(--border); }
+[data-theme="dark"] .chip-default { background: rgba(12, 18, 32, 0.6); color: var(--text-mid); border-color: var(--border); }
+
+/* ─── Audit log — theme-aware cell styling ─── */
+.audit-actor {
+  color: var(--text-mid);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+}
+[data-theme="dark"] .audit-actor { color: #b0c4de; }
+
+.audit-action-code {
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border-subtle);
+  font-family: 'JetBrains Mono', monospace;
+}
+[data-theme="dark"] .audit-action-code {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border-color: rgba(148, 163, 184, 0.12);
+}
+
+.audit-status {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.audit-status.is-ok  { color: var(--ok);       background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.28); }
+.audit-status.is-bad { color: var(--critical); background: rgba(239, 68, 68, 0.12);  border: 1px solid rgba(239, 68, 68, 0.30);  }
+[data-theme="dark"] .audit-status.is-ok  { background: rgba(52, 211, 153, 0.10); border-color: rgba(52, 211, 153, 0.25); }
+[data-theme="dark"] .audit-status.is-bad { background: rgba(248, 113, 113, 0.10); border-color: rgba(248, 113, 113, 0.30); }
 .chip-purple   { background: var(--purple-bg);         color: var(--purple); border: 1px solid rgba(155,124,247,0.25); }
 .chip-teal     { background: var(--teal-bg);           color: var(--teal);   border: 1px solid rgba(45,212,191,0.25); }
 .chip-orange   { background: var(--orange-bg);         color: var(--orange); border: 1px solid rgba(251,146,60,0.25); }
