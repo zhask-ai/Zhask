@@ -1131,10 +1131,10 @@ function renderAudit() {
   setEmpty(ui.auditBody, ui.auditEmpty, v);
   ui.auditBody.innerHTML = v.map(r => `<tr>
     <td>${ts(r.ts)}</td>
-    <td style="color:#b0c4de">${r.actor||"—"}</td>
-    <td><code style="font-size:.72rem;background:rgba(255,255,255,.05);padding:1px 6px;border-radius:3px">${r.action||"—"}</code></td>
+    <td class="audit-actor">${r.actor||"—"}</td>
+    <td><code class="audit-action-code">${r.action||"—"}</code></td>
     <td><span class="module-chip chip-default">${r.module||"—"}</span></td>
-    <td><span style="color:${r.status==="ok"?"#2ed573":"#ff4757"}">${r.status||"ok"}</span></td>
+    <td><span class="audit-status ${r.status==="ok"?"is-ok":"is-bad"}">${r.status||"ok"}</span></td>
   </tr>`).join("");
 }
 
