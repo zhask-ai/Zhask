@@ -1146,6 +1146,7 @@ function renderAudit() {
     <td><span class="module-chip chip-default">${r.module||"—"}</span></td>
     <td><span class="audit-status ${r.status==="ok"?"is-ok":"is-bad"}">${r.status||"ok"}</span></td>
   </tr>`).join("");
+  renderActionLog();
 }
 
 // ── GATEWAY M01 ───────────────────────────────────────────────
@@ -1741,6 +1742,14 @@ function showItemDetail(type, idx) {
   `;
 
   window._drwCtx = { type, idx, ev };
+  // Append prior-action history into drawer body
+  if (drwBody) {
+    const historyHtml = _renderDrawerHistory(type, idx, ev);
+    if (historyHtml) drwBody.insertAdjacentHTML("beforeend", historyHtml);
+  }
+  // Clear any stale progress/receipt from a previous drawer open
+  document.getElementById("drw-progress")?.remove();
+  document.getElementById("drw-receipt")?.remove();
   if (drwActions) {
     if (alreadyFixed) {
       drwActions.innerHTML = `
@@ -2044,134 +2053,598 @@ function closeDetailDrawer(e) {
 }
 
 // ── Drawer action catalog ─────────────────────────────────────
-// Each entry: { id, label, cls, toast, severity }
+// Fields: id, label, cls, sev, shortcut, confirm{text,effects[],blast}, destructive(bool)
 const DRW_ACTIONS = {
   alert: [
-    { id:"fix",        label:"⚡ Fix It Now",         cls:"drw-btn--fix" },
-    { id:"block_ip",   label:"🚫 Block Source IP",    cls:"drw-btn--block",  toast:ev=>`🚫 IP ${ev.source_ip||"?"} blocked at edge — propagated to 14 firewalls`, sev:"warning" },
-    { id:"quarantine", label:"🔒 Quarantine User",    cls:"drw-btn--block",  toast:ev=>`🔒 User ${ev.user_id||"?"} session terminated — account locked pending review`, sev:"warning" },
-    { id:"forensic",   label:"🧪 Forensic Snapshot",  cls:"drw-btn--neutral",toast:()=>`🧪 Memory + session snapshot captured — evidence sealed in S3 vault`, sev:"info" },
-    { id:"slack",      label:"📣 Page SOC",           cls:"drw-btn--neutral",toast:()=>`📣 Slack #sec-incidents pinged + PagerDuty fired to L2 oncall`, sev:"info" },
-    { id:"jira",       label:"🎫 Create Jira",        cls:"drw-btn--neutral",toast:()=>`🎫 SEC-${_int(4000,9999)} created in Jira with full event chain attached`, sev:"info" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Fix It Now",           cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Apply full automated remediation",effects:["Block source IP at edge","Revoke active credentials","Create incident record","Notify SOC on-call"],blast:"Affects: 1 user · 14 firewall nodes · on-call pager"} },
+    { id:"block_ip",   label:"🚫 Block Source IP",      cls:"drw-btn--block",  shortcut:"B", sev:"warning",
+      confirm:{text:"Block this IP at all perimeter nodes",effects:["Add IP to blocklist on 14 firewalls","Tag all future events from this IP as BLOCKED"],blast:"Affects: all inbound traffic from this IP"},
+      destructive:false, reversible:true },
+    { id:"quarantine", label:"🔒 Quarantine User",      cls:"drw-btn--block",  shortcut:"Q", sev:"warning",
+      confirm:{text:"Terminate all sessions for this user",effects:["Invalidate all active bearer tokens","Lock account in identity provider","Inject termination event to feed"],blast:"Affects: 1 user account · all active sessions"},
+      destructive:true, reversible:true },
+    { id:"forensic",   label:"🧪 Forensic Snapshot",    cls:"drw-btn--neutral",shortcut:"S", sev:"info",
+      confirm:{text:"Capture full forensic evidence bundle",effects:["Snapshot ML features from this event","Package payload + caller chain","Seal in evidence vault with hash"],blast:"Read-only — no active sessions affected"} },
+    { id:"slack",      label:"📣 Page SOC",             cls:"drw-btn--neutral",shortcut:"P", sev:"info",
+      confirm:{text:"Alert the SOC on-call team",effects:["Post to Slack #sec-incidents with event detail","Fire PagerDuty alert to L2 on-call"],blast:"Affects: L2 on-call rotation"} },
+    { id:"jira",       label:"🎫 Create Jira",          cls:"drw-btn--neutral",shortcut:"J", sev:"info",
+      confirm:{text:"Create a Jira security ticket",effects:["Open SEC-#### with full event chain","Set SLA deadline based on severity"],blast:"Affects: security backlog queue"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   anomaly: [
-    { id:"fix",        label:"⚡ Retrain Baseline",   cls:"drw-btn--fix" },
-    { id:"quarantine", label:"🔒 Isolate Session",    cls:"drw-btn--block",  toast:ev=>`🔒 Session for ${ev.user_id||"user"} suspended — ML model retraining queued`, sev:"warning" },
-    { id:"elevate",    label:"🚨 Escalate to Incident", cls:"drw-btn--block",toast:()=>`🚨 Auto-elevated — incident INC-${_int(5000,9999)} opened with P1 severity`, sev:"warning" },
-    { id:"forensic",   label:"🧪 Capture Features",   cls:"drw-btn--neutral",toast:()=>`🧪 24 ML features snapshotted — appended to threat-intel corpus`, sev:"info" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Retrain Baseline",     cls:"drw-btn--fix",    shortcut:"R",
+      confirm:{text:"Retrain the ML baseline model",effects:["Pull last 7d feature vectors","Refit IsolationForest (contamination=0.05)","Validate on 20% holdout","Swap model version — future events use new baseline"],blast:"Affects: all future anomaly scoring · model version bumped"} },
+    { id:"quarantine", label:"🔒 Isolate Session",      cls:"drw-btn--block",  shortcut:"I", sev:"warning",
+      confirm:{text:"Terminate and isolate this user session",effects:["Invalidate all active bearer tokens (3)","Lock account in identity provider","Tag all future events for this user as [ISOLATED]","Inject session-terminated alert to feed"],blast:"Affects: 1 user account · all active sessions"},
+      destructive:true, reversible:true },
+    { id:"elevate",    label:"🚨 Escalate to Incident", cls:"drw-btn--block",  shortcut:"E", sev:"warning",
+      confirm:{text:"Escalate this anomaly to a P1 incident",effects:["Create INC-#### record linked to this event","Assign to on-call L2 team","Incident appears live in Incidents tab"],blast:"Affects: incident queue · on-call team"},
+      destructive:false },
+    { id:"forensic",   label:"🧪 Capture Features",    cls:"drw-btn--neutral",shortcut:"F", sev:"info",
+      confirm:{text:"Capture and archive ML feature snapshot",effects:["Export 24-feature vector from this event","Generate CSV + JSON evidence bundle","Append to threat-intel corpus"],blast:"Read-only — no active sessions affected"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   sap: [
-    { id:"fix",        label:"⚡ Revoke SAP Auth",    cls:"drw-btn--fix" },
-    { id:"freeze",     label:"❄️ Freeze SAP Role",   cls:"drw-btn--block",  toast:ev=>`❄️ Role for ${ev.user_id} frozen — SU01 lock applied on ${ev.tenant_id}`, sev:"warning" },
-    { id:"tool_block", label:"🚫 Disable MCP Tool",  cls:"drw-btn--block",  toast:ev=>`🚫 MCP tool ${ev.tool_name} globally disabled — guardrail added`, sev:"warning" },
-    { id:"audit",      label:"📋 Pull Audit Trail",  cls:"drw-btn--neutral",toast:()=>`📋 STAD + SM20 logs pulled for last 72h — exported to evidence locker`, sev:"info" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Revoke SAP Auth",      cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Revoke SAP MCP authorization for this user",effects:["Terminate SAP session","Revoke all MCP tool permissions","Apply SU01 lock"],blast:"Affects: 1 SAP user account"} },
+    { id:"freeze",     label:"❄️ Freeze SAP Role",     cls:"drw-btn--block",  shortcut:"Z", sev:"warning",
+      confirm:{text:"Apply SU01 lock to this SAP user",effects:["Freeze user's SAP role (SU01)","Notify SAP basis team","Log in change management"],blast:"Affects: 1 SAP user · all SAP access"},
+      reversible:true },
+    { id:"tool_block", label:"🚫 Disable MCP Tool",    cls:"drw-btn--block",  shortcut:"T", sev:"warning",
+      confirm:{text:"Globally disable this MCP tool",effects:["Add tool to disabled_tools registry","Propagate guardrail to all tenants","Future events using this tool show BLOCKED badge"],blast:"Affects: all tenants using this tool"},
+      destructive:true, reversible:true },
+    { id:"audit",      label:"📋 Pull Audit Trail",    cls:"drw-btn--neutral",shortcut:"A", sev:"info",
+      confirm:{text:"Export SAP audit trail for this user",effects:["Pull STAD transaction logs (72h)","Pull SM20 security audit log","Export to evidence locker as CSV"],blast:"Read-only — generates downloadable evidence"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   dlp: [
-    { id:"fix",        label:"⚡ Block Egress",       cls:"drw-btn--fix" },
-    { id:"mask",       label:"🕶️ Mask PII",          cls:"drw-btn--block",  toast:()=>`🕶️ PII fields tokenised in transit — egress stream rewritten`, sev:"warning" },
-    { id:"dest_block", label:"🚫 Blocklist Dest",    cls:"drw-btn--block",  toast:ev=>`🚫 Destination ${ev.destination} added to global DLP blocklist`, sev:"warning" },
-    { id:"dpo",        label:"⚖️ Notify DPO",        cls:"drw-btn--neutral",toast:()=>`⚖️ DPO paged — GDPR 72h breach-clock started`, sev:"info" },
-    { id:"revoke",     label:"🔑 Revoke Tokens",     cls:"drw-btn--neutral",toast:ev=>`🔑 All access tokens for ${ev.user_id} revoked — forced re-auth`, sev:"info" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Block Egress",         cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Block all egress to this destination",effects:["Add destination to DLP blocklist","Update egress stream rules","Alert data owner"],blast:"Affects: all outbound traffic to this destination"} },
+    { id:"mask",       label:"🕶️ Mask PII",            cls:"drw-btn--block",  shortcut:"M", sev:"warning",
+      confirm:{text:"Tokenise PII fields in this egress stream",effects:["Apply tokenisation schema to matching fields","Rewrite egress stream in-flight"],blast:"Affects: this egress stream only"} },
+    { id:"dest_block", label:"🚫 Blocklist Dest",      cls:"drw-btn--block",  shortcut:"B", sev:"warning",
+      confirm:{text:"Add this destination to the global DLP blocklist",effects:["Block destination across all egress nodes","Persist in DLP policy engine"],blast:"Affects: all outbound traffic to this destination"},
+      reversible:true },
+    { id:"dpo",        label:"⚖️ Notify DPO",          cls:"drw-btn--neutral",shortcut:"G", sev:"info",
+      confirm:{text:"Page the Data Protection Officer (GDPR Art.33)",effects:["Draft GDPR breach notification","Page DPO with event context","Start 72-hour breach-notification clock"],blast:"Triggers legal breach-notification workflow"} },
+    { id:"revoke",     label:"🔑 Revoke Tokens",       cls:"drw-btn--neutral",shortcut:"R", sev:"info",
+      confirm:{text:"Revoke all access tokens for this user",effects:["Invalidate all active tokens","Force re-authentication on next request"],blast:"Affects: 1 user · all active API sessions"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   shadow: [
-    { id:"fix",        label:"⚡ Block Endpoint",     cls:"drw-btn--fix" },
-    { id:"register",   label:"📝 Register & Audit",  cls:"drw-btn--block",  toast:ev=>`📝 ${ev.endpoint} added to registry with mandatory audit tag`, sev:"info" },
-    { id:"forensic",   label:"🧪 Forensic Dump",     cls:"drw-btn--neutral",toast:()=>`🧪 Full RFC payload + caller chain dumped to incident vault`, sev:"info" },
-    { id:"sweep",      label:"🔍 Sweep for More",    cls:"drw-btn--neutral",toast:()=>`🔍 Shadow-sweep launched across all tenants — ${_int(30,90)}s ETA`, sev:"info" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Block Endpoint",       cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Block this shadow RFC endpoint at the SAP Gateway",effects:["Add to reginfo/secinfo deny list","Broadcast block rule to all tenants"],blast:"Affects: all callers of this endpoint"} },
+    { id:"register",   label:"📝 Register & Audit",    cls:"drw-btn--block",  shortcut:"R", sev:"info",
+      confirm:{text:"Register this endpoint with mandatory audit tag",effects:["Add to endpoint registry","Tag with mandatory audit requirement","Record owner in change management"],blast:"Read-only policy change"} },
+    { id:"forensic",   label:"🧪 Forensic Dump",       cls:"drw-btn--neutral",shortcut:"S", sev:"info",
+      confirm:{text:"Dump full RFC payload and caller chain",effects:["Capture full request payload","Reconstruct caller chain","Seal in incident vault with hash"],blast:"Read-only — evidence capture only"} },
+    { id:"sweep",      label:"🔍 Sweep for More",      cls:"drw-btn--neutral",shortcut:"W", sev:"info",
+      confirm:{text:"Scan all tenants for similar shadow endpoints",effects:["Pattern-match against recent RFC events","Build similarity report across tenants"],blast:"Read-only scan across all tenants"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   comp: [
-    { id:"fix",        label:"⚡ Apply Control",      cls:"drw-btn--fix" },
-    { id:"evidence",   label:"📎 Attach Evidence",   cls:"drw-btn--neutral",toast:ev=>`📎 Evidence pack built for ${ev.framework} ${ev.control_id}`, sev:"info" },
-    { id:"legal",      label:"⚖️ Notify Legal",      cls:"drw-btn--neutral",toast:()=>`⚖️ Legal + Compliance teams paged with framework mapping`, sev:"info" },
-    { id:"exception",  label:"📝 File Exception",    cls:"drw-btn--block",  toast:()=>`📝 Compensating-control exception filed — expires in 90d`, sev:"warning" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Apply Control",        cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Apply the recommended compensating control",effects:["Evaluate control requirement","Apply remediation","Log evidence in compliance ledger"],blast:"Affects: 1 compliance finding"} },
+    { id:"evidence",   label:"📎 Attach Evidence",     cls:"drw-btn--neutral",shortcut:"V", sev:"info",
+      confirm:{text:"Build and attach evidence pack",effects:["Collect evidence artefacts for this control","Package as auditor-ready bundle","Link to compliance finding record"],blast:"Read-only — generates downloadable evidence"} },
+    { id:"legal",      label:"⚖️ Notify Legal",        cls:"drw-btn--neutral",shortcut:"L", sev:"info",
+      confirm:{text:"Notify Legal and Compliance teams",effects:["Page Legal with framework mapping","Page Compliance team with control gap detail"],blast:"Affects: Legal + Compliance escalation queue"} },
+    { id:"exception",  label:"📝 File Exception",      cls:"drw-btn--block",  shortcut:"X", sev:"warning",
+      confirm:{text:"File a compensating-control exception",effects:["Create exception record EXC-####","Set 90-day expiry","Notify approver for sign-off"],blast:"Creates formal risk acceptance record"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   incident: [
-    { id:"fix",        label:"⚡ Run Playbook",       cls:"drw-btn--fix" },
-    { id:"contain",    label:"🔒 Contain Now",       cls:"drw-btn--block",  toast:()=>`🔒 Containment steps fired — network ACL + EDR isolation active`, sev:"warning" },
-    { id:"war_room",   label:"🚨 Open War Room",    cls:"drw-btn--block",  toast:ev=>`🚨 Zoom bridge opened for ${ev.incident_id} — SOC + IR + Legal invited`, sev:"warning" },
-    { id:"handoff",    label:"🤝 Hand to IR",        cls:"drw-btn--neutral",toast:()=>`🤝 Escalated to L3 IR team — SLA clock at 15m`, sev:"info" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Run Playbook",         cls:"drw-btn--fix",    shortcut:"P",
+      confirm:{text:"Execute the full incident response playbook",effects:["Contain — network ACL + EDR isolation","Eradicate — malicious artefacts removed","Recover — restore from clean snapshot","Schedule post-incident review"],blast:"Affects: incident scope · may terminate active sessions"} },
+    { id:"contain",    label:"🔒 Contain Now",         cls:"drw-btn--block",  shortcut:"C", sev:"warning",
+      confirm:{text:"Immediately activate containment",effects:["Apply network ACL block","Activate EDR isolation mode","Notify IR team"],blast:"Affects: network access for this incident's scope"} },
+    { id:"war_room",   label:"🚨 Open War Room",       cls:"drw-btn--block",  shortcut:"W", sev:"warning",
+      confirm:{text:"Open a war room bridge for this incident",effects:["Create meeting bridge URL","Invite SOC + IR + Legal","Share incident context automatically"],blast:"Notifies: SOC · IR · Legal teams"} },
+    { id:"handoff",    label:"🤝 Hand to IR",          cls:"drw-btn--neutral",shortcut:"H", sev:"info",
+      confirm:{text:"Escalate to L3 Incident Response team",effects:["Package full incident dossier","Assign to L3 IR team","Start 15-minute SLA clock"],blast:"Affects: L3 IR on-call queue"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   sbom: [
-    { id:"fix",        label:"⚡ Apply Patch",        cls:"drw-btn--fix" },
-    { id:"pin",        label:"📌 Pin Safe Version",  cls:"drw-btn--block",  toast:ev=>`📌 ${ev.target} pinned to safe version across all environments`, sev:"warning" },
-    { id:"isolate",    label:"🔒 Isolate Component", cls:"drw-btn--block",  toast:ev=>`🔒 ${ev.target} network-isolated pending patch rollout`, sev:"warning" },
-    { id:"cve_ticket", label:"🎫 File CVE Ticket",   cls:"drw-btn--neutral",toast:()=>`🎫 CVE ticket opened — SLA 30d for CVSS ≥7`, sev:"info" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Apply Patch",          cls:"drw-btn--fix",    shortcut:"P",
+      confirm:{text:"Apply available patch for this SBOM finding",effects:["Identify safe version","Apply patch in staging then production","Update SBOM inventory"],blast:"Affects: deployment pipeline · running services"} },
+    { id:"pin",        label:"📌 Pin Safe Version",    cls:"drw-btn--block",  shortcut:"V", sev:"warning",
+      confirm:{text:"Pin this component to a safe version",effects:["Update lock files across all environments","Block automatic upgrades past safe version"],blast:"Affects: build pipeline for all environments"} },
+    { id:"isolate",    label:"🔒 Isolate Component",   cls:"drw-btn--block",  shortcut:"I", sev:"warning",
+      confirm:{text:"Network-isolate this vulnerable component",effects:["Apply egress deny rules for this component","Monitor for lateral movement attempts"],blast:"Affects: component network access"},
+      reversible:true },
+    { id:"cve_ticket", label:"🎫 File CVE Ticket",     cls:"drw-btn--neutral",shortcut:"T", sev:"info",
+      confirm:{text:"Open a CVE tracking ticket",effects:["Create CVE-TRACK-#### ticket","Set 30-day SLA for CVSS ≥7"],blast:"Affects: security backlog queue"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   zt: [
-    { id:"fix",        label:"⚡ Update Policy",      cls:"drw-btn--fix" },
-    { id:"mfa",        label:"🔐 Require MFA",       cls:"drw-btn--block",  toast:ev=>`🔐 MFA enforcement added for ${ev.user_id} on all SAP surfaces`, sev:"warning" },
-    { id:"isolate",    label:"🔒 Isolate Session",   cls:"drw-btn--block",  toast:()=>`🔒 Session terminated + device posture re-evaluated`, sev:"warning" },
-    { id:"reeval",     label:"🔁 Re-eval All Sessions", cls:"drw-btn--neutral",toast:()=>`🔁 Policy broadcast — ${_int(400,900)} active sessions re-evaluated`, sev:"info" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Update Policy",        cls:"drw-btn--fix",    shortcut:"U",
+      confirm:{text:"Update Zero-Trust policy for this finding",effects:["Evaluate applicable policy matrix","Apply least-privilege update","Broadcast to all Zero-Trust nodes"],blast:"Affects: Zero-Trust policy enforcement across all nodes"} },
+    { id:"mfa",        label:"🔐 Require MFA",         cls:"drw-btn--block",  shortcut:"M", sev:"warning",
+      confirm:{text:"Enforce MFA for this user on all SAP surfaces",effects:["Tag user as mfa_required","Force MFA challenge on next request","Propagate to all SAP authentication surfaces"],blast:"Affects: 1 user · all SAP access"},
+      reversible:true },
+    { id:"isolate",    label:"🔒 Isolate Session",     cls:"drw-btn--block",  shortcut:"I", sev:"warning",
+      confirm:{text:"Terminate session and re-evaluate device posture",effects:["Terminate all active sessions","Re-evaluate device posture score","Lock account pending re-authentication"],blast:"Affects: 1 user · all active sessions"},
+      destructive:true, reversible:true },
+    { id:"reeval",     label:"🔁 Re-eval All Sessions",cls:"drw-btn--neutral",shortcut:"R", sev:"info",
+      confirm:{text:"Broadcast policy update — re-evaluate all active sessions",effects:["Push updated policy to all session validators","Terminate non-compliant sessions"],blast:"Affects: 400–900 active sessions"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   cred: [
-    { id:"fix",        label:"⚡ Rotate Now",         cls:"drw-btn--fix" },
-    { id:"revoke",     label:"🚫 Revoke Credential", cls:"drw-btn--block",  toast:ev=>`🚫 Credential ${ev.key} revoked — downstream services notified`, sev:"warning" },
-    { id:"owner",      label:"👤 Quarantine Owner",  cls:"drw-btn--block",  toast:()=>`👤 Credential owner's account locked pending review`, sev:"warning" },
-    { id:"vault_scan", label:"🗝️ Vault Sweep",      cls:"drw-btn--neutral",toast:()=>`🗝️ Full credential vault swept for related keys`, sev:"info" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Rotate Now",           cls:"drw-btn--fix",    shortcut:"R",
+      confirm:{text:"Rotate this credential immediately",effects:["Generate new credential","Update vault with new value","Notify downstream services of rotation"],blast:"Affects: all services using this credential"} },
+    { id:"revoke",     label:"🚫 Revoke Credential",   cls:"drw-btn--block",  shortcut:"V", sev:"warning",
+      confirm:{text:"Revoke this credential permanently",effects:["Revoke credential in vault","Add to revocation list","Notify all downstream services"],blast:"Affects: all services using this credential"},
+      reversible:true },
+    { id:"owner",      label:"👤 Quarantine Owner",    cls:"drw-btn--block",  shortcut:"Q", sev:"warning",
+      confirm:{text:"Lock the credential owner's account",effects:["Terminate all active sessions","Lock account in identity provider","Flag for security review"],blast:"Affects: 1 user account"},
+      destructive:true, reversible:true },
+    { id:"vault_scan", label:"🗝️ Vault Sweep",        cls:"drw-btn--neutral",shortcut:"S", sev:"info",
+      confirm:{text:"Sweep the credential vault for related keys",effects:["Scan for credentials sharing secrets or prefixes","Build relationship map","Generate match report"],blast:"Read-only scan of credential vault"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   cloud: [
-    { id:"fix",        label:"⚡ Auto-Remediate",     cls:"drw-btn--fix" },
-    { id:"isolate",    label:"🔒 Isolate Resource",  cls:"drw-btn--block",  toast:ev=>`🔒 ${ev.resource_id} network-isolated + SG rewritten`, sev:"warning" },
-    { id:"rotate",     label:"🔑 Rotate Cloud Keys", cls:"drw-btn--block",  toast:ev=>`🔑 ${ev.provider?.toUpperCase()} keys rotated across account`, sev:"warning" },
-    { id:"csp_ticket", label:"🎫 Open CSP Ticket",   cls:"drw-btn--neutral",toast:ev=>`🎫 ${ev.provider?.toUpperCase()} support ticket opened with finding detail`, sev:"info" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Auto-Remediate",       cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Auto-remediate this cloud misconfiguration",effects:["Apply least-privilege policy to resource","Verify configuration drift resolved","Log remediation in cloud audit trail"],blast:"Affects: cloud resource configuration"} },
+    { id:"isolate",    label:"🔒 Isolate Resource",    cls:"drw-btn--block",  shortcut:"I", sev:"warning",
+      confirm:{text:"Network-isolate this cloud resource",effects:["Rewrite Security Group to deny all","Preserve resource state for forensics"],blast:"Affects: this cloud resource's network access"},
+      reversible:true },
+    { id:"rotate",     label:"🔑 Rotate Cloud Keys",   cls:"drw-btn--block",  shortcut:"K", sev:"warning",
+      confirm:{text:"Rotate cloud provider access keys",effects:["Generate new access key pair","Update secrets manager","Notify dependent services"],blast:"Affects: all services using these cloud keys"} },
+    { id:"csp_ticket", label:"🎫 Open CSP Ticket",     cls:"drw-btn--neutral",shortcut:"T", sev:"info",
+      confirm:{text:"Open a support ticket with the cloud provider",effects:["Create P1 ticket with finding detail","Attach misconfiguration evidence"],blast:"Affects: cloud provider support queue"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   gateway: [
-    { id:"fix",        label:"⚡ Fix It Now",         cls:"drw-btn--fix" },
-    { id:"block_ip",   label:"🚫 Block Source IP",    cls:"drw-btn--block",  toast:ev=>`🚫 IP ${ev.source_ip||"?"} blocked at gateway`, sev:"warning" },
-    { id:"rate_limit", label:"🐢 Rate-Limit",         cls:"drw-btn--block",  toast:()=>`🐢 Rate-limit rule installed (10 req/min) for source`, sev:"warning" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Fix It Now",           cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Block source IP and apply gateway rule",effects:["Add source IP to gateway blocklist","Propagate rule to all gateway nodes"],blast:"Affects: all traffic from this source IP"} },
+    { id:"block_ip",   label:"🚫 Block Source IP",      cls:"drw-btn--block",  shortcut:"B", sev:"warning",
+      confirm:{text:"Block this IP at the API gateway",effects:["Add to gateway IP blocklist","Tag future events from this IP as BLOCKED"],blast:"Affects: all traffic from this source IP"},
+      reversible:true },
+    { id:"rate_limit", label:"🐢 Rate-Limit",           cls:"drw-btn--block",  shortcut:"L", sev:"warning",
+      confirm:{text:"Apply rate-limiting rule for this source",effects:["Install rate-limit rule (10 req/min)","Confirm rule active at all gateway nodes"],blast:"Affects: this source IP's request throughput"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
   rules: [
-    { id:"fix",        label:"⚡ Apply Rule",         cls:"drw-btn--fix" },
-    { id:"tune",       label:"🎛️ Tune Threshold",    cls:"drw-btn--neutral",toast:()=>`🎛️ Rule threshold tuned based on last 7d telemetry`, sev:"info" },
-    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+    { id:"fix",        label:"⚡ Apply Rule",           cls:"drw-btn--fix",    shortcut:"A",
+      confirm:{text:"Apply this rule action and suppress the alert",effects:["Execute rule enforcement action","Suppress parent alert","Log rule trigger in action log"],blast:"Affects: this alert · rule engine state"} },
+    { id:"tune",       label:"🎛️ Tune Threshold",      cls:"drw-btn--neutral",shortcut:"T", sev:"info",
+      confirm:{text:"Auto-tune this rule's threshold from recent telemetry",effects:["Analyse last 7d telemetry for this rule","Compute optimal threshold","Update rule registry — takes effect immediately"],blast:"Affects: all future evaluations of this rule"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
   ],
 };
 
 function _drwActionButtons(type, idx, ev) {
   const acts = DRW_ACTIONS[type] || DRW_ACTIONS.alert;
   return acts.map(a => {
-    if (a.id==="fix")    return `<button onclick="applyFix('${type}',${idx})" class="drw-btn ${a.cls}">${a.label}</button>`;
-    if (a.id==="report") return `<button onclick="downloadReport()" class="drw-btn ${a.cls}">${a.label}</button>`;
-    return `<button onclick="runDrwAction('${a.id}')" class="drw-btn ${a.cls}">${a.label}</button>`;
+    const hint = a.shortcut ? `<span class="drw-shortcut">${a.shortcut}</span>` : "";
+    if (a.id==="report") return `<button onclick="downloadReport()" class="drw-btn ${a.cls}">${a.label}${hint}</button>`;
+    return `<button onclick="runDrwActionPhased('${a.id}',${idx})" class="drw-btn ${a.cls}">${a.label}${hint}</button>`;
   }).join("");
 }
 
-function runDrwAction(actionId) {
-  const ctx = window._drwCtx; if (!ctx) return;
-  const acts = DRW_ACTIONS[ctx.type] || DRW_ACTIONS.alert;
-  const a = acts.find(x=>x.id===actionId);
-  if (!a) return;
-  const msg = typeof a.toast === "function" ? a.toast(ctx.ev) : (a.toast||"Action executed");
-  showToast(msg, a.sev||"info", 4200);
+// ── Operator identity ─────────────────────────────────────────
+function _getOperator() { return localStorage.getItem("is_operator") || ""; }
+
+function _getOrPromptOperator() {
+  const op = _getOperator();
+  if (op) return Promise.resolve(op);
+  return new Promise(resolve => {
+    const modal = document.getElementById("operator-modal");
+    const input = document.getElementById("operator-name-input");
+    if (!modal || !input) { resolve("anonymous"); return; }
+    modal.classList.remove("hidden");
+    input.value = "";
+    input.focus();
+    window._operatorResolve = resolve;
+  });
 }
 
-// ── Report download (unique per scenario / type) ──────────────
+function _saveOperatorName() {
+  const input = document.getElementById("operator-name-input");
+  const name = input?.value.trim();
+  if (!name) { input?.focus(); return; }
+  localStorage.setItem("is_operator", name);
+  document.getElementById("operator-modal")?.classList.add("hidden");
+  if (window._operatorResolve) { window._operatorResolve(name); window._operatorResolve = null; }
+}
+
+// ── 4-Phase action dispatcher ─────────────────────────────────
+let _pendingAction = null;
+
+async function runDrwActionPhased(actionId, idx) {
+  const ctx = window._drwCtx; if (!ctx) return;
+  const { type, ev } = ctx;
+  const acts = DRW_ACTIONS[type] || DRW_ACTIONS.alert;
+  const a = acts.find(x => x.id === actionId);
+  if (!a) return;
+
+  const operator = await _getOrPromptOperator();
+  if (!operator) return;
+
+  // Phase 1 — Confirm
+  if (a.confirm) {
+    const confirmed = await _showActionConfirm(a, ev);
+    if (!confirmed) return;
+  }
+
+  // Phase 2 — Execute
+  _showActionProgress([]);
+  let result;
+  try {
+    const resp = await fetch("/api/actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ drawer_type: type, action_id: actionId, event: ev, operator }),
+    });
+    result = await resp.json();
+  } catch(err) {
+    _hideActionProgress();
+    showToast(`Action failed: ${err.message}`, "critical", 5000);
+    return;
+  }
+
+  // Phase 3 — Animate steps
+  await _animateActionProgress(result.steps || []);
+
+  // Phase 4 — Receipt + side-effects
+  _showActionReceipt(result, a);
+
+  if (result.reversible && result.undo_token) {
+    showToastWithUndo(`✅ ${a.label} applied`, a.sev || "success", 5500, result.undo_token, result.undo_label || "Undo");
+  } else {
+    showToast(`✅ ${a.label} complete`, a.sev || "success", 4000);
+  }
+
+  const eventKey = `${type}-${ev.ts || ev.incident_id || idx}`;
+  _saveActionReceipt(eventKey, { action: a.label, action_id: result.action_id, ts: result.ts, side_effects: result.side_effects || [], artifacts: result.artifacts || [] });
+
+  // For fix actions run the existing visual resolver too
+  if (actionId === "fix") applyFix(type, idx !== undefined ? idx : (ctx.idx || 0));
+
+  // Inject new incident into incidents tab if escalated
+  if (actionId === "elevate" && result.incident_id) _injectIncident(result, ev);
+
+  // Mark user as isolated across the board
+  if ((actionId === "quarantine" || actionId === "isolate") && ev.user_id) {
+    window._isolatedUsers = window._isolatedUsers || new Set();
+    window._isolatedUsers.add(ev.user_id);
+  }
+}
+
+// ── Confirm modal ─────────────────────────────────────────────
+function _showActionConfirm(action, ev) {
+  return new Promise(resolve => {
+    const modal = document.getElementById("action-confirm-modal");
+    if (!modal) { resolve(true); return; }
+    const icon  = action.label.match(/^([\p{Emoji}]+)/u)?.[1] || "⚡";
+    document.getElementById("acm-icon").textContent  = icon;
+    document.getElementById("acm-title").textContent = action.label;
+    document.getElementById("acm-scope").textContent = action.confirm?.blast || "";
+    const effectsEl = document.getElementById("acm-effects");
+    effectsEl.innerHTML = (action.confirm?.effects || []).map(e => `<div class="action-modal-effect">${e}</div>`).join("");
+    const wrapEl  = document.getElementById("acm-confirm-input-wrap");
+    const inputEl = document.getElementById("acm-confirm-input");
+    const execBtn = document.getElementById("acm-execute-btn");
+    if (action.destructive && ev.user_id) {
+      document.getElementById("acm-confirm-label").textContent = `Type "${ev.user_id}" to confirm:`;
+      wrapEl.classList.remove("hidden");
+      inputEl.value = "";
+      execBtn.disabled = true;
+      execBtn.style.opacity = "0.5";
+    } else {
+      wrapEl.classList.add("hidden");
+      execBtn.disabled = false;
+      execBtn.style.opacity = "";
+    }
+    window._confirmResolve = resolve;
+    window._confirmDestructiveTarget = action.destructive ? (ev.user_id || "") : null;
+    modal.classList.remove("hidden");
+    setTimeout(() => (action.destructive ? inputEl : execBtn)?.focus(), 50);
+  });
+}
+
+function _checkConfirmInput() {
+  const inputEl = document.getElementById("acm-confirm-input");
+  const execBtn = document.getElementById("acm-execute-btn");
+  const target  = window._confirmDestructiveTarget;
+  if (!target) return;
+  const match = inputEl.value.trim() === target;
+  execBtn.disabled = !match;
+  execBtn.style.opacity = match ? "" : "0.5";
+}
+
+function _dismissActionConfirm() {
+  document.getElementById("action-confirm-modal")?.classList.add("hidden");
+  if (window._confirmResolve) { window._confirmResolve(false); window._confirmResolve = null; }
+}
+
+function _executeConfirmedAction() {
+  document.getElementById("action-confirm-modal")?.classList.add("hidden");
+  if (window._confirmResolve) { window._confirmResolve(true); window._confirmResolve = null; }
+}
+
+// ── Progress strip ────────────────────────────────────────────
+function _showActionProgress(steps) {
+  const actionsEl = document.getElementById("drw-actions");
+  if (!actionsEl) return;
+  let existing = document.getElementById("drw-progress");
+  if (!existing) {
+    existing = document.createElement("div");
+    existing.id = "drw-progress";
+    actionsEl.after(existing);
+  }
+  existing.innerHTML = `<div class="drw-progress-title">Executing…</div>
+    <div class="drw-progress-step active"><span class="drw-step-dot"></span>Connecting to backend…</div>`;
+  existing.style.display = "";
+}
+
+async function _animateActionProgress(steps) {
+  const el = document.getElementById("drw-progress");
+  if (!el || !steps.length) { await _sleep(600); return; }
+  el.innerHTML = `<div class="drw-progress-title">Executing action</div>` +
+    steps.map((s, i) => `<div class="drw-progress-step" id="prog-step-${i}"><span class="drw-step-dot"></span>${s}</div>`).join("");
+  for (let i = 0; i < steps.length; i++) {
+    const prev = document.getElementById(`prog-step-${i - 1}`);
+    if (prev) { prev.classList.remove("active"); prev.classList.add("done"); }
+    const cur = document.getElementById(`prog-step-${i}`);
+    if (cur) cur.classList.add("active");
+    await _sleep(i === 0 ? 300 : 480 + Math.random() * 320);
+  }
+  const last = document.getElementById(`prog-step-${steps.length - 1}`);
+  if (last) { last.classList.remove("active"); last.classList.add("done"); }
+  await _sleep(250);
+}
+
+function _hideActionProgress() {
+  const el = document.getElementById("drw-progress");
+  if (el) el.style.display = "none";
+}
+
+function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Receipt card ──────────────────────────────────────────────
+function _showActionReceipt(result, action) {
+  let el = document.getElementById("drw-receipt");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "drw-receipt";
+    const prog = document.getElementById("drw-progress");
+    (prog || document.getElementById("drw-actions"))?.after(el);
+  }
+  const effects = (result.side_effects || []).map(e => `<div class="drw-receipt-effect">${e}</div>`).join("");
+  const artifacts = (result.artifacts || []).filter(a => a.name && a.content).map(a =>
+    `<button class="drw-artifact-btn" onclick="_downloadArtifact(${JSON.stringify(a.name)},${JSON.stringify(a.content)},${JSON.stringify(a.mime||'text/plain')})">📎 ${a.name}</button>`
+  ).join("");
+  el.innerHTML = `
+    <div class="drw-receipt-header">
+      ✅ ${action.label} — Completed
+      <span class="drw-receipt-id">${result.action_id || ""}</span>
+    </div>
+    ${effects}
+    ${artifacts ? `<div class="drw-receipt-artifacts">${artifacts}</div>` : ""}`;
+}
+
+function _downloadArtifact(name, content, mime) {
+  const blob = new Blob([content], { type: mime + ";charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+  showToast(`📎 ${name} downloaded`, "success", 3000);
+}
+
+// ── Toast with Undo ───────────────────────────────────────────
+function showToastWithUndo(message, type, duration, undoToken, undoLabel) {
+  if (!toastContainer) return;
+  const t = document.createElement("div");
+  t.className = `toast toast-${type}`;
+  t.innerHTML = `<span class="toast-icon">${type==="critical"?"🔴":type==="warning"?"🟡":type==="success"?"🟢":"🔵"}</span>
+    <span class="toast-message">${message}</span>
+    <button class="toast-close" style="background:rgba(76,130,247,.2);color:#7ab3f7;border-color:rgba(76,130,247,.3);margin-right:.35rem;padding:.2rem .5rem;font-size:.7rem" onclick="_undoAction('${undoToken}',this.closest('.toast'))">${undoLabel}</button>
+    <button class="toast-close" onclick="this.parentElement.remove()">×</button>`;
+  toastContainer.prepend(t);
+  requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add("toast-visible")));
+  setTimeout(() => { t.classList.remove("toast-visible"); setTimeout(() => t.remove(), 300); }, duration);
+}
+
+async function _undoAction(token, toastEl) {
+  toastEl?.remove();
+  try {
+    const resp = await fetch("/api/actions/undo", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ undo_token: token }),
+    });
+    const r = await resp.json();
+    showToast(r.status === "ok" ? "↩ Action reversed successfully" : `Undo failed: ${r.message}`,
+              r.status === "ok" ? "success" : "warning", 4000);
+  } catch(e) { showToast(`Undo failed: ${e.message}`, "warning", 4000); }
+}
+
+// ── Receipt persistence ───────────────────────────────────────
+function _saveActionReceipt(eventKey, receipt) {
+  try {
+    const key = "is_receipts";
+    const all = JSON.parse(localStorage.getItem(key) || "{}");
+    if (!all[eventKey]) all[eventKey] = [];
+    all[eventKey].unshift(receipt);
+    all[eventKey] = all[eventKey].slice(0, 10);
+    const keys = Object.keys(all);
+    if (keys.length > 50) keys.slice(50).forEach(k => delete all[k]);
+    localStorage.setItem(key, JSON.stringify(all));
+  } catch(e) {}
+}
+
+function _loadActionReceipts(eventKey) {
+  try { return JSON.parse(localStorage.getItem("is_receipts") || "{}")[eventKey] || []; }
+  catch(e) { return []; }
+}
+
+function _renderDrawerHistory(type, idx, ev) {
+  const eventKey = `${type}-${ev?.ts || ev?.incident_id || idx}`;
+  const receipts = _loadActionReceipts(eventKey);
+  if (!receipts.length) return "";
+  const items = receipts.map(r =>
+    `<div class="drw-history-item">
+      <span>${r.action}</span>
+      <span style="font-size:.65rem;font-family:monospace;color:#4a6080">${r.ts ? new Date(r.ts).toLocaleTimeString() : ""}</span>
+    </div>`).join("");
+  return `<div class="drw-history"><div class="drw-history-title">Prior actions on this event</div>${items}</div>`;
+}
+
+// ── Inject new incident into incidents tab ────────────────────
+function _injectIncident(result, ev) {
+  const inc = {
+    incident_id: result.incident_id,
+    status: "open",
+    severity: "critical",
+    source_module: "soc-action",
+    playbook_id: "auto-escalate",
+    ts: result.ts || new Date().toISOString(),
+    scenario: ev.scenario || "anomaly",
+    user_id: ev.user_id,
+    source_ip: ev.source_ip,
+  };
+  incEvents.unshift(inc);
+  if (currentTab === "incidents") renderIncidents();
+  showToast(`🚨 Incident ${result.incident_id} created — visible in Incidents tab`, "warning", 5000);
+}
+
+// ── Action Log tab renderer ───────────────────────────────────
+async function renderActionLog() {
+  const tbody = document.getElementById("action-log-body");
+  const emptyEl = document.getElementById("action-log-empty");
+  if (!tbody) return;
+  const typeFilter  = document.getElementById("al-type-filter")?.value  || "";
+  const actorFilter = document.getElementById("al-actor-filter")?.value || "";
+  try {
+    const params = new URLSearchParams({ limit: "100" });
+    if (typeFilter)  params.set("type",  typeFilter);
+    if (actorFilter) params.set("actor", actorFilter);
+    const resp = await fetch(`/api/actions?${params}`);
+    const data = await resp.json();
+    const rows = data.actions || [];
+    if (emptyEl) emptyEl.classList.toggle("hidden", rows.length > 0);
+    // Populate actor filter with unique operators
+    const actorSel = document.getElementById("al-actor-filter");
+    if (actorSel) {
+      const operators = [...new Set(rows.map(r => r.operator).filter(Boolean))];
+      const cur = actorSel.value;
+      actorSel.innerHTML = `<option value="">All operators</option>` +
+        operators.map(o => `<option value="${o}" ${o===cur?"selected":""}>${o}</option>`).join("");
+    }
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td style="white-space:nowrap;color:#7a93b4">${r.ts ? new Date(r.ts).toLocaleString() : "—"}</td>
+        <td style="font-family:monospace;font-size:.68rem;color:#4a6080">${r.action_id || "—"}</td>
+        <td style="font-weight:600;color:#eaf0f7">${r.operator || "—"}</td>
+        <td><span class="al-badge al-badge-type">${r.drawer_type || "—"}</span></td>
+        <td>${r.action_id_label || "—"}</td>
+        <td style="color:#7a93b4;font-size:.71rem">${r.event_user ? `👤 ${r.event_user}` : ""}${r.event_source_ip ? ` · ${r.event_source_ip}` : ""}</td>
+        <td style="color:#b0c4de;font-size:.71rem">${(r.side_effects || []).slice(0,1).join("") || "—"}</td>
+        <td><span class="al-badge al-badge-ok">${r.status || "ok"}</span></td>
+      </tr>`).join("") || `<tr><td colspan="8" style="color:#7a93b4;text-align:center;padding:1rem">No actions yet</td></tr>`;
+  } catch(e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:#7a93b4;text-align:center">Backend unavailable</td></tr>`;
+  }
+}
+
+// ── Keyboard shortcuts inside open drawer ─────────────────────
+document.addEventListener("keydown", e => {
+  const overlay = document.getElementById("detail-overlay");
+  if (!overlay || overlay.classList.contains("hidden")) return;
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  const ctx = window._drwCtx; if (!ctx) return;
+  const acts = DRW_ACTIONS[ctx.type] || [];
+  const a = acts.find(x => x.shortcut && x.shortcut.toLowerCase() === e.key.toLowerCase());
+  if (!a) return;
+  e.preventDefault();
+  if (a.id === "report") downloadReport();
+  else runDrwActionPhased(a.id, ctx.idx);
+});
+
+// ── Report download — MD + JSON + PDF ────────────────────────
 function downloadReport() {
   const ctx = window._drwCtx; if (!ctx) { showToast("No event context","warning"); return; }
   const { type, ev } = ctx;
-  const md = _buildReportMarkdown(type, ev);
-  const stamp = new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
+  const stamp       = new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
   const scenarioTag = (ev.scenario||type).replace(/[^a-z0-9_-]/gi,"_").toLowerCase();
-  const fname = `IntegriShield_${type}_${scenarioTag}_${stamp}.md`;
-  const blob = new Blob([md], { type:"text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  const base        = `IntegriShield_${type}_${scenarioTag}_${stamp}`;
+
+  // 1 — Markdown
+  const md = _buildReportMarkdown(type, ev);
+  _dlBlob(md, `${base}.md`, "text/markdown");
+
+  // 2 — JSON
+  const jsonData = {
+    report_id:    base,
+    generated_at: new Date().toISOString(),
+    operator:     _getOperator() || "anonymous",
+    drawer_type:  type,
+    scenario:     ev.scenario || type,
+    event:        ev,
+    receipts:     _loadActionReceipts(`${type}-${ev.ts || ""}`),
+  };
+  _dlBlob(JSON.stringify(jsonData, null, 2), `${base}.json`, "application/json");
+
+  // 3 — PDF via hidden print iframe
+  _printReportPDF(type, ev, md, base);
+
+  showToast(`📄 Report bundle downloaded — MD + JSON + PDF`, "success", 4500);
+}
+
+function _dlBlob(content, fname, mime) {
+  const blob = new Blob([content], { type: mime + ";charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
   a.href = url; a.download = fname;
   document.body.appendChild(a); a.click();
-  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
-  showToast(`📄 Report downloaded — ${fname}`, "success", 4500);
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+}
+
+function _printReportPDF(type, ev, md, base) {
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:210mm;height:297mm;border:none";
+  document.body.appendChild(iframe);
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>${base}</title>
+    <style>
+      body{font-family:system-ui,sans-serif;font-size:12px;line-height:1.6;margin:20mm 18mm;color:#1a1a2e}
+      h1{font-size:18px;border-bottom:2px solid #4c82f7;padding-bottom:8px;color:#1a1a2e}
+      h2{font-size:14px;color:#2c3e6b;margin-top:16px}
+      h3{font-size:12px;color:#3a4a7a}
+      pre,code{background:#f4f6f9;padding:2px 6px;border-radius:3px;font-size:11px}
+      table{width:100%;border-collapse:collapse;margin:8px 0}
+      td,th{border:1px solid #dde3f0;padding:4px 8px;font-size:11px}
+      th{background:#f4f6f9;font-weight:600}
+      .header-meta{color:#666;font-size:11px;margin-bottom:16px}
+      @media print{@page{margin:15mm}}
+    </style></head><body>
+    <div class="header-meta">IntegriShield SOC Platform · ${new Date().toLocaleString()} · Operator: ${_getOperator()||"anonymous"}</div>
+    ${_mdToHtml(md)}
+    </body></html>`;
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  iframe.contentWindow.focus();
+  setTimeout(() => {
+    iframe.contentWindow.print();
+    setTimeout(() => iframe.remove(), 2000);
+  }, 300);
+}
+
+function _mdToHtml(md) {
+  return md
+    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/^- (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>.*<\/li>)/gs, "<ul>$1</ul>")
+    .replace(/\n\n/g, "<br><br>")
+    .replace(/\n/g, "<br>");
 }
 
 function _buildReportMarkdown(type, ev) {
