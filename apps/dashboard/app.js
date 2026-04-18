@@ -3075,7 +3075,7 @@ if (detailOverlay) detailOverlay.addEventListener("click", e=>{ if(e.target===de
 // ── Main sync ─────────────────────────────────────────────────
 async function syncData() {
   try {
-    const [aR,auR,stR,anR,sR,cR,dR,iR,shR,sbR,zR,crR,clR,mR] = await Promise.all([
+    const [aR,auR,stR,anR,sR,cR,dR,iR,shR,sbR,zR,crR,clR,mR,cnR,whR,tfR] = await Promise.all([
       fetch(`${API_BASE}/api/alerts?limit=80`).then(r=>r.json()),
       fetch(`${API_BASE}/api/audit?limit=60`).then(r=>r.json()),
       fetch(`${API_BASE}/api/stats`).then(r=>r.json()),
@@ -3090,6 +3090,9 @@ async function syncData() {
       fetch(`${API_BASE}/api/credentials?limit=60`).then(r=>r.json()),
       fetch(`${API_BASE}/api/cloud-posture?limit=60`).then(r=>r.json()),
       fetch(`${API_BASE}/api/modules/health`).then(r=>r.json()),
+      fetch(`${API_BASE}/api/connectors?limit=60`).then(r=>r.json()).catch(()=>({connectors:[]})),
+      fetch(`${API_BASE}/api/webhooks?limit=60`).then(r=>r.json()).catch(()=>({webhooks:[]})),
+      fetch(`${API_BASE}/api/traffic?limit=60`).then(r=>r.json()).catch(()=>({flows:[]})),
     ]);
 
     if (demo.active) stopDemo();
@@ -3098,6 +3101,7 @@ async function syncData() {
     sapEvents=sR.events||[]; compEvents=cR.findings||[]; dlpEvents=dR.violations||[];
     incEvents=iR.incidents||[]; shadowEvents=shR.detections||[]; sbomEvents=sbR.scans||[];
     ztEvents=zR.evaluations||[]; credEvents=crR.events||[]; cloudEvents=clR.findings||[];
+    connEvents=cnR.connectors||[]; webhookEvents=whR.webhooks||[]; trafficEvents=tfR.flows||[];
 
     if (ui.backendStatus) ui.backendStatus.textContent="connected";
     if (ui.statusDot)     ui.statusDot.className="status-dot online";

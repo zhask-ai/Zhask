@@ -67,7 +67,16 @@ STREAM_KEYS = {
     "sbom":             os.getenv("STREAM_SBOM",             "integrishield:sbom_scan_events"),
     # M15 multi-cloud posture findings
     "cloud_posture":    os.getenv("STREAM_CLOUD_POSTURE",    "integrishield:cloud_posture_events"),
+    # M02 connector sentinel
+    "connectors":       os.getenv("STREAM_CONNECTORS",       "integrishield:connector_events"),
+    # M14 webhook gateway
+    "webhooks":         os.getenv("STREAM_WEBHOOKS",         "integrishield:webhook_events"),
+    # M03 integration traffic analyzer
+    "traffic":          os.getenv("STREAM_TRAFFIC",          "integrishield:traffic_flow_events"),
 }
+
+# Whether the backend should also publish synthetic demo events to all streams
+ENABLE_DEMO_GENERATOR = os.getenv("DEMO_GENERATOR", "1") not in ("0", "false", "no", "off")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -101,7 +110,12 @@ INCIDENTS   = deque(maxlen=200)
 SHADOW      = deque(maxlen=200)
 SBOM_SCANS  = deque(maxlen=200)
 CLOUD       = deque(maxlen=200)
+CONNECTORS_Q= deque(maxlen=200)
+WEBHOOKS    = deque(maxlen=200)
+TRAFFIC     = deque(maxlen=200)
 LOCK        = threading.Lock()
+
+_DEMO_GEN = None  # set in main() once started
 
 BACKEND_STATE = {
     "redis_connected": False,
@@ -268,6 +282,9 @@ def _route_event(stream_name: str, event: dict, started: float):
         "alerts":      _handle_external_alert,
         "sbom":        _handle_sbom,
         "cloud_posture": _handle_cloud,
+        "connectors":  _handle_connector,
+        "webhooks":    _handle_webhook,
+        "traffic":     _handle_traffic,
     }
     fn = handlers.get(stream_name)
     if fn:
@@ -399,6 +416,33 @@ def _handle_external_alert(event: dict):
     event.setdefault("ts", event.get("timestamp_utc", _now_iso()))
     with LOCK:
         ALERTS.appendleft(event)
+
+
+def _handle_connector(event: dict):
+    """M02 connector sentinel event."""
+    event.setdefault("ts", event.get("timestamp_utc", _now_iso()))
+    with LOCK:
+        CONNECTORS_Q.appendleft(event)
+        AUDIT.appendleft({"ts": event["ts"], "actor": "m02-connector-sentinel",
+                          "action": event.get("status", "connector_check"),
+                          "module": "m02-connector-sentinel", "status": "ok"})
+
+
+def _handle_webhook(event: dict):
+    """M14 webhook gateway event."""
+    event.setdefault("ts", event.get("timestamp_utc", _now_iso()))
+    with LOCK:
+        WEBHOOKS.appendleft(event)
+        AUDIT.appendleft({"ts": event["ts"], "actor": "m14-webhook-gateway",
+                          "action": event.get("result", "webhook_received"),
+                          "module": "m14-webhook-gateway", "status": "ok"})
+
+
+def _handle_traffic(event: dict):
+    """M03 traffic analyzer — data-in-transit classification."""
+    event.setdefault("ts", event.get("timestamp_utc", _now_iso()))
+    with LOCK:
+        TRAFFIC.appendleft(event)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -683,6 +727,30 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path == "/api/chat":
             self._json(200, _handle_chat(body))
 
+        elif parsed.path == "/api/demo/replay":
+            scenario = (body.get("scenario") or "all").lower()
+            if _DEMO_GEN is None:
+                self._json(503, {"error": "demo generator not running"}); return
+            count = _DEMO_GEN.replay_scenario(scenario)
+            self._json(200, {"replayed": scenario, "events_published": count})
+
+        elif parsed.path.startswith("/webhook/"):
+            # M14 webhook intake — validates signature presence, rate-limit stub
+            source = parsed.path.rsplit("/", 1)[-1] or "custom"
+            sig = self.headers.get("X-Signature") or self.headers.get("X-Hub-Signature-256")
+            result = "accepted" if sig else "rejected"
+            event = {
+                "source":          source,
+                "result":          result,
+                "signature_valid": bool(sig),
+                "reason":          "signature verified" if sig else "missing signature",
+                "event_type":      body.get("event_type", "push"),
+                "severity":        "high" if result == "rejected" else "low",
+            }
+            if _DEMO_GEN is not None:
+                _DEMO_GEN.publish("webhooks", event)
+            self._json(200 if sig else 401, {"result": result, "source": source})
+
         else:
             self._json(404, {"error": "not found"})
 
@@ -762,6 +830,9 @@ class Handler(BaseHTTPRequestHandler):
             shadow      = list(SHADOW)[:limit]
             sbom        = list(SBOM_SCANS)[:limit]
             cloud       = list(CLOUD)[:limit]
+            connectors  = list(CONNECTORS_Q)[:limit]
+            webhooks    = list(WEBHOOKS)[:limit]
+            traffic     = list(TRAFFIC)[:limit]
 
         routes = {
             "/api/alerts":       lambda: {"alerts":      alerts},
@@ -776,9 +847,35 @@ class Handler(BaseHTTPRequestHandler):
             "/api/shadow":       lambda: {"detections":  shadow},
             "/api/sbom":         lambda: {"scans":       sbom},
             "/api/cloud-posture":lambda: {"findings":    cloud},
+            "/api/connectors":   lambda: {"connectors":  connectors},
+            "/api/webhooks":     lambda: {"webhooks":    webhooks},
+            "/api/traffic":      lambda: {"flows":       traffic},
         }
         if path in routes:
             self._json(200, routes[path]()); return
+
+        # ── Compliance report (per framework) ──────────────────
+        if path == "/api/compliance/report":
+            fw = (params.get("framework", ["SOC2"])[0] or "SOC2").upper()
+            with LOCK:
+                findings = [f for f in COMPLIANCE if str(f.get("framework","")).upper() == fw]
+                total_alerts  = len(ALERTS)
+                total_incid   = len(INCIDENTS)
+            passed = sum(1 for f in findings if f.get("status") == "pass")
+            failed = sum(1 for f in findings if f.get("status") == "fail")
+            controls = sorted({f.get("control_id","") for f in findings if f.get("control_id")})
+            self._json(200, {
+                "framework":       fw,
+                "generated_at":    _now_iso(),
+                "controls_evaluated": len(controls),
+                "controls":        controls,
+                "total_findings":  len(findings),
+                "passed":          passed,
+                "failed":          failed,
+                "posture_score":   round(100 * passed / max(len(findings), 1), 1) if findings else 100.0,
+                "evidence_events": total_alerts + total_incid,
+                "recent_evidence": findings[:20],
+            }); return
 
         # ── Aggregate stats ─────────────────────────────────────
         if path == "/api/stats":
@@ -794,6 +891,9 @@ class Handler(BaseHTTPRequestHandler):
                 n_shadow    = len(SHADOW)
                 n_sbom      = len(SBOM_SCANS)
                 n_cloud     = len(CLOUD)
+                n_conn      = len(CONNECTORS_Q)
+                n_webhook   = len(WEBHOOKS)
+                n_traffic   = len(TRAFFIC)
                 counts      = dict(BACKEND_STATE["counts"])
             critical  = sum(1 for a in all_alerts if a.get("severity") == "critical")
             latencies = [int(a["latencyMs"]) for a in all_alerts if "latencyMs" in a]
@@ -812,6 +912,9 @@ class Handler(BaseHTTPRequestHandler):
                 "shadow_detections":  n_shadow,
                 "sbom_scans":         n_sbom,
                 "cloud_findings":     n_cloud,
+                "connector_events":   n_conn,
+                "webhook_events":     n_webhook,
+                "traffic_flows":      n_traffic,
                 "stream_counts":      counts,
             }); return
 
@@ -937,8 +1040,17 @@ def all_module_statuses() -> list[dict]:
 # ──────────────────────────────────────────────────────────────
 
 def main() -> None:
+    global _DEMO_GEN
     t = threading.Thread(target=stream_consumer_loop, daemon=True)
     t.start()
+
+    if ENABLE_DEMO_GENERATOR:
+        try:
+            from demo_generator import start_demo_generator
+            _DEMO_GEN = start_demo_generator(REDIS_URL, STREAM_KEYS)
+            print(f"  Demo gen   : publishing synthetic events to {len(STREAM_KEYS)} streams")
+        except Exception as exc:
+            print(f"  Demo gen   : DISABLED ({exc})")
 
     server = ThreadingHTTPServer(("0.0.0.0", SERVER_PORT), Handler)
     print("=" * 64)
