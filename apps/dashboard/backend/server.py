@@ -29,6 +29,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+# Ensure backend directory is importable (for action_handlers.py)
+_BACKEND_DIR = str(Path(__file__).resolve().parent)
+if _BACKEND_DIR not in sys.path:
+    sys.path.insert(0, _BACKEND_DIR)
+
 # ──────────────────────────────────────────────────────────────
 # Configuration
 # ──────────────────────────────────────────────────────────────
@@ -734,6 +739,21 @@ class Handler(BaseHTTPRequestHandler):
             count = _DEMO_GEN.replay_scenario(scenario)
             self._json(200, {"replayed": scenario, "events_published": count})
 
+        elif parsed.path == "/api/actions":
+            import action_handlers as ah
+            drawer_type = body.get("drawer_type", "alert")
+            action_id   = body.get("action_id", "fix")
+            ev          = body.get("event", {})
+            operator    = body.get("operator", "anonymous")
+            result      = ah.dispatch(drawer_type, action_id, ev, operator)
+            self._json(200, result)
+
+        elif parsed.path == "/api/actions/undo":
+            import action_handlers as ah
+            token  = body.get("undo_token", "")
+            result = ah.undo_action(token)
+            self._json(200, result)
+
         elif parsed.path.startswith("/webhook/"):
             # M14 webhook intake — validates signature presence, rate-limit stub
             source = parsed.path.rsplit("/", 1)[-1] or "custom"
@@ -917,6 +937,19 @@ class Handler(BaseHTTPRequestHandler):
                 "traffic_flows":      n_traffic,
                 "stream_counts":      counts,
             }); return
+
+        if path == "/api/actions":
+            import action_handlers as ah
+            f_type   = params.get("type",   [None])[0]
+            f_actor  = params.get("actor",  [None])[0]
+            f_action = params.get("action", [None])[0]
+            rows = ah._read_action_log(limit=limit, filter_type=f_type,
+                                       filter_actor=f_actor, filter_action=f_action)
+            self._json(200, {"actions": rows, "total": len(rows)}); return
+
+        if path == "/api/actions/state":
+            import action_handlers as ah
+            self._json(200, ah.get_state_flags()); return
 
         self._json(404, {"error": "not_found"})
 
