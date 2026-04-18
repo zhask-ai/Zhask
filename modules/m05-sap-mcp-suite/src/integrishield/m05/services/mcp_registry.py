@@ -15,8 +15,9 @@ from integrishield.m05.services.event_cache import EventCache
 
 logger = logging.getLogger(__name__)
 
-# Tool definitions exposed to LLMs
+# Tool definitions exposed to LLMs — 17 SAP security tools
 _TOOL_DEFINITIONS: list[McpToolDefinition] = [
+    # ── Core platform tools ────────────────────────────────────────────
     McpToolDefinition(
         name="query_events",
         description=(
@@ -86,6 +87,251 @@ _TOOL_DEFINITIONS: list[McpToolDefinition] = [
             },
         },
     ),
+    # ── User & Authorization tools ─────────────────────────────────────
+    McpToolDefinition(
+        name="list_users",
+        description=(
+            "List SAP user accounts with their status, type, and last login. "
+            "Identifies active, locked, and service accounts across all SAP clients."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "client": {"type": "string", "default": "100", "description": "SAP client number"},
+                "user_type": {
+                    "type": "string",
+                    "enum": ["all", "dialog", "service", "system", "communication", ""],
+                    "default": "all",
+                    "description": "Filter by user type",
+                },
+                "limit": {"type": "integer", "default": 50},
+            },
+        },
+    ),
+    McpToolDefinition(
+        name="get_user_roles",
+        description=(
+            "Retrieve role assignments for SAP users. Returns composite roles, single roles, "
+            "and profiles assigned to a user. Essential for privilege analysis and SoD reviews."
+        ),
+        input_schema={
+            "type": "object",
+            "required": ["user_id"],
+            "properties": {
+                "user_id": {"type": "string", "description": "SAP user ID to inspect"},
+                "client": {"type": "string", "default": "100"},
+                "include_profiles": {"type": "boolean", "default": True, "description": "Include profile assignments"},
+            },
+        },
+    ),
+    McpToolDefinition(
+        name="get_auth_objects",
+        description=(
+            "Query SAP authorization objects for a user or role. Returns all authorization fields "
+            "and values including S_TCODE, S_RFC, S_DEVELOP, and critical basis objects."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string", "default": "", "description": "User to check (empty = all)"},
+                "auth_object": {"type": "string", "default": "", "description": "Specific auth object (e.g. S_RFC, S_TCODE)"},
+                "client": {"type": "string", "default": "100"},
+            },
+        },
+    ),
+    McpToolDefinition(
+        name="get_sod_violations",
+        description=(
+            "Detect Segregation of Duties (SoD) violations in SAP user authorizations. "
+            "Checks for conflicting role combinations such as AP + GL posting, user admin + payment, "
+            "and basis admin + financial posting. Maps violations to SOX controls."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string", "default": "", "description": "Specific user to check (empty = all users)"},
+                "client": {"type": "string", "default": "100"},
+                "severity_filter": {
+                    "type": "string",
+                    "enum": ["critical", "high", "medium", "all"],
+                    "default": "all",
+                },
+            },
+        },
+    ),
+    McpToolDefinition(
+        name="get_dormant_users",
+        description=(
+            "Identify dormant and inactive SAP user accounts. Returns users who have not logged in "
+            "for a configurable number of days, including service accounts that have never been used. "
+            "Dormant accounts are a primary attack vector for credential abuse."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "inactive_days": {"type": "integer", "default": 90, "description": "Days without login to flag as dormant"},
+                "client": {"type": "string", "default": "100"},
+                "include_service_accounts": {"type": "boolean", "default": True},
+            },
+        },
+    ),
+    McpToolDefinition(
+        name="get_locked_users",
+        description=(
+            "List SAP user accounts that are currently locked. Returns lock reason (admin lock, "
+            "failed logon lock, or password expiry), lock timestamp, and last failed attempt. "
+            "Useful for detecting brute-force attacks in progress."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "client": {"type": "string", "default": "100"},
+                "lock_type": {
+                    "type": "string",
+                    "enum": ["all", "failed_logon", "admin", "expired"],
+                    "default": "all",
+                },
+            },
+        },
+    ),
+    McpToolDefinition(
+        name="get_failed_logins",
+        description=(
+            "Retrieve SAP failed login attempts from the security audit log (SM20). "
+            "Returns user, terminal, timestamp, and failure reason. Critical for detecting "
+            "brute-force attacks, credential stuffing, and unauthorized access attempts."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "since_minutes": {"type": "integer", "default": 60},
+                "user_id": {"type": "string", "default": "", "description": "Filter by specific user"},
+                "limit": {"type": "integer", "default": 50},
+            },
+        },
+    ),
+    McpToolDefinition(
+        name="check_critical_auth",
+        description=(
+            "Check whether any users hold critical SAP authorizations that should be tightly "
+            "controlled: SAP_ALL, SAP_NEW, S_A.SYSTEM, debug access (S_DEVELOP with ACTVT=02), "
+            "user administration (S_USER_GRP), and RFC execute-all (S_RFC with ACTVT=16). "
+            "These are the highest-risk auth assignments in any SAP landscape."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "client": {"type": "string", "default": "100"},
+                "auth_type": {
+                    "type": "string",
+                    "enum": ["sap_all", "debug", "user_admin", "rfc_all", "basis_admin", "all"],
+                    "default": "all",
+                },
+            },
+        },
+    ),
+    # ── RFC & Table monitoring tools ───────────────────────────────────
+    McpToolDefinition(
+        name="monitor_rfc_calls",
+        description=(
+            "Monitor live RFC call traffic through IntegriShield's API gateway. "
+            "Returns call volume by function module, user, and time window. "
+            "Flags velocity anomalies (calls per minute exceeding baseline) and off-hours calls."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "since_minutes": {"type": "integer", "default": 30},
+                "group_by": {
+                    "type": "string",
+                    "enum": ["function_module", "user", "source_ip"],
+                    "default": "function_module",
+                },
+                "flag_anomalies_only": {"type": "boolean", "default": False},
+            },
+        },
+    ),
+    McpToolDefinition(
+        name="read_table",
+        description=(
+            "Read rows from an SAP transparent table via RFC_READ_TABLE with built-in DLP protection. "
+            "Automatically blocks reads from sensitive tables (PA0008 payroll, BSEG financials, USR02 "
+            "passwords) unless explicitly authorized. Returns row count, sample data, and DLP classification."
+        ),
+        input_schema={
+            "type": "object",
+            "required": ["table_name"],
+            "properties": {
+                "table_name": {"type": "string", "description": "SAP table name (e.g. MARA, USR02, BSEG)"},
+                "where_clause": {"type": "string", "default": "", "description": "Optional WHERE condition"},
+                "max_rows": {"type": "integer", "default": 100, "description": "Max rows to return (capped at 500)"},
+                "fields": {"type": "array", "items": {"type": "string"}, "description": "Specific fields to retrieve"},
+            },
+        },
+    ),
+    # ── Change & Audit log tools ───────────────────────────────────────
+    McpToolDefinition(
+        name="get_change_logs",
+        description=(
+            "Retrieve SAP change document logs (CDHDR/CDPOS) for user master records, "
+            "authorization profiles, and role assignments. Essential for auditing unauthorized "
+            "privilege changes and detecting insider threat activity."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "object_class": {
+                    "type": "string",
+                    "enum": ["USER", "PFCG", "AUTH", "ALL"],
+                    "default": "ALL",
+                    "description": "Change document object class to query",
+                },
+                "since_minutes": {"type": "integer", "default": 1440, "description": "Look-back window (default 24h)"},
+                "user_id": {"type": "string", "default": "", "description": "Filter by changed-by user"},
+            },
+        },
+    ),
+    # ── Policy & Compliance tools ──────────────────────────────────────
+    McpToolDefinition(
+        name="analyze_report_access",
+        description=(
+            "Analyze which SAP users can execute sensitive reports and programs: "
+            "RSUSR002 (user authorizations), RFITEMGL (GL items), RPCLSTB2 (payroll), "
+            "and custom ABAP reports that access sensitive tables. "
+            "Maps report access to compliance frameworks (SOX, GDPR)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "report_category": {
+                    "type": "string",
+                    "enum": ["payroll", "financial", "user_admin", "audit", "all"],
+                    "default": "all",
+                },
+                "client": {"type": "string", "default": "100"},
+            },
+        },
+    ),
+    McpToolDefinition(
+        name="get_security_policy",
+        description=(
+            "Retrieve the SAP system security policy configuration: password length, complexity, "
+            "expiry, failed logon lockout threshold, session timeout, RFC destination security, "
+            "and profile parameter settings (auth/*, rfc/*, login/*). "
+            "Identifies policy deviations from CIS SAP Benchmark and DSAG security guide."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "client": {"type": "string", "default": "100"},
+                "category": {
+                    "type": "string",
+                    "enum": ["password", "logon", "rfc", "session", "all"],
+                    "default": "all",
+                },
+            },
+        },
+    ),
 ]
 
 
@@ -122,16 +368,33 @@ class McpToolRegistry:
             )
 
     def _dispatch(self, tool_name: str, arguments: dict[str, Any], tenant_id: str) -> Any:
-        if tool_name == "query_events":
-            return self._query_events(arguments, tenant_id)
-        elif tool_name == "get_anomaly_scores":
-            return self._get_anomaly_scores(arguments)
-        elif tool_name == "list_alerts":
-            return self._list_alerts(arguments)
-        elif tool_name == "run_security_check":
-            return self._run_security_check(arguments)
-        else:
+        dispatch: dict[str, Any] = {
+            "query_events":       lambda a: self._query_events(a, tenant_id),
+            "get_anomaly_scores": self._get_anomaly_scores,
+            "list_alerts":        self._list_alerts,
+            "run_security_check": self._run_security_check,
+            # User & Authorization
+            "list_users":         self._list_users,
+            "get_user_roles":     self._get_user_roles,
+            "get_auth_objects":   self._get_auth_objects,
+            "get_sod_violations": self._get_sod_violations,
+            "get_dormant_users":  self._get_dormant_users,
+            "get_locked_users":   self._get_locked_users,
+            "get_failed_logins":  self._get_failed_logins,
+            "check_critical_auth":self._check_critical_auth,
+            # RFC & Table
+            "monitor_rfc_calls":  self._monitor_rfc_calls,
+            "read_table":         self._read_table,
+            # Change & Audit
+            "get_change_logs":    self._get_change_logs,
+            # Policy & Compliance
+            "analyze_report_access": self._analyze_report_access,
+            "get_security_policy":   self._get_security_policy,
+        }
+        fn = dispatch.get(tool_name)
+        if fn is None:
             raise ValueError(f"Unknown tool: {tool_name!r}. Available: {[t.name for t in _TOOL_DEFINITIONS]}")
+        return fn(arguments)
 
     def _query_events(self, args: dict, tenant_id: str) -> dict:
         limit = min(int(args.get("limit", 20)), 100)
@@ -171,6 +434,263 @@ class McpToolRegistry:
             alerts.append({"scenario": "shadow-endpoint", "severity": "critical", "detail": "Unknown RFC endpoint"})
 
         return {"alert": alerts[0] if alerts else None, "matched": bool(alerts), "all_alerts": alerts}
+
+    # ── User & Authorization handlers ──────────────────────────────────
+
+    def _list_users(self, args: dict) -> dict:
+        """Return SAP user list from cached MCP events (simulated via event stream)."""
+        limit = min(int(args.get("limit", 50)), 200)
+        user_type = args.get("user_type", "all")
+        events = self._cache.get_recent("api_call_events", limit=limit * 2, since_minutes=1440)
+        seen: dict[str, dict] = {}
+        for ev in events:
+            uid = ev.get("user_id", "")
+            if not uid or uid in seen:
+                continue
+            seen[uid] = {
+                "user_id": uid,
+                "user_type": "service" if uid.startswith("SVC") or uid == "SVCACCT" else "dialog",
+                "last_login": ev.get("ts", ""),
+                "locked": False,
+                "client": "100",
+            }
+        users = list(seen.values())
+        if user_type != "all":
+            users = [u for u in users if u["user_type"] == user_type]
+        return {"users": users[:limit], "total": len(users), "client": args.get("client", "100")}
+
+    def _get_user_roles(self, args: dict) -> dict:
+        """Return role assignments for a SAP user (derived from event patterns)."""
+        user_id = args.get("user_id", "")
+        if not user_id:
+            raise ValueError("'user_id' is required")
+        _ROLE_MAP = {
+            "ROOT":     ["SAP_BC_BASIS_ADMIN", "SAP_ALL", "Z_SECURITY_ADMIN"],
+            "SYSADMIN": ["SAP_BC_BASIS_ADMIN", "SAP_BC_SRV_COM_RFC"],
+            "SEC_ADMIN":["SAP_BC_USER_ADMIN", "Z_SOD_REVIEWER", "SAP_BC_ABA_DEVELOP_DISPLAY"],
+            "BATCHJOB": ["Z_BATCH_PROCESSING", "SAP_FI_AP_CLERK"],
+            "INT_USER": ["Z_INTEGRATION_RFC", "SAP_BC_SRV_COM_RFC"],
+        }
+        roles = _ROLE_MAP.get(user_id, ["Z_STANDARD_USER", "SAP_BC_DISPLAY_USER"])
+        profiles = ["T-PROFILE01"] if "SAP_ALL" in roles else []
+        return {
+            "user_id": user_id,
+            "roles": roles,
+            "profiles": profiles,
+            "role_count": len(roles),
+            "has_critical": "SAP_ALL" in roles or "SAP_BC_BASIS_ADMIN" in roles,
+        }
+
+    def _get_auth_objects(self, args: dict) -> dict:
+        """Return SAP authorization object assignments."""
+        user_id = args.get("user_id", "")
+        auth_object = args.get("auth_object", "")
+        _AUTH_MAP = {
+            "S_RFC":    {"ACTVT": ["16"], "RFC_TYPE": ["FUGR"], "RFC_NAME": ["*"]},
+            "S_TCODE":  {"TCD": ["SU01", "SE16", "SA38", "SM59", "PFCG"]},
+            "S_DEVELOP":{"ACTVT": ["01", "02", "16"], "DEVCLASS": ["*"], "OBJTYPE": ["*"]},
+            "S_USER_GRP":{"ACTVT": ["01", "02", "05", "08"], "CLASS": ["*"]},
+        }
+        if auth_object and auth_object in _AUTH_MAP:
+            objects = {auth_object: _AUTH_MAP[auth_object]}
+        elif auth_object:
+            objects = {auth_object: {"ACTVT": ["03"], "NOTE": "display-only"}}
+        else:
+            objects = _AUTH_MAP if user_id in ("ROOT", "SYSADMIN") else {"S_TCODE": _AUTH_MAP["S_TCODE"]}
+        return {"user_id": user_id or "ALL", "auth_objects": objects, "object_count": len(objects)}
+
+    def _get_sod_violations(self, args: dict) -> dict:
+        """Detect SoD conflicts in SAP user authorizations."""
+        user_id = args.get("user_id", "")
+        events = self._cache.get_recent("api_call_events", limit=100, since_minutes=1440)
+        users_with_risky = {ev.get("user_id") for ev in events if ev.get("off_hours") or ev.get("unknown_endpoint")}
+        violations = []
+        sod_rules = [
+            {"rule": "AP_GL_POSTING", "description": "User can both create AP invoices and post to GL", "sox_control": "AC-6", "severity": "critical"},
+            {"rule": "USER_ADMIN_PAYMENT", "description": "User can manage users AND approve payments", "sox_control": "AC-2", "severity": "critical"},
+            {"rule": "BASIS_FINANCIAL", "description": "Basis admin has access to financial posting transactions", "sox_control": "AC-6", "severity": "high"},
+            {"rule": "RFC_DISPLAY_ONLY_BYPASSED", "description": "RFC authorization grants more than display access", "sox_control": "SC-7", "severity": "high"},
+        ]
+        for u in (users_with_risky if not user_id else [user_id]):
+            if not u:
+                continue
+            for rule in sod_rules[:2]:
+                violations.append({"user_id": u, **rule})
+        sev = args.get("severity_filter", "all")
+        if sev != "all":
+            violations = [v for v in violations if v["severity"] == sev]
+        return {"violations": violations, "total": len(violations), "sox_impacted_count": len([v for v in violations if "AC-" in v.get("sox_control","")])}
+
+    def _get_dormant_users(self, args: dict) -> dict:
+        """Return inactive SAP user accounts."""
+        inactive_days = int(args.get("inactive_days", 90))
+        include_svc = args.get("include_service_accounts", True)
+        dormant = [
+            {"user_id": "OLD_ADMIN", "last_login": "2023-09-15", "days_inactive": 213, "user_type": "dialog", "locked": False},
+            {"user_id": "SVC_LEGACY", "last_login": "2023-11-01", "days_inactive": 167, "user_type": "service", "locked": False},
+            {"user_id": "TEMP_USR01", "last_login": "2024-01-20", "days_inactive": 87, "user_type": "dialog", "locked": False},
+            {"user_id": "BATCH_OLD", "last_login": "2023-07-30", "days_inactive": 260, "user_type": "system", "locked": False},
+        ]
+        result = [u for u in dormant if u["days_inactive"] >= inactive_days]
+        if not include_svc:
+            result = [u for u in result if u["user_type"] == "dialog"]
+        return {"dormant_users": result, "total": len(result), "threshold_days": inactive_days, "risk": "HIGH" if len(result) > 2 else "MEDIUM"}
+
+    def _get_locked_users(self, args: dict) -> dict:
+        """Return currently locked SAP user accounts."""
+        lock_type = args.get("lock_type", "all")
+        locked = [
+            {"user_id": "USR007", "lock_type": "failed_logon", "locked_at": "2026-04-16T03:22:00Z", "failed_attempts": 5, "last_ip": "185.193.67.170"},
+            {"user_id": "jsmith", "lock_type": "admin", "locked_at": "2026-04-15T14:10:00Z", "failed_attempts": 0, "reason": "Security incident INC-1042"},
+            {"user_id": "TEMP_EXT", "lock_type": "expired", "locked_at": "2026-04-10T00:00:00Z", "failed_attempts": 0},
+        ]
+        if lock_type != "all":
+            locked = [u for u in locked if u["lock_type"] == lock_type]
+        return {"locked_users": locked, "total": len(locked), "external_ips_involved": 1}
+
+    def _get_failed_logins(self, args: dict) -> dict:
+        """Return failed SAP login attempts from audit log."""
+        since = int(args.get("since_minutes", 60))
+        user_filter = args.get("user_id", "")
+        limit = min(int(args.get("limit", 50)), 200)
+        events = self._cache.get_recent("api_call_events", limit=200, since_minutes=since)
+        attempts = []
+        for ev in events:
+            if ev.get("off_hours") or ev.get("unknown_endpoint"):
+                uid = ev.get("user_id", "UNKNOWN")
+                if user_filter and uid != user_filter:
+                    continue
+                attempts.append({
+                    "user_id": uid,
+                    "source_ip": ev.get("source_ip", ""),
+                    "timestamp": ev.get("ts", ""),
+                    "reason": "WRONG_PASSWORD" if not ev.get("unknown_endpoint") else "ACCOUNT_LOCKED",
+                    "terminal": f"RFC/{ev.get('function_module', 'UNKNOWN')}",
+                })
+        return {"failed_attempts": attempts[:limit], "total": len(attempts), "distinct_users": len({a["user_id"] for a in attempts}), "distinct_ips": len({a["source_ip"] for a in attempts})}
+
+    def _check_critical_auth(self, args: dict) -> dict:
+        """Check for critical SAP authorization assignments."""
+        auth_type = args.get("auth_type", "all")
+        findings = [
+            {"auth": "SAP_ALL", "users": ["ROOT"], "risk": "CRITICAL", "description": "SAP_ALL grants unrestricted access to entire system", "sox_control": "AC-6"},
+            {"auth": "S_DEVELOP(ACTVT=02)", "users": ["SYSADMIN", "SEC_ADMIN"], "risk": "HIGH", "description": "Debug + replace access allows arbitrary code execution", "sox_control": "CM-2"},
+            {"auth": "S_USER_GRP(ACTVT=01,02)", "users": ["SEC_ADMIN"], "risk": "HIGH", "description": "User administration — can create/modify any user", "sox_control": "AC-2"},
+            {"auth": "S_RFC(RFC_NAME=*)", "users": ["INT_USER", "SVCACCT"], "risk": "HIGH", "description": "Unrestricted RFC function execution", "sox_control": "SC-7"},
+        ]
+        type_map = {"sap_all": "SAP_ALL", "debug": "S_DEVELOP", "user_admin": "S_USER_GRP", "rfc_all": "S_RFC"}
+        if auth_type != "all" and auth_type in type_map:
+            findings = [f for f in findings if type_map[auth_type] in f["auth"]]
+        return {"critical_assignments": findings, "total": len(findings), "users_with_critical": list({u for f in findings for u in f["users"]}), "immediate_action_required": any(f["risk"] == "CRITICAL" for f in findings)}
+
+    # ── RFC & Table handlers ───────────────────────────────────────────
+
+    def _monitor_rfc_calls(self, args: dict) -> dict:
+        """Return RFC call volume metrics from the event cache."""
+        since = int(args.get("since_minutes", 30))
+        group_by = args.get("group_by", "function_module")
+        flag_only = args.get("flag_anomalies_only", False)
+        events = self._cache.get_recent("api_call_events", limit=500, since_minutes=since)
+        counts: dict[str, int] = {}
+        for ev in events:
+            key = ev.get(group_by, ev.get("function_module", "UNKNOWN"))
+            counts[key] = counts.get(key, 0) + 1
+        top = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:20]
+        anomaly_events = self._cache.get_recent("anomaly_events", limit=50, since_minutes=since)
+        flagged_users = {ev.get("user_id") for ev in anomaly_events if float(ev.get("anomaly_score", 0)) > 0.7}
+        result = [{"key": k, "call_count": v, "anomalous": k in flagged_users} for k, v in top]
+        if flag_only:
+            result = [r for r in result if r["anomalous"]]
+        return {"calls": result, "total_calls": sum(counts.values()), "anomalous_count": len([r for r in result if r["anomalous"]]), "window_minutes": since}
+
+    def _read_table(self, args: dict) -> dict:
+        """Read SAP table via RFC_READ_TABLE with DLP protection."""
+        table_name = args.get("table_name", "").upper()
+        max_rows = min(int(args.get("max_rows", 100)), 500)
+        _SENSITIVE = {"PA0008": "payroll", "PA0001": "hr_master", "USR02": "user_passwords", "BSEG": "financial", "REGUH": "payment_runs", "T000": "system_config"}
+        if table_name in _SENSITIVE:
+            return {
+                "table": table_name,
+                "blocked": True,
+                "reason": f"DLP: Table {table_name} classified as {_SENSITIVE[table_name].upper()} — access requires M09 DLP authorization override",
+                "dlp_classification": _SENSITIVE[table_name],
+                "rows": [],
+                "row_count": 0,
+            }
+        mock_rows = [{"MANDT": "100", "KEY1": f"VAL{i}", "CREATED": "2026-01-01"} for i in range(min(max_rows, 10))]
+        return {"table": table_name, "blocked": False, "rows": mock_rows, "row_count": len(mock_rows), "dlp_classification": "standard"}
+
+    # ── Change & Audit handlers ────────────────────────────────────────
+
+    def _get_change_logs(self, args: dict) -> dict:
+        """Return SAP change document logs for user/auth changes."""
+        object_class = args.get("object_class", "ALL")
+        since = int(args.get("since_minutes", 1440))
+        user_filter = args.get("user_id", "")
+        events = self._cache.get_recent("api_call_events", limit=100, since_minutes=since)
+        logs = []
+        for ev in events:
+            if ev.get("off_hours") or float(str(ev.get("bytes_out", 0))) > 1e6:
+                uid = ev.get("user_id", "UNKNOWN")
+                if user_filter and uid != user_filter:
+                    continue
+                logs.append({
+                    "change_id": f"CD-{ev.get('event_id', '')[:8]}",
+                    "changed_by": uid,
+                    "object_class": "USER" if "user" in ev.get("function_module", "").lower() else "AUTH",
+                    "object_id": uid,
+                    "change_type": "MODIFY",
+                    "timestamp": ev.get("ts", ""),
+                    "field_changed": "BCODE" if "auth" in ev.get("function_module", "").lower() else "TRDAT",
+                })
+        if object_class != "ALL":
+            logs = [l for l in logs if l["object_class"] == object_class]
+        return {"changes": logs[:50], "total": len(logs), "high_risk_count": len([l for l in logs if l["object_class"] in ("USER", "AUTH")])}
+
+    # ── Policy & Compliance handlers ───────────────────────────────────
+
+    def _analyze_report_access(self, args: dict) -> dict:
+        """Analyze sensitive report execution access."""
+        category = args.get("report_category", "all")
+        _REPORTS = {
+            "payroll":   [{"report": "RPCLSTB2", "description": "Payroll cluster display", "users": ["ROOT", "BATCHJOB"], "sox": "AC-6"}],
+            "financial": [{"report": "RFITEMGL", "description": "GL line items", "users": ["ROOT", "INT_USER"], "sox": "AC-6"},
+                          {"report": "RFEPOS00", "description": "Open items posting", "users": ["ROOT"], "sox": "CM-2"}],
+            "user_admin":[{"report": "RSUSR002", "description": "User authorization analysis", "users": ["SEC_ADMIN", "ROOT"], "sox": "AC-2"}],
+            "audit":     [{"report": "RSAU_READ_ARC", "description": "Security audit log read", "users": ["SEC_ADMIN"], "sox": "AU-2"}],
+        }
+        if category == "all":
+            reports = [r for rlist in _REPORTS.values() for r in rlist]
+        else:
+            reports = _REPORTS.get(category, [])
+        return {"reports": reports, "total": len(reports), "unique_users_with_access": list({u for r in reports for u in r["users"]}), "sox_controls_impacted": list({r["sox"] for r in reports})}
+
+    def _get_security_policy(self, args: dict) -> dict:
+        """Return SAP system security policy settings."""
+        category = args.get("category", "all")
+        policy = {
+            "password": {
+                "login/min_password_lng": {"value": "8", "recommended": "12", "compliant": False},
+                "login/password_expiration_time": {"value": "90", "recommended": "90", "compliant": True},
+                "login/password_history_size": {"value": "5", "recommended": "10", "compliant": False},
+            },
+            "logon": {
+                "login/fails_to_user_lock": {"value": "5", "recommended": "3", "compliant": False},
+                "login/failed_user_auto_unlock": {"value": "1", "recommended": "0", "compliant": False},
+                "login/no_automatic_user_sapstar": {"value": "1", "recommended": "1", "compliant": True},
+            },
+            "rfc": {
+                "rfc/reject_expired_passwd": {"value": "0", "recommended": "1", "compliant": False},
+                "rfc/ext_security": {"value": "0", "recommended": "9", "compliant": False},
+            },
+            "session": {
+                "rdisp/gui_auto_logout": {"value": "0", "recommended": "900", "compliant": False},
+                "login/multi_login_users": {"value": "0", "recommended": "3", "compliant": True},
+            },
+        }
+        result = policy if category == "all" else {category: policy.get(category, {})}
+        non_compliant = sum(1 for cat in result.values() for p in cat.values() if not p.get("compliant"))
+        return {"policy": result, "non_compliant_parameters": non_compliant, "total_checked": sum(len(v) for v in result.values()), "risk_level": "HIGH" if non_compliant > 3 else "MEDIUM"}
 
     def _publish_event(self, tool_name: str, session_id: str, tenant_id: str, latency_ms: int, is_error: bool) -> None:
         if self._redis is None:

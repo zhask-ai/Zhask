@@ -28,6 +28,8 @@
         <div class="topbar-center">
           <div class="health-pills">
             <span class="pill pill-pending" id="pill-m01" title="M01 API Gateway">M01</span>
+            <span class="pill pill-pending" id="pill-m02" title="M02 Connector Sentinel">M02</span>
+            <span class="pill pill-pending" id="pill-m03" title="M03 Traffic Analyzer">M03</span>
             <span class="pill pill-pending" id="pill-m04" title="M04 Zero-Trust">M04</span>
             <span class="pill pill-pending" id="pill-m05" title="M05 SAP MCP">M05</span>
             <span class="pill pill-pending" id="pill-m06" title="M06 Credentials">M06</span>
@@ -38,6 +40,7 @@
             <span class="pill pill-pending" id="pill-m11" title="M11 Shadow">M11</span>
             <span class="pill pill-pending" id="pill-m12" title="M12 Rules">M12</span>
             <span class="pill pill-pending" id="pill-m13" title="M13 SBOM">M13</span>
+            <span class="pill pill-pending" id="pill-m14" title="M14 Webhook Gateway">M14</span>
             <span class="pill pill-pending" id="pill-m15" title="M15 Cloud">M15</span>
           </div>
         </div>
@@ -70,10 +73,24 @@
           Audit Log
         </button>
 
+        <span class="nav-group-label">Ingestion</span>
+        <button class="nav-btn" data-tab="connectors" id="nav-connectors">
+          <span class="nav-chip chip-blue">M02</span>
+          <span>Connectors</span>
+        </button>
+        <button class="nav-btn" data-tab="webhooks" id="nav-webhooks">
+          <span class="nav-chip chip-teal">M14</span>
+          <span>Webhooks</span>
+        </button>
+
         <span class="nav-group-label">Threat Detection</span>
         <button class="nav-btn" data-tab="gateway" id="nav-gateway">
           <span class="nav-chip chip-red">M01</span>
           <span>Gateway</span>
+        </button>
+        <button class="nav-btn" data-tab="traffic" id="nav-traffic">
+          <span class="nav-chip chip-teal">M03</span>
+          <span>Traffic</span>
         </button>
         <button class="nav-btn" data-tab="anomalies" id="nav-anomalies">
           <span class="nav-chip chip-purple">M08</span>
@@ -268,7 +285,7 @@
           <div class="chart-panel">
             <div class="panel-title-row">
               <h2>Alert Timeline</h2>
-              <span class="chart-legend-item"><span class="dot-inline" style="background:var(--accent)"></span>alerts / poll</span>
+              <span class="chart-legend-item"><span class="dot-inline live-dot"></span>alerts / poll · LIVE</span>
             </div>
             <div class="chart-wrap"><canvas id="alert-chart"></canvas></div>
           </div>
@@ -392,6 +409,40 @@
             </table>
           </div>
           <p class="empty-state hidden" id="audit-empty">No audit entries match filter.</p>
+
+          <!-- Action Log section -->
+          <div class="action-log-section">
+            <div class="action-log-header">
+              <h3 style="color:#eaf0f7;font-size:.9rem;margin:0">⚡ SOC Action History</h3>
+              <select class="action-log-filter" id="al-type-filter" onchange="renderActionLog()">
+                <option value="">All types</option>
+                <option value="anomaly">Anomaly</option>
+                <option value="alert">Alert</option>
+                <option value="sap">SAP</option>
+                <option value="dlp">DLP</option>
+                <option value="shadow">Shadow</option>
+                <option value="comp">Compliance</option>
+                <option value="incident">Incident</option>
+                <option value="sbom">SBOM</option>
+                <option value="zt">Zero-Trust</option>
+                <option value="cred">Credentials</option>
+                <option value="cloud">Cloud</option>
+                <option value="gateway">Gateway</option>
+                <option value="rules">Rules</option>
+              </select>
+              <select class="action-log-filter" id="al-actor-filter" onchange="renderActionLog()">
+                <option value="">All operators</option>
+              </select>
+              <button class="export-btn" onclick="renderActionLog()">↻ Refresh</button>
+            </div>
+            <div class="table-wrap">
+              <table class="action-log-table">
+                <thead><tr><th>Time</th><th>Action ID</th><th>Operator</th><th>Type</th><th>Action</th><th>Target</th><th>Side Effects</th><th>Status</th></tr></thead>
+                <tbody id="action-log-body"></tbody>
+              </table>
+            </div>
+            <p class="empty-state hidden" id="action-log-empty">No actions taken yet. Use the drawer action buttons to get started.</p>
+          </div>
         </section>
 
         <!-- ══════════════ GATEWAY M01 ══════════════ -->
@@ -499,7 +550,7 @@
             </div>
             <div class="panel-controls">
               <input type="text" id="sap-search" placeholder="Search tool, user, tenant…" class="filter-input">
-              <select id="sap-tool-filter"><option value="all">All tools</option><option value="read_table">read_table</option><option value="list_users">list_users</option><option value="get_auth_objects">get_auth_objects</option><option value="export_payroll_data">export_payroll_data</option><option value="change_user_auth">change_user_auth</option><option value="modify_auth_profile">modify_auth_profile</option><option value="delete_table_entries">delete_table_entries</option><option value="run_report">run_report</option></select>
+              <select id="sap-tool-filter"><option value="all">All tools (17)</option><option value="query_events">query_events</option><option value="get_anomaly_scores">get_anomaly_scores</option><option value="list_alerts">list_alerts</option><option value="run_security_check">run_security_check</option><option value="list_users">list_users</option><option value="get_user_roles">get_user_roles</option><option value="get_auth_objects">get_auth_objects</option><option value="get_sod_violations">get_sod_violations</option><option value="get_dormant_users">get_dormant_users</option><option value="get_locked_users">get_locked_users</option><option value="get_failed_logins">get_failed_logins</option><option value="check_critical_auth">check_critical_auth</option><option value="monitor_rfc_calls">monitor_rfc_calls</option><option value="read_table">read_table</option><option value="get_change_logs">get_change_logs</option><option value="analyze_report_access">analyze_report_access</option><option value="get_security_policy">get_security_policy</option></select>
               <select id="sap-flag-filter"><option value="all">All events</option><option value="flagged">Flagged only</option><option value="clean">Clean only</option></select>
               <button class="export-btn" onclick="exportCSV('sap')">⬇ CSV</button>
             </div>
@@ -688,6 +739,81 @@
           <p class="empty-state" id="cloud-empty">No cloud findings yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
         </section>
 
+        <!-- ══════════════ CONNECTOR SENTINEL M02 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-connectors">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-blue">M02</span>
+              <h2>Connector Sentinel</h2>
+              <span class="panel-subtitle">SAP BTP · MuleSoft · Boomi · Workato · unauthorized data flows</span>
+            </div>
+            <div class="panel-controls">
+              <input type="text" id="conn-search" placeholder="Search connector, system…" class="filter-input">
+              <select id="conn-platform-filter"><option value="all">All platforms</option><option value="sap_btp">SAP BTP</option><option value="mulesoft">MuleSoft</option><option value="boomi">Boomi</option><option value="workato">Workato</option></select>
+              <select id="conn-status-filter"><option value="all">All statuses</option><option value="alert">Alerts</option><option value="misconfigured">Misconfigured</option><option value="healthy">Healthy</option></select>
+              <button class="export-btn" onclick="exportCSV('connectors')">⬇ CSV</button>
+            </div>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-info"><span id="conn-total">0</span><label>Connectors Monitored</label></div>
+            <div class="mini-stat mini-stat-critical"><span id="conn-alerts">0</span><label>Alerts</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="conn-misconfig">0</span><label>Misconfigured</label></div>
+            <div class="mini-stat mini-stat-ok"><span id="conn-healthy">0</span><label>Healthy</label></div>
+          </div>
+          <ul id="conn-list" class="feed-list"></ul>
+          <p class="empty-state" id="conn-empty">No connector events yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
+        </section>
+
+        <!-- ══════════════ TRAFFIC ANALYZER M03 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-traffic">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-teal">M03</span>
+              <h2>Integration Traffic Analyzer</h2>
+              <span class="panel-subtitle">Data-in-transit classification · PII/PHI detection · volume analytics</span>
+            </div>
+            <div class="panel-controls">
+              <input type="text" id="traffic-search" placeholder="Search source, destination…" class="filter-input">
+              <select id="traffic-class-filter"><option value="all">All classifications</option><option value="PII">PII</option><option value="PHI">PHI</option><option value="FINANCIAL">Financial</option><option value="STANDARD">Standard</option></select>
+              <select id="traffic-dir-filter"><option value="all">All directions</option><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select>
+              <button class="export-btn" onclick="exportCSV('traffic')">⬇ CSV</button>
+            </div>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-info"><span id="traffic-total">0</span><label>Flows Analyzed</label></div>
+            <div class="mini-stat mini-stat-critical"><span id="traffic-pii">0</span><label>PII in Transit</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="traffic-phi">0</span><label>PHI Detected</label></div>
+            <div class="mini-stat mini-stat-ok"><span id="traffic-volume">0 MB</span><label>Total Volume</label></div>
+          </div>
+          <ul id="traffic-list" class="feed-list"></ul>
+          <p class="empty-state" id="traffic-empty">No traffic flows yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
+        </section>
+
+        <!-- ══════════════ WEBHOOK GATEWAY M14 ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-webhooks">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-teal">M14</span>
+              <h2>Secure Webhook Gateway</h2>
+              <span class="panel-subtitle">Signature validation · rate limiting · replay attack prevention</span>
+            </div>
+            <div class="panel-controls">
+              <input type="text" id="wh-search" placeholder="Search source, event type…" class="filter-input">
+              <select id="wh-result-filter"><option value="all">All results</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option><option value="rate_limited">Rate Limited</option></select>
+              <select id="wh-source-filter"><option value="all">All sources</option><option value="github">GitHub</option><option value="slack">Slack</option><option value="pagerduty">PagerDuty</option><option value="custom">Custom</option></select>
+              <button class="export-btn" onclick="exportCSV('webhooks')">⬇ CSV</button>
+            </div>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-info"><span id="wh-total">0</span><label>Webhooks Received</label></div>
+            <div class="mini-stat mini-stat-ok"><span id="wh-accepted">0</span><label>Accepted</label></div>
+            <div class="mini-stat mini-stat-critical"><span id="wh-rejected">0</span><label>Rejected</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="wh-rate-limited">0</span><label>Rate Limited</label></div>
+          </div>
+          <ul id="wh-list" class="feed-list"></ul>
+          <p class="empty-state" id="wh-empty">No webhook events yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
+        </section>
+
         <!-- ══════════════ MODULE STREAM STATUS ══════════════ -->
         <section class="panel module-health-section">
           <div class="panel-title-row">
@@ -715,25 +841,191 @@
 
     <!-- ══════════════════ DETAIL DRAWER (unified) ══════════════════ -->
     <div class="detail-overlay hidden" id="detail-overlay" onclick="if(event.target===this)closeDetailDrawer()">
-      <div id="detail-drawer" style="position:absolute;right:0;top:0;width:min(560px,96vw);height:100%;background:#0d1421;border-left:1px solid rgba(76,130,247,0.2);display:flex;flex-direction:column;overflow:hidden;box-shadow:-8px 0 40px rgba(0,0,0,0.6);animation:slideIn .25s ease">
+      <div id="detail-drawer" class="drw-panel">
         <!-- Header -->
-        <div style="padding:1.2rem 1.4rem;border-bottom:1px solid rgba(76,130,247,0.15);display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0;background:linear-gradient(135deg,rgba(76,130,247,0.05),rgba(155,124,247,0.04))">
+        <div class="drw-header">
           <div style="display:flex;flex-direction:column;gap:.3rem">
             <span id="drw-badge" class="sev-badge sev-critical" style="align-self:flex-start">CRITICAL</span>
-            <div id="drw-title" style="font-size:.95rem;font-weight:700;color:#eaf0f7;line-height:1.3;max-width:440px">Alert Detail</div>
+            <div id="drw-title" class="drw-title">Alert Detail</div>
           </div>
-          <button onclick="closeDetailDrawer()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#7a93b4;font-size:1rem;cursor:pointer;padding:.3rem .55rem;border-radius:6px;line-height:1;flex-shrink:0;margin-left:.75rem;transition:all .15s">✕</button>
+          <button onclick="closeDetailDrawer()" class="drw-close">✕</button>
         </div>
         <!-- Body -->
-        <div id="drw-body" style="flex:1;overflow-y:auto;padding:1.2rem 1.4rem;display:flex;flex-direction:column;gap:1rem;color:#b0c4de"></div>
+        <div id="drw-body" class="drw-body"></div>
         <!-- Actions -->
-        <div id="drw-actions" style="padding:1rem 1.4rem;border-top:1px solid rgba(76,130,247,0.15);display:flex;flex-wrap:wrap;gap:.5rem;flex-shrink:0;background:rgba(0,0,0,0.2)"></div>
+        <div id="drw-actions" class="drw-actions"></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ ACTION SYSTEM STYLES ══════════════════ -->
+    <style>
+      /* ── Action Confirm / Operator Modals ── */
+      .action-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:1100;display:flex;align-items:center;justify-content:center;padding:1rem}
+      .action-modal-overlay.hidden{display:none}
+      .action-modal{background:#0d1421;border:1px solid rgba(76,130,247,.3);border-radius:14px;padding:1.4rem 1.6rem;width:min(520px,96vw);box-shadow:0 24px 80px rgba(0,0,0,.7);animation:modalIn .2s ease}
+      @keyframes modalIn{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}
+      .action-modal-header{display:flex;align-items:flex-start;gap:.9rem;margin-bottom:1rem}
+      .action-modal-icon{font-size:1.8rem;line-height:1;flex-shrink:0;margin-top:.1rem}
+      .action-modal-title{font-size:1rem;font-weight:700;color:#eaf0f7}
+      .action-modal-scope{font-size:.75rem;color:#7a93b4;margin-top:.2rem}
+      .action-modal-effects{display:flex;flex-direction:column;gap:.4rem;margin-bottom:1rem;padding:.75rem;background:rgba(255,165,0,.06);border:1px solid rgba(255,165,0,.18);border-radius:8px}
+      .action-modal-effect{font-size:.76rem;color:#d0c4a0;display:flex;gap:.5rem;align-items:flex-start}
+      .action-modal-effect::before{content:"→";color:#ffa502;flex-shrink:0}
+      .action-modal-confirm-wrap{margin-bottom:1rem}
+      .action-modal-confirm-wrap.hidden{display:none}
+      .action-modal-confirm-label{font-size:.73rem;color:#7a93b4;display:block;margin-bottom:.4rem}
+      .action-modal-confirm-input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:#eaf0f7;padding:.5rem .75rem;font-size:.8rem;outline:none;box-sizing:border-box;transition:border-color .2s}
+      .action-modal-confirm-input:focus{border-color:rgba(76,130,247,.5)}
+      .action-modal-footer{display:flex;gap:.75rem;justify-content:flex-end}
+      /* ── Progress strip ── */
+      #drw-progress{padding:1rem;background:rgba(76,130,247,.06);border:1px solid rgba(76,130,247,.18);border-radius:8px;margin-top:.75rem}
+      .drw-progress-title{font-size:.72rem;font-weight:700;color:#7a93b4;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem}
+      .drw-progress-step{display:flex;align-items:center;gap:.55rem;font-size:.76rem;color:#7a93b4;padding:.25rem 0;transition:color .3s}
+      .drw-progress-step.done{color:#2ed573}
+      .drw-progress-step.active{color:#eaf0f7}
+      .drw-step-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.15);flex-shrink:0;transition:background .3s}
+      .drw-progress-step.done  .drw-step-dot{background:#2ed573}
+      .drw-progress-step.active .drw-step-dot{background:#4c82f7;box-shadow:0 0 6px #4c82f7;animation:stepPulse 1s ease infinite}
+      @keyframes stepPulse{0%,100%{opacity:1}50%{opacity:.4}}
+      /* ── Receipt card ── */
+      #drw-receipt{padding:.9rem 1rem;border:1px solid rgba(46,213,115,.25);border-radius:8px;background:rgba(46,213,115,.06);margin-top:.75rem}
+      .drw-receipt-header{font-size:.72rem;font-weight:700;color:#2ed573;margin-bottom:.5rem;display:flex;align-items:center;justify-content:space-between}
+      .drw-receipt-id{font-size:.65rem;color:#7a93b4;font-family:monospace}
+      .drw-receipt-effect{font-size:.74rem;color:#b0c4de;padding:.2rem 0;display:flex;gap:.5rem}
+      .drw-receipt-effect::before{content:"✓";color:#2ed573;flex-shrink:0}
+      .drw-receipt-artifacts{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}
+      .drw-artifact-btn{padding:.3rem .6rem;background:rgba(76,130,247,.12);border:1px solid rgba(76,130,247,.25);border-radius:5px;color:#7ab3f7;font-size:.7rem;cursor:pointer;display:flex;align-items:center;gap:.35rem;transition:all .15s}
+      .drw-artifact-btn:hover{background:rgba(76,130,247,.2);color:#b0d0ff}
+      /* ── Shortcut hints on buttons ── */
+      .drw-shortcut{font-size:.6rem;opacity:.55;font-family:monospace;margin-left:.3rem;background:rgba(255,255,255,.1);padding:1px 4px;border-radius:3px}
+      /* ── Action history in drawer ── */
+      .drw-history{padding:.75rem 1rem;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(255,255,255,.02);margin-top:.75rem}
+      .drw-history-title{font-size:.68rem;font-weight:700;color:#7a93b4;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem}
+      .drw-history-item{display:flex;align-items:center;justify-content:space-between;padding:.25rem 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.72rem;color:#7a93b4}
+      .drw-history-item:last-child{border-bottom:none}
+      /* ── Action Log table in Audit tab ── */
+      .action-log-section{margin-top:1.5rem}
+      .action-log-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;flex-wrap:wrap}
+      .action-log-filter{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#eaf0f7;padding:.35rem .6rem;font-size:.75rem;outline:none}
+      .action-log-table{width:100%;border-collapse:collapse;font-size:.76rem}
+      .action-log-table th{text-align:left;padding:.5rem .75rem;color:#7a93b4;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid rgba(255,255,255,.08)}
+      .action-log-table td{padding:.5rem .75rem;border-bottom:1px solid rgba(255,255,255,.04);color:#b0c4de;vertical-align:top}
+      .action-log-table tr:hover td{background:rgba(255,255,255,.03)}
+      .al-badge{display:inline-block;padding:.15rem .45rem;border-radius:4px;font-size:.65rem;font-weight:700;text-transform:uppercase}
+      .al-badge-ok{background:rgba(46,213,115,.15);color:#2ed573}
+      .al-badge-type{background:rgba(76,130,247,.15);color:#7ab3f7}
+    </style>
+
+    <!-- ══════════════════ CLAUDE AI CHAT ══════════════════ -->
+    <style>
+      .chat-fab{position:fixed;bottom:1.5rem;right:1.5rem;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#4c82f7,#9b7cf7);border:none;cursor:pointer;box-shadow:0 4px 20px rgba(76,130,247,0.45);display:flex;align-items:center;justify-content:center;font-size:1.3rem;z-index:900;transition:transform .2s,box-shadow .2s}
+      .chat-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(76,130,247,0.65)}
+      .chat-fab-badge{position:absolute;top:-2px;right:-2px;background:var(--critical);color:#fff;font-size:0.55rem;font-weight:700;padding:2px 5px;border-radius:8px;display:none}
+      .chat-panel{position:fixed;bottom:4.5rem;right:1.5rem;width:min(420px,96vw);height:min(600px,80vh);background:#0d1421;border:1px solid rgba(76,130,247,0.25);border-radius:14px;display:flex;flex-direction:column;z-index:901;box-shadow:0 16px 60px rgba(0,0,0,0.6);animation:chatSlide .25s ease;overflow:hidden}
+      @keyframes chatSlide{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+      .chat-panel.hidden{display:none}
+      .chat-header{padding:.85rem 1rem;background:linear-gradient(135deg,rgba(76,130,247,0.12),rgba(155,124,247,0.08));border-bottom:1px solid rgba(76,130,247,0.15);display:flex;align-items:center;gap:.6rem;flex-shrink:0}
+      .chat-header-icon{font-size:1.1rem}
+      .chat-header-title{font-size:.85rem;font-weight:700;color:#eaf0f7;flex:1}
+      .chat-header-sub{font-size:.62rem;color:#7a93b4}
+      .chat-close{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#7a93b4;font-size:.9rem;cursor:pointer;padding:.2rem .45rem;border-radius:5px;line-height:1;transition:all .15s}
+      .chat-close:hover{background:rgba(255,255,255,.12);color:#eaf0f7}
+      .chat-messages{flex:1;overflow-y:auto;padding:.75rem;display:flex;flex-direction:column;gap:.6rem;scroll-behavior:smooth}
+      .chat-msg{max-width:88%;padding:.6rem .8rem;border-radius:10px;font-size:.78rem;line-height:1.55;animation:msgIn .18s ease}
+      @keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+      .chat-msg.user{align-self:flex-end;background:rgba(76,130,247,0.18);border:1px solid rgba(76,130,247,0.3);color:#c8d8f0;border-bottom-right-radius:3px}
+      .chat-msg.assistant{align-self:flex-start;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#b0c4de;border-bottom-left-radius:3px}
+      .chat-msg.typing{align-self:flex-start;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:#7a93b4;font-style:italic}
+      .chat-tool-pill{display:inline-flex;align-items:center;gap:.3rem;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);color:#10b981;font-size:.62rem;font-weight:600;padding:1px 7px;border-radius:4px;margin:.15rem .1rem;white-space:nowrap}
+      .chat-suggestions{padding:.5rem .75rem;display:flex;flex-wrap:wrap;gap:.35rem;border-top:1px solid rgba(255,255,255,.05);flex-shrink:0}
+      .chat-suggestion{background:rgba(76,130,247,.1);border:1px solid rgba(76,130,247,.2);color:#7a9fd4;font-size:.67rem;padding:3px 9px;border-radius:12px;cursor:pointer;transition:all .15s;white-space:nowrap}
+      .chat-suggestion:hover{background:rgba(76,130,247,.2);color:#c8d8f0}
+      .chat-input-row{padding:.65rem .75rem;border-top:1px solid rgba(255,255,255,.07);display:flex;gap:.5rem;flex-shrink:0;background:rgba(0,0,0,.15)}
+      .chat-input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.5rem .75rem;color:#eaf0f7;font-size:.78rem;outline:none;resize:none;font-family:inherit;line-height:1.4;transition:border-color .15s}
+      .chat-input:focus{border-color:rgba(76,130,247,.5);background:rgba(76,130,247,.06)}
+      .chat-input::placeholder{color:#4a6280}
+      .chat-send{background:linear-gradient(135deg,#4c82f7,#9b7cf7);border:none;border-radius:8px;color:#fff;cursor:pointer;font-size:.85rem;padding:.5rem .75rem;transition:opacity .15s;flex-shrink:0}
+      .chat-send:hover{opacity:.88}
+      .chat-send:disabled{opacity:.35;cursor:not-allowed}
+    </style>
+
+    <button class="chat-fab" id="chat-fab" onclick="toggleChat()" title="Ask Claude — SAP Security Assistant">
+      ◆
+      <span class="chat-fab-badge" id="chat-fab-badge"></span>
+    </button>
+
+    <div class="chat-panel hidden" id="chat-panel">
+      <div class="chat-header">
+        <span class="chat-header-icon">◆</span>
+        <div style="flex:1">
+          <div class="chat-header-title">Claude SAP Security Assistant</div>
+          <div class="chat-header-sub">17 tools · real-time SAP data · M05 MCP Suite</div>
+        </div>
+        <button class="chat-close" onclick="toggleChat()">✕</button>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-msg assistant">
+          Hi! I'm your SAP security analyst. I have access to 17 live security tools — ask me about users, alerts, SoD violations, RFC activity, or compliance posture.
+        </div>
+      </div>
+      <div class="chat-suggestions" id="chat-suggestions">
+        <span class="chat-suggestion" onclick="sendSuggestion(this)">Who has SAP_ALL?</span>
+        <span class="chat-suggestion" onclick="sendSuggestion(this)">Show critical alerts</span>
+        <span class="chat-suggestion" onclick="sendSuggestion(this)">Any SoD violations?</span>
+        <span class="chat-suggestion" onclick="sendSuggestion(this)">Dormant users?</span>
+        <span class="chat-suggestion" onclick="sendSuggestion(this)">Security policy gaps?</span>
+        <span class="chat-suggestion" onclick="sendSuggestion(this)">Recent RFC anomalies</span>
+      </div>
+      <div class="chat-input-row">
+        <textarea class="chat-input" id="chat-input" placeholder="Ask about SAP users, alerts, compliance…" rows="1" onkeydown="chatKeyDown(event)"></textarea>
+        <button class="chat-send" id="chat-send" onclick="sendChatMessage()">➤</button>
       </div>
     </div>
 
     <!-- ══════════════════ TOAST NOTIFICATIONS ══════════════════ -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="./app.js?v=13" defer></script>
+    <!-- ══════════════════ ACTION CONFIRM MODAL ══════════════════ -->
+    <div id="action-confirm-modal" class="action-modal-overlay hidden" onclick="if(event.target===this)_dismissActionConfirm()">
+      <div class="action-modal">
+        <div class="action-modal-header">
+          <span id="acm-icon" class="action-modal-icon">⚡</span>
+          <div>
+            <div id="acm-title" class="action-modal-title">Confirm Action</div>
+            <div id="acm-scope" class="action-modal-scope"></div>
+          </div>
+        </div>
+        <div id="acm-effects" class="action-modal-effects"></div>
+        <div id="acm-confirm-input-wrap" class="action-modal-confirm-wrap hidden">
+          <label class="action-modal-confirm-label" id="acm-confirm-label">Type user ID to confirm:</label>
+          <input class="action-modal-confirm-input" id="acm-confirm-input" placeholder="type here…" oninput="_checkConfirmInput()">
+        </div>
+        <div class="action-modal-footer">
+          <button class="drw-btn drw-btn--neutral" onclick="_dismissActionConfirm()">Cancel</button>
+          <button class="drw-btn drw-btn--fix" id="acm-execute-btn" onclick="_executeConfirmedAction()">Execute</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ OPERATOR IDENTITY MODAL ══════════════════ -->
+    <div id="operator-modal" class="action-modal-overlay hidden">
+      <div class="action-modal" style="max-width:380px">
+        <div class="action-modal-header">
+          <span class="action-modal-icon">👤</span>
+          <div>
+            <div class="action-modal-title">Identify Operator</div>
+            <div class="action-modal-scope">Required before taking any action</div>
+          </div>
+        </div>
+        <div style="padding:.5rem 0">
+          <input class="action-modal-confirm-input" id="operator-name-input" placeholder="Your name or SOC ID…" style="width:100%;margin-top:.5rem" onkeydown="if(event.key==='Enter')_saveOperatorName()">
+        </div>
+        <div class="action-modal-footer">
+          <button class="drw-btn drw-btn--fix" onclick="_saveOperatorName()">Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./app.js?v=17" defer></script>
   </body>
 </html>

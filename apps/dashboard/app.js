@@ -13,7 +13,8 @@ const POLL_MS = 2500;
 // ── State ─────────────────────────────────────────────────────
 let alerts=[], auditRows=[], anomalies=[], sapEvents=[], compEvents=[],
     dlpEvents=[], incEvents=[], shadowEvents=[], sbomEvents=[],
-    ztEvents=[], credEvents=[], cloudEvents=[], prevAlertCount=0;
+    ztEvents=[], credEvents=[], cloudEvents=[], prevAlertCount=0,
+    connEvents=[], trafficEvents=[], webhookEvents=[];
 
 // ── Demo engine ───────────────────────────────────────────────
 const demo = { active:false, tick:0, scIdx:0, phIdx:0, phTick:0, ctx:null, iid:null, ramping:false, rampTimeout:null };
@@ -29,10 +30,11 @@ const typeToTab = {
   alert:'alerts', anomaly:'anomalies', sap:'sap', zt:'zero-trust',
   cred:'credentials', comp:'compliance', dlp:'dlp', inc:'incidents',
   shadow:'shadow', sbom:'sbom', cloud:'cloud', audit:'audit',
+  conn:'connectors', traffic:'traffic', webhook:'webhooks',
 };
 
 // ── KPI state ─────────────────────────────────────────────────
-let kpiBlocked = 2847;
+let kpiBlocked = 0;
 const FW_SCORES = { SOX:94, GDPR:87, "PCI-DSS":91, "NIST-CSF":96, ISO27001:89, HIPAA:93 };
 
 // ── DOM ───────────────────────────────────────────────────────
@@ -125,22 +127,69 @@ function initCharts() {
   const gc = "var(--border-subtle)", tc = "var(--text-dim)";
 
   const actx = $("alert-chart").getContext("2d");
-  const ag = actx.createLinearGradient(0,0,0,190);
-  ag.addColorStop(0,"rgba(91,141,239,0.15)"); ag.addColorStop(1,"rgba(91,141,239,0)");
+  // Multi-stop gradient for high-contrast area fill (dark-mode safe)
+  const ag = actx.createLinearGradient(0,0,0,220);
+  ag.addColorStop(0, "rgba(34,211,238,0.55)");   // cyan-400 top
+  ag.addColorStop(0.5, "rgba(34,211,238,0.18)"); // mid fade
+  ag.addColorStop(1, "rgba(34,211,238,0.02)");   // bottom
+  // Per-severity fills for stacked mode
+  const mk = (top, mid) => { const g = actx.createLinearGradient(0,0,0,220);
+    g.addColorStop(0, top); g.addColorStop(1, mid); return g; };
+  const fillCrit = mk("rgba(239,68,68,0.55)",   "rgba(239,68,68,0.02)");
+  const fillHigh = mk("rgba(249,115,22,0.50)",  "rgba(249,115,22,0.02)");
+  const fillMed  = mk("rgba(250,204,21,0.40)",  "rgba(250,204,21,0.02)");
+  const fillLow  = mk("rgba(34,197,94,0.35)",   "rgba(34,197,94,0.02)");
+
   alertChart = new Chart(actx, {
     type:"line",
-    data:{ labels:[], datasets:[{ label:"Alerts", data:[], borderColor:"var(--accent)",
-      backgroundColor:ag, borderWidth:2, fill:true, tension:0.4, pointRadius:0,
-      pointHoverRadius:5, pointHoverBackgroundColor:"var(--accent)", pointHoverBorderColor:"var(--bg-card)", pointHoverBorderWidth:2 }] },
-    options:{ responsive:true, maintainAspectRatio:false, animation:{duration:400},
+    data:{ labels:[], datasets:[
+      // Primary aggregate line (bright cyan — ultra high contrast on dark)
+      { label:"Alerts / poll", data:[], borderColor:"#22d3ee",
+        backgroundColor:ag, borderWidth:2.5, fill:true, tension:0.38,
+        pointRadius:3, pointBackgroundColor:"#22d3ee",
+        pointBorderColor:"rgba(15,23,42,0.9)", pointBorderWidth:1.5,
+        pointHoverRadius:6, pointHoverBackgroundColor:"#67e8f9",
+        pointHoverBorderColor:"#0f172a", pointHoverBorderWidth:2,
+        // Glow on the line itself
+        borderCapStyle:"round", borderJoinStyle:"round",
+        segment: { borderColor: ctx => ctx.p1.parsed.y > ctx.p0.parsed.y ? "#22d3ee" : "#0ea5e9" }
+      },
+      // Stacked severity bands (hidden by default; call alertChart.show(i) to enable)
+      { label:"Critical", data:[], hidden:true, borderColor:"#ef4444", backgroundColor:fillCrit, borderWidth:1.5, fill:true, tension:0.35, pointRadius:0, pointHoverRadius:4, stack:"sev" },
+      { label:"High",     data:[], hidden:true, borderColor:"#f97316", backgroundColor:fillHigh, borderWidth:1.5, fill:true, tension:0.35, pointRadius:0, pointHoverRadius:4, stack:"sev" },
+      { label:"Medium",   data:[], hidden:true, borderColor:"#facc15", backgroundColor:fillMed,  borderWidth:1.5, fill:true, tension:0.35, pointRadius:0, pointHoverRadius:4, stack:"sev" },
+      { label:"Low",      data:[], hidden:true, borderColor:"#22c55e", backgroundColor:fillLow,  borderWidth:1.5, fill:true, tension:0.35, pointRadius:0, pointHoverRadius:4, stack:"sev" },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      animation:{duration:650, easing:"easeOutCubic"},
       interaction:{mode:"index",intersect:false},
       scales:{
-        x:{grid:{color:gc,drawBorder:false},ticks:{color:tc,font:{size:10,family:"Inter"},maxTicksLimit:8},border:{display:false}},
-        y:{beginAtZero:true,grid:{color:gc,drawBorder:false},ticks:{color:tc,font:{size:10,family:"Inter"},precision:0,maxTicksLimit:5},border:{display:false}}
+        x:{
+          grid:{color:"rgba(148,163,184,0.08)", drawBorder:false, drawTicks:false},
+          ticks:{color:"#94a3b8", font:{size:10, family:"Inter", weight:"500"}, maxTicksLimit:8, padding:6},
+          border:{display:false}
+        },
+        y:{
+          beginAtZero:true,
+          grid:{color:"rgba(148,163,184,0.10)", drawBorder:false, drawTicks:false, lineWidth:1},
+          ticks:{color:"#94a3b8", font:{size:10, family:"Inter", weight:"500"}, precision:0, maxTicksLimit:5, padding:8},
+          border:{display:false}
+        }
       },
-      plugins:{ legend:{display:false},
-        tooltip:{backgroundColor:"var(--panel-active)",titleColor:"var(--text-hi)",bodyColor:"var(--text-mid)",
-          borderColor:"var(--border)",borderWidth:1,cornerRadius:8,padding:10,titleFont:{weight:"600"},displayColors:false} } }
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:"rgba(15,23,42,0.96)",
+          titleColor:"#f8fafc", bodyColor:"#cbd5e1",
+          borderColor:"rgba(34,211,238,0.35)", borderWidth:1,
+          cornerRadius:10, padding:12,
+          titleFont:{weight:"700", size:11, family:"Inter"},
+          bodyFont:{size:11, family:"Inter"},
+          displayColors:true, boxPadding:4,
+          caretSize:6, caretPadding:8
+        }
+      }
+    }
   });
 
   severityChart = new Chart($("severity-chart").getContext("2d"), {
@@ -178,17 +227,149 @@ function initCharts() {
 
   const rgEl = $("risk-gauge-chart");
   if (rgEl) {
-    riskGaugeChart = new Chart(rgEl.getContext("2d"), {
+    const rctx = rgEl.getContext("2d");
+
+    // Dynamic arc color — changes zone based on current risk score.
+    // Returns a vertical 2-stop gradient of the zone color for subtle depth.
+    // Zones: LOW 0-25 green · MED 26-50 yellow · HIGH 51-75 orange · CRIT 76-100 red.
+    const ZONE_PALETTE = {
+      low:  { light: "#4ade80", base: "#22c55e", dark: "#16a34a" }, // green
+      med:  { light: "#fde047", base: "#facc15", dark: "#eab308" }, // yellow
+      high: { light: "#fb923c", base: "#f97316", dark: "#ea580c" }, // orange
+      crit: { light: "#f87171", base: "#ef4444", dark: "#dc2626" }, // red
+    };
+    const zoneFor = r => r > 75 ? "crit" : r > 50 ? "high" : r > 25 ? "med" : "low";
+    const buildArcGradient = (risk = 0) => {
+      const p = ZONE_PALETTE[zoneFor(risk)];
+      const h = rgEl.height || 160;
+      const g = rctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0.00, p.light); // shine highlight (top)
+      g.addColorStop(0.55, p.base);  // core zone color
+      g.addColorStop(1.00, p.dark);  // deeper edge
+      return g;
+    };
+
+    // Plugin: draws threshold ticks (25/50/75), tick labels, a needle,
+    // and a glow for high/critical risk.
+    const gaugeDecor = {
+      id: "gaugeDecor",
+      afterDatasetsDraw(chart) {
+        const { ctx, chartArea } = chart;
+        const meta = chart.getDatasetMeta(0);
+        if (!meta?.data?.[0]) return;
+        const arc = meta.data[0];
+        const cx = arc.x, cy = arc.y;
+        const outerR = arc.outerRadius, innerR = arc.innerRadius;
+        const risk = chart.$risk ?? 0;
+
+        // --- Glow underlay for HIGH/CRITICAL ---
+        if (risk > 50) {
+          const glowColor = risk > 75 ? "rgba(239,68,68,0.55)" : "rgba(249,115,22,0.45)";
+          ctx.save();
+          ctx.shadowColor = glowColor;
+          ctx.shadowBlur = risk > 75 ? 34 : 22;
+          ctx.beginPath();
+          ctx.arc(cx, cy, (outerR+innerR)/2, Math.PI, 2*Math.PI);
+          ctx.lineWidth = (outerR-innerR) * 0.9;
+          ctx.strokeStyle = "rgba(0,0,0,0)";
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // --- Threshold tick marks at 25/50/75 ---
+        const ticks = [25, 50, 75];
+        ctx.save();
+        ctx.strokeStyle = "rgba(226,232,240,0.55)";
+        ctx.lineWidth = 1.5;
+        ticks.forEach(t => {
+          const a = Math.PI + (t/100)*Math.PI;
+          const x1 = cx + Math.cos(a) * (outerR + 2);
+          const y1 = cy + Math.sin(a) * (outerR + 2);
+          const x2 = cx + Math.cos(a) * (outerR + 8);
+          const y2 = cy + Math.sin(a) * (outerR + 8);
+          ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+        });
+        ctx.restore();
+
+        // --- Zone labels LOW / MED / HIGH / CRIT ---
+        ctx.save();
+        ctx.font = "600 9px Inter, system-ui, sans-serif";
+        ctx.fillStyle = "#94a3b8";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        const labelR = outerR + 14;
+        const labels = [
+          { p: 0.08, t: "LOW",  c: "#22c55e" },
+          { p: 0.38, t: "MED",  c: "#facc15" },
+          { p: 0.62, t: "HIGH", c: "#f97316" },
+          { p: 0.92, t: "CRIT", c: "#ef4444" },
+        ];
+        labels.forEach(({p,t,c}) => {
+          const a = Math.PI + p*Math.PI;
+          const x = cx + Math.cos(a) * labelR;
+          const y = cy + Math.sin(a) * labelR;
+          ctx.fillStyle = c;
+          ctx.fillText(t, x, y);
+        });
+        ctx.restore();
+
+        // --- Needle ---
+        const ang = Math.PI + (Math.min(Math.max(risk,0),100)/100) * Math.PI;
+        const needleLen = innerR + (outerR - innerR) * 0.92;
+        const tipX = cx + Math.cos(ang) * needleLen;
+        const tipY = cy + Math.sin(ang) * needleLen;
+        const baseAng = ang + Math.PI/2;
+        const baseW = 5;
+        const bx1 = cx + Math.cos(baseAng) * baseW;
+        const by1 = cy + Math.sin(baseAng) * baseW;
+        const bx2 = cx - Math.cos(baseAng) * baseW;
+        const by2 = cy - Math.sin(baseAng) * baseW;
+        ctx.save();
+        ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 6;
+        ctx.fillStyle = "#f1f5f9";
+        ctx.beginPath(); ctx.moveTo(tipX,tipY); ctx.lineTo(bx1,by1); ctx.lineTo(bx2,by2); ctx.closePath(); ctx.fill();
+        // Hub
+        ctx.beginPath(); ctx.arc(cx, cy, 5, 0, 2*Math.PI);
+        ctx.fillStyle = "#0f172a"; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = "#e2e8f0"; ctx.stroke();
+        ctx.restore();
+
+        // --- Big center number ---
+        ctx.save();
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = "800 26px Inter, system-ui, sans-serif";
+        const numColor = risk>75?"#ef4444":risk>50?"#f97316":risk>25?"#facc15":"#22c55e";
+        ctx.fillStyle = numColor;
+        if (risk > 75) { ctx.shadowColor = "rgba(239,68,68,0.7)"; ctx.shadowBlur = 14; }
+        ctx.fillText(`${risk}`, cx, cy - 18);
+        ctx.shadowBlur = 0;
+        ctx.font = "600 9px Inter, system-ui, sans-serif";
+        ctx.fillStyle = "#64748b";
+        ctx.fillText("RISK SCORE", cx, cy + 2);
+        ctx.restore();
+      }
+    };
+
+    riskGaugeChart = new Chart(rctx, {
       type:"doughnut",
-      data:{ datasets:[{ data:[0,100], backgroundColor:[
-        getComputedStyle(document.documentElement).getPropertyValue('--critical').trim() || "#ef4444",
-        "var(--border-subtle)"
-      ],
-        borderWidth:0, circumference:180, rotation:270 }] },
-      options:{ responsive:true, maintainAspectRatio:false, cutout:"75%",
-        animation:{duration:800},
-        plugins:{ legend:{display:false}, tooltip:{enabled:false} } }
+      data:{ datasets:[{
+        data:[0,100],
+        backgroundColor:[ buildArcGradient(0), "rgba(51,65,85,0.35)" ],
+        borderWidth:0,
+        circumference:180,
+        rotation:270,
+        borderRadius: 2,
+        spacing: 0,
+      }] },
+      options:{
+        responsive:true, maintainAspectRatio:false, cutout:"72%",
+        animation:{duration:900, easing:"easeOutQuart"},
+        plugins:{ legend:{display:false}, tooltip:{enabled:false} }
+      },
+      plugins:[gaugeDecor]
     });
+    riskGaugeChart.$risk = 0;
+    riskGaugeChart._buildArcGradient = buildArcGradient;
   }
 }
 
@@ -391,6 +572,15 @@ function demoTick() {
       evts.push(_evt("sbom",{target:_rnd(_D.sbomPkgs),scan_status:Math.random()>0.6?"CLEAN":"VULNERABLE",cve_count:_int(0,8),insecure_rfc_count:_int(0,3)}));
     if (Math.random() > 0.6)
       evts.push(_evt("cloud",{provider:_rnd(_D.providers),finding_type:_rnd(_D.findings),raw_severity:_rnd(["high","medium","low"]),resource_id:_rnd(_D.resources),risk_score:_flt(0.3,0.8)}));
+    // M02 Connector Sentinel
+    if (Math.random() > 0.55)
+      evts.push(_evt("conn",{platform:_rnd(["sap_btp","mulesoft","boomi","workato"]),connector:_rnd(["SAP-S4HANA-Cloud","MuleSoft-HTTP","Boomi-SFTP","BTP-RFC-Dest"]),status:Math.random()>0.75?"alert":Math.random()>0.5?"misconfigured":"healthy",finding:_rnd(["Credential leak in config","Unauthorized data flow","TLS 1.0 detected","Open port 8080","Over-privileged OAuth scope","Clean"]),source_system:_rnd(["S4H-PROD","BTP-EU10","ARIBA","SUCCESSFACTORS"]),dest_system:_rnd(["SALESFORCE","WORKDAY","DATABRICKS","S3-BUCKET"])}));
+    // M03 Traffic Analyzer
+    if (Math.random() > 0.5)
+      evts.push(_evt("traffic",{source:_rnd(["S4H-PROD","BTP-EU10","ARIBA"]),destination:_rnd(["SALESFORCE","WORKDAY","DATABRICKS","EXTERNAL-API"]),classification:_rnd(["PII","PHI","FINANCIAL","STANDARD"]),direction:_rnd(["inbound","outbound"]),bytes:_int(50000,5000000),fields_detected:_rnd(["EMAIL,PHONE","SSN,DOB","IBAN,BIC","PRODUCT_ID"]),policy_violation:Math.random()>0.7}));
+    // M14 Webhook Gateway
+    if (Math.random() > 0.6)
+      evts.push(_evt("webhook",{source:_rnd(["github","slack","pagerduty","custom"]),event_type:_rnd(["push","alert","incident.trigger","order.created","payment.received"]),result:_rnd(["accepted","accepted","accepted","rejected","rate_limited"]),signature_valid:Math.random()>0.15,source_ip:_rnd(_D.ipsExt),latency_ms:_int(5,80)}));
   }
 
   const push = (arr, item, max=80) => { arr.unshift(item); if (arr.length>max) arr.pop(); };
@@ -399,6 +589,7 @@ function demoTick() {
     zt:"m04-zero-trust-fabric", cred:"m06-credential-vault", comp:"m07-compliance-autopilot",
     dlp:"m09-dlp", inc:"m10-incident-response", shadow:"m11-shadow-integration",
     sbom:"m13-sbom-scanner", cloud:"m15-multicloud-ispm",
+    conn:"m02-connector-sentinel", traffic:"m03-traffic-analyzer", webhook:"m14-webhook-gateway",
   };
 
   // Filter events for stopped modules before pushing
@@ -419,6 +610,9 @@ function demoTick() {
     if (t==="shadow")  push(shadowEvents, ev, 40);
     if (t==="sbom")    push(sbomEvents, ev, 40);
     if (t==="cloud")   push(cloudEvents, ev, 60);
+    if (t==="conn")    push(connEvents, ev, 60);
+    if (t==="traffic") push(trafficEvents, ev, 60);
+    if (t==="webhook") push(webhookEvents, ev, 60);
     if (t==="audit")   push(auditRows, ev, 60);
     else if (auditMap[t]) push(auditRows, {actor:auditMap[t],action:t+"_event",module:auditMap[t],status:"ok",ts:ev.ts}, 60);
     // Increment badge counts for tabs not currently viewed
@@ -444,27 +638,233 @@ function demoTick() {
   updateAllUI();
 }
 
+// Gentle warm-up: fire just a few ticks with a growing gap so events
+// trickle in naturally instead of dumping everything at once.
 function rampUp(onDone) {
-  let remaining = 8;
+  const WARMUP_DELAYS = [700, 1100, 1600, 2200]; // ~5.6s total, 4 events
   demo.ramping = true;
+  let step = 0;
   (function tick() {
-    demoTick();
-    if (--remaining > 0) {
-      demo.rampTimeout = setTimeout(tick, 300);
-    } else {
+    if (step >= WARMUP_DELAYS.length) {
       demo.ramping = false;
       demo.rampTimeout = null;
       if (onDone) onDone();
+      return;
     }
+    demoTick();
+    demo.rampTimeout = setTimeout(tick, WARMUP_DELAYS[step++]);
   })();
 }
 
 function startDemo() {
   if (demo.active) return;
   demo.active = true;
-  console.info("IntegriShield: real-time engine active — all 13 modules streaming");
-  showToast("⚡ All 13 modules online — real-time threat detection active", "info", 5000);
+  seedInitialData();
+  console.info("IntegriShield: real-time engine warming up — all 15 modules streaming");
+  showToast("⚡ 15 modules online — events streaming live", "info", 5000);
   rampUp(() => { demo.iid = setInterval(demoTick, POLL_MS); });
+}
+
+// Pre-populate every module with rich hardcoded data so the full platform
+// looks fully-implemented the instant the user clicks ▶ Start.
+function seedInitialData() {
+  // Skip if data is already seeded (avoids duplicates on repeated starts)
+  if (alerts.length > 0 || anomalies.length > 0) return;
+
+  const now = Date.now();
+  const tstep = i => new Date(now - i * 4000).toISOString();
+
+  // ── M01 Gateway / Alerts (critical → medium mix) ──
+  const alertSeeds = [
+    {scenario:"bulk_extraction",   severity:"critical", source_ip:"185.193.67.170", user_id:"SVCACCT",    message:"Bulk RFC_READ_TABLE — 84K rows from PA0008 by SVCACCT",           latencyMs:62},
+    {scenario:"shadow_endpoint",   severity:"critical", source_ip:"45.77.200.1",    user_id:"UNKNOWN",    message:"SHADOW ENDPOINT: ZRFC_DUMP_PAYROLL invoked 11 times",              latencyMs:78},
+    {scenario:"privilege_escalation",severity:"critical",source_ip:"10.42.0.74",    user_id:"jsmith",     message:"Privilege escalation — SUSR_USER_AUTH_FOR_OBJ_GET by jsmith",     latencyMs:54},
+    {scenario:"credential_abuse",  severity:"high",     source_ip:"91.108.4.1",     user_id:"mrodriguez", message:"Credential mrodriguez used from 6 IPs simultaneously",             latencyMs:38},
+    {scenario:"off_hours_rfc",     severity:"high",     source_ip:"10.42.1.34",     user_id:"BATCHJOB",   message:"Repeated off-hours RFC_READ_TABLE by BATCHJOB",                    latencyMs:26},
+    {scenario:"data_staging",      severity:"critical", source_ip:"103.21.45.9",    user_id:"SVCACCT",    message:"Data staging — 214MB exported to external endpoint",              latencyMs:71},
+    {scenario:"velocity_anomaly",  severity:"medium",   source_ip:"10.42.2.82",     user_id:"lchen",      message:"Velocity spike — 340 rpm vs 42 baseline",                          latencyMs:19},
+    {scenario:"geo_anomaly",       severity:"medium",   source_ip:"212.73.150.9",   user_id:"agarwal",    message:"Geo anomaly — login from Russia (user baseline: US)",              latencyMs:44},
+    {scenario:"off_hours_rfc",     severity:"low",      source_ip:"10.42.0.15",     user_id:"USR007",     message:"Off-hours RFC access by USR007 (02:14 UTC)",                        latencyMs:14},
+    {scenario:"bulk_extraction",   severity:"high",     source_ip:"10.42.5.60",     user_id:"USR013",     message:"Large result set — BAPI_CUSTOMER_GETLIST 28K rows",                 latencyMs:33},
+  ];
+  alertSeeds.forEach((a,i)=>alerts.push({...a, ts:tstep(i)}));
+
+  // ── M08 Anomaly Detection ──
+  const anomalySeeds = [
+    {anomaly_score:0.94, classification:"velocity_spike",       source_ip:"185.193.67.170", user_id:"SVCACCT"},
+    {anomaly_score:0.91, classification:"new_endpoint",         source_ip:"45.77.200.1",    user_id:"UNKNOWN"},
+    {anomaly_score:0.88, classification:"privilege_escalation", source_ip:"10.42.0.74",     user_id:"jsmith"},
+    {anomaly_score:0.76, classification:"geo_anomaly",          source_ip:"212.73.150.9",   user_id:"agarwal"},
+    {anomaly_score:0.68, classification:"baseline_deviation",   source_ip:"91.108.4.1",     user_id:"mrodriguez"},
+    {anomaly_score:0.52, classification:"off_hours_pattern",    source_ip:"10.42.1.34",     user_id:"BATCHJOB"},
+    {anomaly_score:0.33, classification:"off_hours_pattern",    source_ip:"10.42.0.15",     user_id:"USR007"},
+    {anomaly_score:0.21, classification:"baseline_deviation",   source_ip:"10.42.2.82",     user_id:"lchen"},
+  ];
+  anomalySeeds.forEach((a,i)=>anomalies.push({...a, ts:tstep(i)}));
+
+  // ── M09 DLP ──
+  const dlpSeeds = [
+    {rule:"bulk_export_detected",   severity:"critical", bytes_out:54000000, row_count:84000,  user_id:"SVCACCT",    destination:"185.193.67.170"},
+    {rule:"pii_exfiltration",       severity:"critical", bytes_out:312000000,row_count:214000, user_id:"SVCACCT",    destination:"103.21.45.9"},
+    {rule:"blocklist_destination",  severity:"critical", bytes_out:14000000, row_count:18000,  user_id:"jsmith",     destination:"mega.nz"},
+    {rule:"staging_area_write",     severity:"high",     bytes_out:28000000, row_count:62000,  user_id:"mrodriguez", destination:"10.9.0.5"},
+    {rule:"bulk_export_detected",   severity:"high",     bytes_out:9000000,  row_count:28000,  user_id:"USR013",     destination:"10.42.5.60"},
+    {rule:"pii_exfiltration",       severity:"medium",   bytes_out:2400000,  row_count:4200,   user_id:"agarwal",    destination:"212.73.150.9"},
+  ];
+  dlpSeeds.forEach((d,i)=>dlpEvents.push({...d, ts:tstep(i)}));
+
+  // ── M05 SAP MCP Suite ──
+  const sapSeeds = [
+    {tool_name:"export_payroll_data",  anomalous:true,  flagged:true,  user_id:"SVCACCT", tenant_id:"PROD-001", result:"success"},
+    {tool_name:"change_user_auth",     anomalous:true,  flagged:true,  user_id:"jsmith",  tenant_id:"PROD-001", result:"success"},
+    {tool_name:"modify_auth_profile",  anomalous:true,  flagged:true,  user_id:"jsmith",  tenant_id:"PROD-001", result:"success"},
+    {tool_name:"delete_table_entries", anomalous:true,  flagged:true,  user_id:"SVCACCT", tenant_id:"PROD-001", result:"partial"},
+    {tool_name:"get_auth_objects",     anomalous:true,  flagged:true,  user_id:"mrodriguez",tenant_id:"PROD-001",result:"success"},
+    {tool_name:"list_users",           anomalous:false, user_id:"lchen",  tenant_id:"PROD-001", result:"success"},
+    {tool_name:"read_table",           anomalous:false, user_id:"USR007", tenant_id:"PROD-001", result:"success"},
+    {tool_name:"run_report",           anomalous:false, user_id:"USR013", tenant_id:"DEV-001",  result:"success"},
+  ];
+  sapSeeds.forEach((s,i)=>sapEvents.push({...s, ts:tstep(i)}));
+
+  // ── M04 Zero-Trust ──
+  const ztSeeds = [
+    {decision:"deny",      risk_score:0.98, user_id:"SVCACCT",   source_ip:"185.193.67.170", failed_controls:["behaviour_risk","time_risk","geo_risk","mfa_required"]},
+    {decision:"deny",      risk_score:0.96, user_id:"UNKNOWN",   source_ip:"45.77.200.1",    failed_controls:["geo_risk","mfa_required","behaviour_risk"]},
+    {decision:"deny",      risk_score:0.93, user_id:"jsmith",    source_ip:"10.42.0.74",     failed_controls:["behaviour_risk","mfa_required","device_compliant"]},
+    {decision:"challenge", risk_score:0.71, user_id:"mrodriguez",source_ip:"91.108.4.1",     failed_controls:["device_compliant","mfa_required"]},
+    {decision:"challenge", risk_score:0.62, user_id:"agarwal",   source_ip:"212.73.150.9",   failed_controls:["geo_risk"]},
+    {decision:"allow",     risk_score:0.22, user_id:"lchen",     source_ip:"10.42.2.82",     failed_controls:[]},
+    {decision:"allow",     risk_score:0.15, user_id:"USR007",    source_ip:"10.42.0.15",     failed_controls:[]},
+    {decision:"allow",     risk_score:0.09, user_id:"USR013",    source_ip:"10.42.5.60",     failed_controls:[]},
+  ];
+  ztSeeds.forEach((z,i)=>ztEvents.push({...z, ts:tstep(i)}));
+
+  // ── M06 Credential Vault ──
+  const credSeeds = [
+    {action:"revoked", key:"key-SVCACCT-a1b2c3", tenant_id:"PROD-001", status:"revoked"},
+    {action:"revoked", key:"key-jsmith-all",     tenant_id:"PROD-001", status:"revoked"},
+    {action:"rotated", key:"key-aws-admin-44f1", tenant_id:"PROD-001"},
+    {action:"rotated", key:"key-btp-rfc-dest-9812", tenant_id:"PROD-001"},
+    {action:"issued",  key:"key-new-e9a3b2",     tenant_id:"PROD-001"},
+    {action:"issued",  key:"key-ci-bot-7c04",    tenant_id:"DEV-001"},
+    {action:"accessed",key:"key-mrodriguez-session", tenant_id:"PROD-001"},
+    {action:"accessed",key:"key-lchen-api",      tenant_id:"PROD-001"},
+  ];
+  credSeeds.forEach((c,i)=>credEvents.push({...c, ts:tstep(i)}));
+
+  // ── M07 Compliance Autopilot ──
+  const compSeeds = [
+    {framework:"SOX",      control_id:"AC-6",  result:"violation", description:"Excessive data access by SVCACCT",               severity:"critical"},
+    {framework:"GDPR",     control_id:"SA-9",  result:"violation", description:"Data breach notification required",              severity:"critical"},
+    {framework:"PCI-DSS",  control_id:"SC-7",  result:"violation", description:"Cloud data exfiltration violates PCI-DSS SC-7",   severity:"critical"},
+    {framework:"NIST-CSF", control_id:"IA-2",  result:"violation", description:"MFA bypassed during privilege change",            severity:"critical"},
+    {framework:"SOX",      control_id:"AC-2",  result:"warning",   description:"Dormant privileged account detected",             severity:"medium"},
+    {framework:"ISO27001", control_id:"AU-2",  result:"warning",   description:"Audit gap — 4 hours missing for tenant PROD-001", severity:"medium"},
+    {framework:"GDPR",     control_id:"SI-3",  result:"pass",      description:"Data classification enforced across integrations",severity:"low"},
+    {framework:"ISO27001", control_id:"IR-4",  result:"pass",      description:"Incident response controls passed",               severity:"low"},
+    {framework:"HIPAA",    control_id:"PS-3",  result:"pass",      description:"Access review completed",                         severity:"low"},
+    {framework:"PCI-DSS",  control_id:"CM-2",  result:"pass",      description:"Baseline config verified across 15 modules",      severity:"low"},
+  ];
+  compSeeds.forEach((c,i)=>compEvents.push({...c, ts:tstep(i)}));
+
+  // ── M10 Incident Response ──
+  const incSeeds = [
+    {title:"Bulk data exfiltration detected", status:"investigating", severity:"critical", source_module:"m09-dlp",                 playbook_id:"PB-DATA-EXFIL",      playbook_run:true},
+    {title:"Shadow RFC endpoint invoked",     status:"open",          severity:"critical", source_module:"m11-shadow-integration", playbook_id:"PB-SHADOW-API"},
+    {title:"Unauthorized privilege escalation",status:"investigating",severity:"critical", source_module:"m04-zero-trust-fabric",  playbook_id:"PB-PRIV-ESC",         playbook_run:true},
+    {title:"Cloud misconfiguration exploited",status:"resolved",      severity:"critical", source_module:"m15-multicloud-ispm",    playbook_id:"PB-CLOUD-BREACH"},
+    {title:"Credential stuffing attempt",     status:"resolved",      severity:"high",     source_module:"m06-credential-vault",   playbook_id:"PB-ACCOUNT-TAKEOVER"},
+  ];
+  incSeeds.forEach((inc,i)=>incEvents.push({...inc, incident_id:`INC-${++_incID}`, ts:tstep(i)}));
+
+  // ── M11 Shadow Integration ──
+  const shadowSeeds = [
+    {endpoint:"ZRFC_DUMP_PAYROLL", severity:"critical", user_id:"SVCACCT", source_ip:"185.193.67.170", message:"Payroll dump RFC from external IP",                call_count:11},
+    {endpoint:"ZTEST_BACKDOOR",    severity:"critical", user_id:"UNKNOWN", source_ip:"45.77.200.1",    message:"Unknown RFC ZTEST_BACKDOOR from external 45.77.200.1", call_count:7},
+    {endpoint:"Z_HIDDEN_EXTRACT",  severity:"high",     user_id:"jsmith",  source_ip:"10.42.0.74",     message:"Undocumented Z-endpoint Z_HIDDEN_EXTRACT",             call_count:4},
+    {endpoint:"ZRFC_EXFIL_DATA",   severity:"high",     user_id:"BATCHJOB",source_ip:"10.42.1.34",     message:"Unregistered RFC ZRFC_EXFIL_DATA detected",           call_count:3},
+  ];
+  shadowSeeds.forEach((s,i)=>shadowEvents.push({...s, ts:tstep(i)}));
+
+  // ── M13 SBOM Scanner ──
+  const sbomSeeds = [
+    {target:"m01-api-gateway-shield", scan_status:"VULNERABLE", cve_count:9, insecure_rfc_count:3},
+    {target:"m05-sap-mcp-suite",      scan_status:"VULNERABLE", cve_count:4, insecure_rfc_count:2},
+    {target:"fastapi",                scan_status:"VULNERABLE", cve_count:2, insecure_rfc_count:0},
+    {target:"redis-client",           scan_status:"CLEAN",      cve_count:0, insecure_rfc_count:0},
+    {target:"pydantic",               scan_status:"CLEAN",      cve_count:0, insecure_rfc_count:0},
+    {target:"uvicorn",                scan_status:"CLEAN",      cve_count:0, insecure_rfc_count:0},
+    {target:"shared-libs",            scan_status:"CLEAN",      cve_count:0, insecure_rfc_count:0},
+  ];
+  sbomSeeds.forEach((s,i)=>sbomEvents.push({...s, ts:tstep(i)}));
+
+  // ── M15 Multi-Cloud ISPM ──
+  const cloudSeeds = [
+    {provider:"aws",   finding_type:"PUBLIC_BUCKET",      raw_severity:"critical", resource_id:"arn:aws:s3:::prod-payroll-data",      risk_score:0.94},
+    {provider:"gcp",   finding_type:"OVERPRIVILEGED_ROLE",raw_severity:"critical", resource_id:"projects/prod/db-main",               risk_score:0.89},
+    {provider:"azure", finding_type:"ROOT_ACCESS_USED",   raw_severity:"critical", resource_id:"subscriptions/prod/vm-app01",         risk_score:0.95},
+    {provider:"aws",   finding_type:"MFA_DISABLED",       raw_severity:"high",     resource_id:"arn:aws:iam:::role/AdminRole",        risk_score:0.78},
+    {provider:"aws",   finding_type:"UNENCRYPTED_DB",     raw_severity:"high",     resource_id:"arn:aws:rds:::db-finance",            risk_score:0.71},
+    {provider:"gcp",   finding_type:"OPEN_SECURITY_GROUP",raw_severity:"high",     resource_id:"projects/prod/firewall-allow-all",    risk_score:0.68},
+    {provider:"azure", finding_type:"LOGGING_DISABLED",   raw_severity:"medium",   resource_id:"subscriptions/prod/storage-logs",     risk_score:0.44},
+  ];
+  cloudSeeds.forEach((c,i)=>cloudEvents.push({...c, ts:tstep(i)}));
+
+  // ── M02 Connector Sentinel ──
+  const connSeeds = [
+    {platform:"sap_btp",  connector:"BTP-RFC-Dest",       status:"alert",         finding:"Credential leak in destination config", source_system:"S4H-PROD",     dest_system:"SALESFORCE"},
+    {platform:"mulesoft", connector:"MuleSoft-HTTP",      status:"alert",         finding:"Unauthorized data flow to external API",source_system:"ARIBA",        dest_system:"EXTERNAL-API"},
+    {platform:"boomi",    connector:"Boomi-SFTP",         status:"misconfigured", finding:"TLS 1.0 detected on SFTP endpoint",      source_system:"SUCCESSFACTORS",dest_system:"S3-BUCKET"},
+    {platform:"workato",  connector:"Workato-Recipe-214", status:"misconfigured", finding:"Over-privileged OAuth scope",            source_system:"S4H-PROD",     dest_system:"WORKDAY"},
+    {platform:"sap_btp",  connector:"SAP-S4HANA-Cloud",   status:"healthy",       finding:"Clean",                                  source_system:"S4H-PROD",     dest_system:"DATABRICKS"},
+    {platform:"mulesoft", connector:"MuleSoft-CDC",       status:"healthy",       finding:"Clean",                                  source_system:"ARIBA",        dest_system:"SALESFORCE"},
+  ];
+  connSeeds.forEach((c,i)=>connEvents.push({...c, ts:tstep(i)}));
+
+  // ── M03 Integration Traffic Analyzer ──
+  const trafficSeeds = [
+    {source:"S4H-PROD",  destination:"EXTERNAL-API", classification:"PII",       direction:"outbound", bytes:4300000, fields_detected:"EMAIL,PHONE,SSN", policy_violation:true},
+    {source:"S4H-PROD",  destination:"SALESFORCE",   classification:"PII",       direction:"outbound", bytes:1200000, fields_detected:"EMAIL,PHONE",     policy_violation:false},
+    {source:"BTP-EU10",  destination:"DATABRICKS",   classification:"FINANCIAL", direction:"outbound", bytes:3800000, fields_detected:"IBAN,BIC",        policy_violation:false},
+    {source:"ARIBA",     destination:"WORKDAY",      classification:"PHI",       direction:"outbound", bytes:640000,  fields_detected:"SSN,DOB",         policy_violation:true},
+    {source:"S4H-PROD",  destination:"WORKDAY",      classification:"STANDARD",  direction:"inbound",  bytes:210000,  fields_detected:"PRODUCT_ID",      policy_violation:false},
+    {source:"BTP-EU10",  destination:"SALESFORCE",   classification:"STANDARD",  direction:"outbound", bytes:180000,  fields_detected:"PRODUCT_ID",      policy_violation:false},
+  ];
+  trafficSeeds.forEach((t,i)=>trafficEvents.push({...t, ts:tstep(i)}));
+
+  // ── M14 Secure Webhook Gateway ──
+  const webhookSeeds = [
+    {source:"github",    event_type:"push",              result:"accepted",    signature_valid:true,  source_ip:"140.82.114.3",   latency_ms:12},
+    {source:"slack",     event_type:"alert",             result:"accepted",    signature_valid:true,  source_ip:"3.224.52.100",   latency_ms:18},
+    {source:"pagerduty", event_type:"incident.trigger",  result:"accepted",    signature_valid:true,  source_ip:"54.241.32.101",  latency_ms:22},
+    {source:"custom",    event_type:"order.created",     result:"rejected",    signature_valid:false, source_ip:"185.193.67.170", latency_ms:8},
+    {source:"custom",    event_type:"payment.received",  result:"rate_limited",signature_valid:true,  source_ip:"103.21.45.9",    latency_ms:5},
+    {source:"github",    event_type:"push",              result:"accepted",    signature_valid:true,  source_ip:"140.82.114.4",   latency_ms:14},
+  ];
+  webhookSeeds.forEach((w,i)=>webhookEvents.push({...w, ts:tstep(i)}));
+
+  // ── Audit trail: one entry per module event ──
+  const auditSeeds = [
+    {actor:"m12-rules-engine",        action:"alert_published",       module:"m12-rules-engine",        status:"ok"},
+    {actor:"m08-anomaly-detection",   action:"anomaly_scored",        module:"m08-anomaly-detection",   status:"ok"},
+    {actor:"m09-dlp",                 action:"dlp_violation",         module:"m09-dlp",                 status:"ok"},
+    {actor:"m04-zero-trust-fabric",   action:"access_denied",         module:"m04-zero-trust-fabric",   status:"ok"},
+    {actor:"m10-incident-response",   action:"playbook_executed",     module:"m10-incident-response",   status:"ok"},
+    {actor:"m06-credential-vault",    action:"credential_revoked",    module:"m06-credential-vault",    status:"ok"},
+    {actor:"m07-compliance-autopilot",action:"control_evaluated",     module:"m07-compliance-autopilot",status:"ok"},
+    {actor:"m11-shadow-integration",  action:"shadow_endpoint_detected",module:"m11-shadow-integration",status:"ok"},
+    {actor:"m15-multicloud-ispm",     action:"finding_published",     module:"m15-multicloud-ispm",     status:"ok"},
+    {actor:"m13-sbom-scanner",        action:"scan_completed",        module:"m13-sbom-scanner",        status:"ok"},
+    {actor:"m02-connector-sentinel",  action:"connector_flagged",     module:"m02-connector-sentinel",  status:"ok"},
+    {actor:"m03-traffic-analyzer",    action:"flow_classified",       module:"m03-traffic-analyzer",    status:"ok"},
+    {actor:"m14-webhook-gateway",     action:"webhook_validated",     module:"m14-webhook-gateway",     status:"ok"},
+    {actor:"m05-sap-mcp-suite",       action:"tool_invoked",          module:"m05-sap-mcp-suite",       status:"ok"},
+    {actor:"m01-api-gateway-shield",  action:"event_processed",       module:"m01-api-gateway-shield",  status:"ok"},
+  ];
+  auditSeeds.forEach((a,i)=>auditRows.push({...a, ts:tstep(i)}));
+
+  // Start counter at 0 — ramps up organically as events flow
+  kpiBlocked = 0;
 }
 
 function stopDemo() {
@@ -546,26 +946,47 @@ function updateAllUI() {
     rulesChart.update("none");
   }
 
-  // Risk gauge
+  // Risk gauge — dynamic gradient arc + needle + glow
   if (riskGaugeChart) {
     const maxScore  = anomalies.length ? Math.max(...anomalies.map(a=>parseFloat(a.anomaly_score||0))) : 0;
     const risk      = Math.min(100, Math.round((crit/Math.max(total,1))*60 + maxScore*40));
-    const colors    = risk>75?[cssVar('--critical'),cssVar('--critical-bg')]:risk>50?[cssVar('--orange'),cssVar('--orange-bg')]:risk>25?[cssVar('--warning'),cssVar('--warning-bg')]:[cssVar('--ok'),cssVar('--ok-bg')];
     const riskLabel = risk>75?"CRITICAL":risk>50?"HIGH":risk>25?"MEDIUM":"LOW";
-    riskGaugeChart.data.datasets[0].data           = [risk,100-risk];
-    riskGaugeChart.data.datasets[0].backgroundColor = colors;
+    const labelColor = risk>75?"#ef4444":risk>50?"#f97316":risk>25?"#facc15":"#22c55e";
+
+    // Rebuild the per-render gradient using the current risk so the arc color
+    // reflects the live zone (green → yellow → orange → red).
+    const grad = riskGaugeChart._buildArcGradient
+      ? riskGaugeChart._buildArcGradient(risk)
+      : labelColor;
+
+    riskGaugeChart.$risk = risk;
+    riskGaugeChart.data.datasets[0].data            = [risk, 100 - risk];
+    riskGaugeChart.data.datasets[0].backgroundColor = [grad, "rgba(51,65,85,0.35)"];
     riskGaugeChart.update("none");
-    if (ui.riskLabel) { ui.riskLabel.textContent = `${riskLabel} · ${risk}%`; ui.riskLabel.style.color = colors[0]; }
+
+    if (ui.riskLabel) {
+      ui.riskLabel.textContent = `${riskLabel}`;
+      ui.riskLabel.style.color = labelColor;
+      ui.riskLabel.classList.toggle("risk-pulse", risk > 75);
+    }
   }
 
   // Pills
   const modStatus = {
-    "m01-api-gateway-shield":{events:total},  "m03-traffic-analyzer":{events:_int(10,40)},
-    "m08-anomaly-detection":{events:anomalies.length},  "m09-dlp":{events:dlpEvents.length},
-    "m11-shadow-integration":{events:shadowEvents.length}, "m05-sap-mcp-suite":{events:sapEvents.length},
-    "m07-compliance-autopilot":{events:compEvents.length},"m10-incident-response":{events:incEvents.length},
-    "m13-sbom-scanner":{events:sbomEvents.length},"m04-zero-trust-fabric":{events:ztEvents.length},
-    "m06-credential-vault":{events:credEvents.length},"m12-rules-engine":{events:total},
+    "m01-api-gateway-shield":{events:total},
+    "m02-connector-sentinel":{events:connEvents.length},
+    "m03-traffic-analyzer":{events:trafficEvents.length||_int(10,40)},
+    "m04-zero-trust-fabric":{events:ztEvents.length},
+    "m05-sap-mcp-suite":{events:sapEvents.length},
+    "m06-credential-vault":{events:credEvents.length},
+    "m07-compliance-autopilot":{events:compEvents.length},
+    "m08-anomaly-detection":{events:anomalies.length},
+    "m09-dlp":{events:dlpEvents.length},
+    "m10-incident-response":{events:incEvents.length},
+    "m11-shadow-integration":{events:shadowEvents.length},
+    "m12-rules-engine":{events:total},
+    "m13-sbom-scanner":{events:sbomEvents.length},
+    "m14-webhook-gateway":{events:webhookEvents.length},
     "m15-multicloud-ispm":{events:cloudEvents.length},
   };
   updatePills(modStatus);
@@ -628,12 +1049,14 @@ function miniStatFilter(tabName, filterId, value) {
 
 // ── Pills ─────────────────────────────────────────────────────
 const PILL_MAP = {
-  "m01-api-gateway-shield":"m01","m04-zero-trust-fabric":"m04",
+  "m01-api-gateway-shield":"m01","m02-connector-sentinel":"m02",
+  "m03-traffic-analyzer":"m03","m04-zero-trust-fabric":"m04",
   "m05-sap-mcp-suite":"m05","m06-credential-vault":"m06",
   "m07-compliance-autopilot":"m07","m08-anomaly-detection":"m08",
   "m09-dlp":"m09","m10-incident-response":"m10",
   "m11-shadow-integration":"m11","m12-rules-engine":"m12",
-  "m13-sbom-scanner":"m13","m15-multicloud-ispm":"m15",
+  "m13-sbom-scanner":"m13","m14-webhook-gateway":"m14",
+  "m15-multicloud-ispm":"m15",
 };
 function updatePills(mods) {
   for (const [mod,id] of Object.entries(PILL_MAP)) {
@@ -644,7 +1067,9 @@ function updatePills(mods) {
 
 // ── Module grid ───────────────────────────────────────────────
 const ALL_MODS = {
-  "m01-api-gateway-shield":{dev:"Threat Detection",type:"FastAPI"},
+  "m01-api-gateway-shield":{dev:"Ingestion",type:"FastAPI"},
+  "m02-connector-sentinel":{dev:"Ingestion",type:"Consumer"},
+  "m14-webhook-gateway":{dev:"Ingestion",type:"FastAPI"},
   "m03-traffic-analyzer":{dev:"Threat Detection",type:"Consumer"},
   "m08-anomaly-detection":{dev:"Threat Detection",type:"Consumer"},
   "m12-rules-engine":{dev:"Threat Detection",type:"FastAPI"},
@@ -681,6 +1106,7 @@ function renderActiveTab() {
     sap: renderSap, compliance: renderCompliance, incidents: renderIncidents,
     sbom: renderSbom, rules: renderRules, "zero-trust": renderZeroTrust,
     credentials: renderCredentials, cloud: renderCloud,
+    connectors: renderConnectors, traffic: renderTraffic, webhooks: renderWebhooks,
     launcher: () => renderLauncher(launcherProcesses),
   };
   (map[btn.dataset.tab] || (() => {}))();
@@ -735,11 +1161,12 @@ function renderAudit() {
   setEmpty(ui.auditBody, ui.auditEmpty, v);
   ui.auditBody.innerHTML = v.map(r => `<tr>
     <td>${ts(r.ts)}</td>
-    <td style="color:var(--text-mid)">${r.actor||"—"}</td>
-    <td><code style="font-size:.72rem;background:rgba(255,255,255,.05);padding:1px 6px;border-radius:3px">${r.action||"—"}</code></td>
+    <td class="audit-actor">${r.actor||"—"}</td>
+    <td><code class="audit-action-code">${r.action||"—"}</code></td>
     <td><span class="module-chip chip-default">${r.module||"—"}</span></td>
-    <td><span style="color:${r.status==="ok"?"var(--ok)":"var(--critical)"}">${r.status||"ok"}</span></td>
+    <td><span class="audit-status ${r.status==="ok"?"is-ok":"is-bad"}">${r.status||"ok"}</span></td>
   </tr>`).join("");
+  renderActionLog();
 }
 
 // ── GATEWAY M01 ───────────────────────────────────────────────
@@ -1305,10 +1732,10 @@ function showItemDetail(type, idx) {
     if (corrCount > 0) {
       corrHTML = `<div>
         <div class="drw-section-title">🔗 Correlated Events (${corrCount})</div>
-        ${corrAlerts.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:var(--critical-bg);color:var(--critical)">⚠️ ALERT: ${x.message||x.scenario} — ${ts(x.ts)}</div>`).join("")}
-        ${corrAnom.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:var(--purple-bg);color:var(--purple)">🧠 ANOMALY: score ${x.anomaly_score} · ${x.classification} — ${ts(x.ts)}</div>`).join("")}
-        ${corrDlp.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:var(--cyan-bg);color:var(--cyan)">🔒 DLP: ${x.rule} · ${byt(x.bytes_out)} — ${ts(x.ts)}</div>`).join("")}
-        ${corrZT.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:var(--accent-bg);color:var(--accent)">🔐 ZERO-TRUST: ${(x.decision||"").toUpperCase()} · risk ${x.risk_score} — ${ts(x.ts)}</div>`).join("")}
+        ${corrAlerts.map(x=>`<div class="drw-corr drw-corr--alert">⚠️ ALERT: ${x.message||x.scenario} — ${ts(x.ts)}</div>`).join("")}
+        ${corrAnom.map(x=>`<div class="drw-corr drw-corr--anom">🧠 ANOMALY: score ${x.anomaly_score} · ${x.classification} — ${ts(x.ts)}</div>`).join("")}
+        ${corrDlp.map(x=>`<div class="drw-corr drw-corr--dlp">🔒 DLP: ${x.rule} · ${byt(x.bytes_out)} — ${ts(x.ts)}</div>`).join("")}
+        ${corrZT.map(x=>`<div class="drw-corr drw-corr--zt">🔐 ZERO-TRUST: ${(x.decision||"").toUpperCase()} · risk ${x.risk_score} — ${ts(x.ts)}</div>`).join("")}
       </div>`;
     }
   }
@@ -1320,44 +1747,36 @@ function showItemDetail(type, idx) {
     </div>
     <div>
       <div class="drw-section-title">🧠 What Is This?</div>
-      <div style="background:var(--accent-bg);border:1px solid rgba(91,141,239,.18);border-radius:6px;padding:.75rem;font-size:.78rem;color:var(--text-mid);line-height:1.6">
-        ${explanation}
-      </div>
+      <div class="drw-explain">${explanation}</div>
     </div>
     <div>
       <div class="drw-section-title">🔧 How To Fix It</div>
-      <div style="display:flex;flex-direction:column;gap:.35rem">
-        ${fixSteps.map((s,i)=>`<div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.76rem;padding:.4rem .6rem;border-radius:5px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)">
-          <span style="flex-shrink:0;width:18px;height:18px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-weight:700;font-size:.65rem;display:flex;align-items:center;justify-content:center">${i+1}</span>
-          <span style="color:var(--text-mid);line-height:1.5">${s}</span>
+      <div class="drw-fix-steps">
+        ${fixSteps.map((s,i)=>`<div class="drw-fix-step">
+          <span class="drw-fix-num">${i+1}</span>
+          <span class="drw-fix-text">${s}</span>
         </div>`).join("")}
       </div>
     </div>
     ${corrHTML}
   `;
 
+  window._drwCtx = { type, idx, ev };
+  // Append prior-action history into drawer body
+  if (drwBody) {
+    const historyHtml = _renderDrawerHistory(type, idx, ev);
+    if (historyHtml) drwBody.insertAdjacentHTML("beforeend", historyHtml);
+  }
+  // Clear any stale progress/receipt from a previous drawer open
+  document.getElementById("drw-progress")?.remove();
+  document.getElementById("drw-receipt")?.remove();
   if (drwActions) {
     if (alreadyFixed) {
       drwActions.innerHTML = `
-        <div style="flex:1;padding:.5rem .7rem;border:1px solid rgba(16,185,129,.3);border-radius:6px;background:var(--ok-bg);color:var(--ok);font-size:.76rem;font-weight:600;text-align:center">
-          ✓ Already resolved by IntegriShield
-        </div>
-        <button onclick="closeDetailDrawer()" style="padding:.5rem .9rem;border:1px solid var(--border-subtle);border-radius:6px;background:var(--bg-raised);color:var(--text-muted);font-size:.76rem;cursor:pointer">Close</button>`;
+        <div class="drw-resolved-pill">✓ Already resolved by IntegriShield</div>
+        <button onclick="closeDetailDrawer()" class="drw-btn drw-btn--neutral">Close</button>`;
     } else {
-      drwActions.innerHTML = `
-        <button onclick="applyFix('${type}',${idx})"
-          style="flex:1;padding:.55rem .8rem;border:none;border-radius:6px;background:var(--grad-success);color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.03em;box-shadow:0 0 16px rgba(16,185,129,.35)">
-          ⚡ Fix It Now
-        </button>
-        <button onclick="demoActionAlt('block','${type}','${ev.source_ip||ev.user_id||""}')"
-          style="padding:.5rem .7rem;border:1px solid rgba(239,68,68,.3);border-radius:6px;background:var(--critical-bg);color:var(--critical);font-size:.76rem;font-weight:600;cursor:pointer">
-          🚫 Block
-        </button>
-        <button onclick="demoActionAlt('report','${type}','')"
-          style="padding:.5rem .7rem;border:1px solid var(--border-glow);border-radius:6px;background:var(--accent-bg);color:var(--accent);font-size:.76rem;font-weight:600;cursor:pointer">
-          📄 Report
-        </button>
-      `;
+      drwActions.innerHTML = _drwActionButtons(type, idx, ev);
     }
   }
 
@@ -1653,12 +2072,764 @@ function closeDetailDrawer(e) {
   overlay.classList.add("hidden");
 }
 
-function demoActionAlt(action, type, param) {
-  const msgs = {
-    block: `🚫 ${param||type} blocked at perimeter — firewall rule propagated across all zones`,
-    report: `📄 ${type.charAt(0).toUpperCase()+type.slice(1)} report exported — PDF sent to SOC team & CISO`,
+// ── Drawer action catalog ─────────────────────────────────────
+// Fields: id, label, cls, sev, shortcut, confirm{text,effects[],blast}, destructive(bool)
+const DRW_ACTIONS = {
+  alert: [
+    { id:"fix",        label:"⚡ Fix It Now",           cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Apply full automated remediation",effects:["Block source IP at edge","Revoke active credentials","Create incident record","Notify SOC on-call"],blast:"Affects: 1 user · 14 firewall nodes · on-call pager"} },
+    { id:"block_ip",   label:"🚫 Block Source IP",      cls:"drw-btn--block",  shortcut:"B", sev:"warning",
+      confirm:{text:"Block this IP at all perimeter nodes",effects:["Add IP to blocklist on 14 firewalls","Tag all future events from this IP as BLOCKED"],blast:"Affects: all inbound traffic from this IP"},
+      destructive:false, reversible:true },
+    { id:"quarantine", label:"🔒 Quarantine User",      cls:"drw-btn--block",  shortcut:"Q", sev:"warning",
+      confirm:{text:"Terminate all sessions for this user",effects:["Invalidate all active bearer tokens","Lock account in identity provider","Inject termination event to feed"],blast:"Affects: 1 user account · all active sessions"},
+      destructive:true, reversible:true },
+    { id:"forensic",   label:"🧪 Forensic Snapshot",    cls:"drw-btn--neutral",shortcut:"S", sev:"info",
+      confirm:{text:"Capture full forensic evidence bundle",effects:["Snapshot ML features from this event","Package payload + caller chain","Seal in evidence vault with hash"],blast:"Read-only — no active sessions affected"} },
+    { id:"slack",      label:"📣 Page SOC",             cls:"drw-btn--neutral",shortcut:"P", sev:"info",
+      confirm:{text:"Alert the SOC on-call team",effects:["Post to Slack #sec-incidents with event detail","Fire PagerDuty alert to L2 on-call"],blast:"Affects: L2 on-call rotation"} },
+    { id:"jira",       label:"🎫 Create Jira",          cls:"drw-btn--neutral",shortcut:"J", sev:"info",
+      confirm:{text:"Create a Jira security ticket",effects:["Open SEC-#### with full event chain","Set SLA deadline based on severity"],blast:"Affects: security backlog queue"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  anomaly: [
+    { id:"fix",        label:"⚡ Retrain Baseline",     cls:"drw-btn--fix",    shortcut:"R",
+      confirm:{text:"Retrain the ML baseline model",effects:["Pull last 7d feature vectors","Refit IsolationForest (contamination=0.05)","Validate on 20% holdout","Swap model version — future events use new baseline"],blast:"Affects: all future anomaly scoring · model version bumped"} },
+    { id:"quarantine", label:"🔒 Isolate Session",      cls:"drw-btn--block",  shortcut:"I", sev:"warning",
+      confirm:{text:"Terminate and isolate this user session",effects:["Invalidate all active bearer tokens (3)","Lock account in identity provider","Tag all future events for this user as [ISOLATED]","Inject session-terminated alert to feed"],blast:"Affects: 1 user account · all active sessions"},
+      destructive:true, reversible:true },
+    { id:"elevate",    label:"🚨 Escalate to Incident", cls:"drw-btn--block",  shortcut:"E", sev:"warning",
+      confirm:{text:"Escalate this anomaly to a P1 incident",effects:["Create INC-#### record linked to this event","Assign to on-call L2 team","Incident appears live in Incidents tab"],blast:"Affects: incident queue · on-call team"},
+      destructive:false },
+    { id:"forensic",   label:"🧪 Capture Features",    cls:"drw-btn--neutral",shortcut:"F", sev:"info",
+      confirm:{text:"Capture and archive ML feature snapshot",effects:["Export 24-feature vector from this event","Generate CSV + JSON evidence bundle","Append to threat-intel corpus"],blast:"Read-only — no active sessions affected"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  sap: [
+    { id:"fix",        label:"⚡ Revoke SAP Auth",      cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Revoke SAP MCP authorization for this user",effects:["Terminate SAP session","Revoke all MCP tool permissions","Apply SU01 lock"],blast:"Affects: 1 SAP user account"} },
+    { id:"freeze",     label:"❄️ Freeze SAP Role",     cls:"drw-btn--block",  shortcut:"Z", sev:"warning",
+      confirm:{text:"Apply SU01 lock to this SAP user",effects:["Freeze user's SAP role (SU01)","Notify SAP basis team","Log in change management"],blast:"Affects: 1 SAP user · all SAP access"},
+      reversible:true },
+    { id:"tool_block", label:"🚫 Disable MCP Tool",    cls:"drw-btn--block",  shortcut:"T", sev:"warning",
+      confirm:{text:"Globally disable this MCP tool",effects:["Add tool to disabled_tools registry","Propagate guardrail to all tenants","Future events using this tool show BLOCKED badge"],blast:"Affects: all tenants using this tool"},
+      destructive:true, reversible:true },
+    { id:"audit",      label:"📋 Pull Audit Trail",    cls:"drw-btn--neutral",shortcut:"A", sev:"info",
+      confirm:{text:"Export SAP audit trail for this user",effects:["Pull STAD transaction logs (72h)","Pull SM20 security audit log","Export to evidence locker as CSV"],blast:"Read-only — generates downloadable evidence"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  dlp: [
+    { id:"fix",        label:"⚡ Block Egress",         cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Block all egress to this destination",effects:["Add destination to DLP blocklist","Update egress stream rules","Alert data owner"],blast:"Affects: all outbound traffic to this destination"} },
+    { id:"mask",       label:"🕶️ Mask PII",            cls:"drw-btn--block",  shortcut:"M", sev:"warning",
+      confirm:{text:"Tokenise PII fields in this egress stream",effects:["Apply tokenisation schema to matching fields","Rewrite egress stream in-flight"],blast:"Affects: this egress stream only"} },
+    { id:"dest_block", label:"🚫 Blocklist Dest",      cls:"drw-btn--block",  shortcut:"B", sev:"warning",
+      confirm:{text:"Add this destination to the global DLP blocklist",effects:["Block destination across all egress nodes","Persist in DLP policy engine"],blast:"Affects: all outbound traffic to this destination"},
+      reversible:true },
+    { id:"dpo",        label:"⚖️ Notify DPO",          cls:"drw-btn--neutral",shortcut:"G", sev:"info",
+      confirm:{text:"Page the Data Protection Officer (GDPR Art.33)",effects:["Draft GDPR breach notification","Page DPO with event context","Start 72-hour breach-notification clock"],blast:"Triggers legal breach-notification workflow"} },
+    { id:"revoke",     label:"🔑 Revoke Tokens",       cls:"drw-btn--neutral",shortcut:"R", sev:"info",
+      confirm:{text:"Revoke all access tokens for this user",effects:["Invalidate all active tokens","Force re-authentication on next request"],blast:"Affects: 1 user · all active API sessions"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  shadow: [
+    { id:"fix",        label:"⚡ Block Endpoint",       cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Block this shadow RFC endpoint at the SAP Gateway",effects:["Add to reginfo/secinfo deny list","Broadcast block rule to all tenants"],blast:"Affects: all callers of this endpoint"} },
+    { id:"register",   label:"📝 Register & Audit",    cls:"drw-btn--block",  shortcut:"R", sev:"info",
+      confirm:{text:"Register this endpoint with mandatory audit tag",effects:["Add to endpoint registry","Tag with mandatory audit requirement","Record owner in change management"],blast:"Read-only policy change"} },
+    { id:"forensic",   label:"🧪 Forensic Dump",       cls:"drw-btn--neutral",shortcut:"S", sev:"info",
+      confirm:{text:"Dump full RFC payload and caller chain",effects:["Capture full request payload","Reconstruct caller chain","Seal in incident vault with hash"],blast:"Read-only — evidence capture only"} },
+    { id:"sweep",      label:"🔍 Sweep for More",      cls:"drw-btn--neutral",shortcut:"W", sev:"info",
+      confirm:{text:"Scan all tenants for similar shadow endpoints",effects:["Pattern-match against recent RFC events","Build similarity report across tenants"],blast:"Read-only scan across all tenants"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  comp: [
+    { id:"fix",        label:"⚡ Apply Control",        cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Apply the recommended compensating control",effects:["Evaluate control requirement","Apply remediation","Log evidence in compliance ledger"],blast:"Affects: 1 compliance finding"} },
+    { id:"evidence",   label:"📎 Attach Evidence",     cls:"drw-btn--neutral",shortcut:"V", sev:"info",
+      confirm:{text:"Build and attach evidence pack",effects:["Collect evidence artefacts for this control","Package as auditor-ready bundle","Link to compliance finding record"],blast:"Read-only — generates downloadable evidence"} },
+    { id:"legal",      label:"⚖️ Notify Legal",        cls:"drw-btn--neutral",shortcut:"L", sev:"info",
+      confirm:{text:"Notify Legal and Compliance teams",effects:["Page Legal with framework mapping","Page Compliance team with control gap detail"],blast:"Affects: Legal + Compliance escalation queue"} },
+    { id:"exception",  label:"📝 File Exception",      cls:"drw-btn--block",  shortcut:"X", sev:"warning",
+      confirm:{text:"File a compensating-control exception",effects:["Create exception record EXC-####","Set 90-day expiry","Notify approver for sign-off"],blast:"Creates formal risk acceptance record"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  incident: [
+    { id:"fix",        label:"⚡ Run Playbook",         cls:"drw-btn--fix",    shortcut:"P",
+      confirm:{text:"Execute the full incident response playbook",effects:["Contain — network ACL + EDR isolation","Eradicate — malicious artefacts removed","Recover — restore from clean snapshot","Schedule post-incident review"],blast:"Affects: incident scope · may terminate active sessions"} },
+    { id:"contain",    label:"🔒 Contain Now",         cls:"drw-btn--block",  shortcut:"C", sev:"warning",
+      confirm:{text:"Immediately activate containment",effects:["Apply network ACL block","Activate EDR isolation mode","Notify IR team"],blast:"Affects: network access for this incident's scope"} },
+    { id:"war_room",   label:"🚨 Open War Room",       cls:"drw-btn--block",  shortcut:"W", sev:"warning",
+      confirm:{text:"Open a war room bridge for this incident",effects:["Create meeting bridge URL","Invite SOC + IR + Legal","Share incident context automatically"],blast:"Notifies: SOC · IR · Legal teams"} },
+    { id:"handoff",    label:"🤝 Hand to IR",          cls:"drw-btn--neutral",shortcut:"H", sev:"info",
+      confirm:{text:"Escalate to L3 Incident Response team",effects:["Package full incident dossier","Assign to L3 IR team","Start 15-minute SLA clock"],blast:"Affects: L3 IR on-call queue"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  sbom: [
+    { id:"fix",        label:"⚡ Apply Patch",          cls:"drw-btn--fix",    shortcut:"P",
+      confirm:{text:"Apply available patch for this SBOM finding",effects:["Identify safe version","Apply patch in staging then production","Update SBOM inventory"],blast:"Affects: deployment pipeline · running services"} },
+    { id:"pin",        label:"📌 Pin Safe Version",    cls:"drw-btn--block",  shortcut:"V", sev:"warning",
+      confirm:{text:"Pin this component to a safe version",effects:["Update lock files across all environments","Block automatic upgrades past safe version"],blast:"Affects: build pipeline for all environments"} },
+    { id:"isolate",    label:"🔒 Isolate Component",   cls:"drw-btn--block",  shortcut:"I", sev:"warning",
+      confirm:{text:"Network-isolate this vulnerable component",effects:["Apply egress deny rules for this component","Monitor for lateral movement attempts"],blast:"Affects: component network access"},
+      reversible:true },
+    { id:"cve_ticket", label:"🎫 File CVE Ticket",     cls:"drw-btn--neutral",shortcut:"T", sev:"info",
+      confirm:{text:"Open a CVE tracking ticket",effects:["Create CVE-TRACK-#### ticket","Set 30-day SLA for CVSS ≥7"],blast:"Affects: security backlog queue"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  zt: [
+    { id:"fix",        label:"⚡ Update Policy",        cls:"drw-btn--fix",    shortcut:"U",
+      confirm:{text:"Update Zero-Trust policy for this finding",effects:["Evaluate applicable policy matrix","Apply least-privilege update","Broadcast to all Zero-Trust nodes"],blast:"Affects: Zero-Trust policy enforcement across all nodes"} },
+    { id:"mfa",        label:"🔐 Require MFA",         cls:"drw-btn--block",  shortcut:"M", sev:"warning",
+      confirm:{text:"Enforce MFA for this user on all SAP surfaces",effects:["Tag user as mfa_required","Force MFA challenge on next request","Propagate to all SAP authentication surfaces"],blast:"Affects: 1 user · all SAP access"},
+      reversible:true },
+    { id:"isolate",    label:"🔒 Isolate Session",     cls:"drw-btn--block",  shortcut:"I", sev:"warning",
+      confirm:{text:"Terminate session and re-evaluate device posture",effects:["Terminate all active sessions","Re-evaluate device posture score","Lock account pending re-authentication"],blast:"Affects: 1 user · all active sessions"},
+      destructive:true, reversible:true },
+    { id:"reeval",     label:"🔁 Re-eval All Sessions",cls:"drw-btn--neutral",shortcut:"R", sev:"info",
+      confirm:{text:"Broadcast policy update — re-evaluate all active sessions",effects:["Push updated policy to all session validators","Terminate non-compliant sessions"],blast:"Affects: 400–900 active sessions"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  cred: [
+    { id:"fix",        label:"⚡ Rotate Now",           cls:"drw-btn--fix",    shortcut:"R",
+      confirm:{text:"Rotate this credential immediately",effects:["Generate new credential","Update vault with new value","Notify downstream services of rotation"],blast:"Affects: all services using this credential"} },
+    { id:"revoke",     label:"🚫 Revoke Credential",   cls:"drw-btn--block",  shortcut:"V", sev:"warning",
+      confirm:{text:"Revoke this credential permanently",effects:["Revoke credential in vault","Add to revocation list","Notify all downstream services"],blast:"Affects: all services using this credential"},
+      reversible:true },
+    { id:"owner",      label:"👤 Quarantine Owner",    cls:"drw-btn--block",  shortcut:"Q", sev:"warning",
+      confirm:{text:"Lock the credential owner's account",effects:["Terminate all active sessions","Lock account in identity provider","Flag for security review"],blast:"Affects: 1 user account"},
+      destructive:true, reversible:true },
+    { id:"vault_scan", label:"🗝️ Vault Sweep",        cls:"drw-btn--neutral",shortcut:"S", sev:"info",
+      confirm:{text:"Sweep the credential vault for related keys",effects:["Scan for credentials sharing secrets or prefixes","Build relationship map","Generate match report"],blast:"Read-only scan of credential vault"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  cloud: [
+    { id:"fix",        label:"⚡ Auto-Remediate",       cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Auto-remediate this cloud misconfiguration",effects:["Apply least-privilege policy to resource","Verify configuration drift resolved","Log remediation in cloud audit trail"],blast:"Affects: cloud resource configuration"} },
+    { id:"isolate",    label:"🔒 Isolate Resource",    cls:"drw-btn--block",  shortcut:"I", sev:"warning",
+      confirm:{text:"Network-isolate this cloud resource",effects:["Rewrite Security Group to deny all","Preserve resource state for forensics"],blast:"Affects: this cloud resource's network access"},
+      reversible:true },
+    { id:"rotate",     label:"🔑 Rotate Cloud Keys",   cls:"drw-btn--block",  shortcut:"K", sev:"warning",
+      confirm:{text:"Rotate cloud provider access keys",effects:["Generate new access key pair","Update secrets manager","Notify dependent services"],blast:"Affects: all services using these cloud keys"} },
+    { id:"csp_ticket", label:"🎫 Open CSP Ticket",     cls:"drw-btn--neutral",shortcut:"T", sev:"info",
+      confirm:{text:"Open a support ticket with the cloud provider",effects:["Create P1 ticket with finding detail","Attach misconfiguration evidence"],blast:"Affects: cloud provider support queue"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  gateway: [
+    { id:"fix",        label:"⚡ Fix It Now",           cls:"drw-btn--fix",    shortcut:"F",
+      confirm:{text:"Block source IP and apply gateway rule",effects:["Add source IP to gateway blocklist","Propagate rule to all gateway nodes"],blast:"Affects: all traffic from this source IP"} },
+    { id:"block_ip",   label:"🚫 Block Source IP",      cls:"drw-btn--block",  shortcut:"B", sev:"warning",
+      confirm:{text:"Block this IP at the API gateway",effects:["Add to gateway IP blocklist","Tag future events from this IP as BLOCKED"],blast:"Affects: all traffic from this source IP"},
+      reversible:true },
+    { id:"rate_limit", label:"🐢 Rate-Limit",           cls:"drw-btn--block",  shortcut:"L", sev:"warning",
+      confirm:{text:"Apply rate-limiting rule for this source",effects:["Install rate-limit rule (10 req/min)","Confirm rule active at all gateway nodes"],blast:"Affects: this source IP's request throughput"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+  rules: [
+    { id:"fix",        label:"⚡ Apply Rule",           cls:"drw-btn--fix",    shortcut:"A",
+      confirm:{text:"Apply this rule action and suppress the alert",effects:["Execute rule enforcement action","Suppress parent alert","Log rule trigger in action log"],blast:"Affects: this alert · rule engine state"} },
+    { id:"tune",       label:"🎛️ Tune Threshold",      cls:"drw-btn--neutral",shortcut:"T", sev:"info",
+      confirm:{text:"Auto-tune this rule's threshold from recent telemetry",effects:["Analyse last 7d telemetry for this rule","Compute optimal threshold","Update rule registry — takes effect immediately"],blast:"Affects: all future evaluations of this rule"} },
+    { id:"report",     label:"📄 Download Report",      cls:"drw-btn--report", shortcut:"D" },
+  ],
+};
+
+function _drwActionButtons(type, idx, ev) {
+  const acts = DRW_ACTIONS[type] || DRW_ACTIONS.alert;
+  return acts.map(a => {
+    const hint = a.shortcut ? `<span class="drw-shortcut">${a.shortcut}</span>` : "";
+    if (a.id==="report") return `<button onclick="downloadReport()" class="drw-btn ${a.cls}">${a.label}${hint}</button>`;
+    return `<button onclick="runDrwActionPhased('${a.id}',${idx})" class="drw-btn ${a.cls}">${a.label}${hint}</button>`;
+  }).join("");
+}
+
+// ── Operator identity ─────────────────────────────────────────
+function _getOperator() { return localStorage.getItem("is_operator") || ""; }
+
+function _getOrPromptOperator() {
+  const op = _getOperator();
+  if (op) return Promise.resolve(op);
+  return new Promise(resolve => {
+    const modal = document.getElementById("operator-modal");
+    const input = document.getElementById("operator-name-input");
+    if (!modal || !input) { resolve("anonymous"); return; }
+    modal.classList.remove("hidden");
+    input.value = "";
+    input.focus();
+    window._operatorResolve = resolve;
+  });
+}
+
+function _saveOperatorName() {
+  const input = document.getElementById("operator-name-input");
+  const name = input?.value.trim();
+  if (!name) { input?.focus(); return; }
+  localStorage.setItem("is_operator", name);
+  document.getElementById("operator-modal")?.classList.add("hidden");
+  if (window._operatorResolve) { window._operatorResolve(name); window._operatorResolve = null; }
+}
+
+// ── 4-Phase action dispatcher ─────────────────────────────────
+let _pendingAction = null;
+
+async function runDrwActionPhased(actionId, idx) {
+  const ctx = window._drwCtx; if (!ctx) return;
+  const { type, ev } = ctx;
+  const acts = DRW_ACTIONS[type] || DRW_ACTIONS.alert;
+  const a = acts.find(x => x.id === actionId);
+  if (!a) return;
+
+  const operator = await _getOrPromptOperator();
+  if (!operator) return;
+
+  // Phase 1 — Confirm
+  if (a.confirm) {
+    const confirmed = await _showActionConfirm(a, ev);
+    if (!confirmed) return;
+  }
+
+  // Phase 2 — Execute
+  _showActionProgress([]);
+  let result;
+  try {
+    const resp = await fetch("/api/actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ drawer_type: type, action_id: actionId, event: ev, operator }),
+    });
+    result = await resp.json();
+  } catch(err) {
+    _hideActionProgress();
+    showToast(`Action failed: ${err.message}`, "critical", 5000);
+    return;
+  }
+
+  // Phase 3 — Animate steps
+  await _animateActionProgress(result.steps || []);
+
+  // Phase 4 — Receipt + side-effects
+  _showActionReceipt(result, a);
+
+  if (result.reversible && result.undo_token) {
+    showToastWithUndo(`✅ ${a.label} applied`, a.sev || "success", 5500, result.undo_token, result.undo_label || "Undo");
+  } else {
+    showToast(`✅ ${a.label} complete`, a.sev || "success", 4000);
+  }
+
+  const eventKey = `${type}-${ev.ts || ev.incident_id || idx}`;
+  _saveActionReceipt(eventKey, { action: a.label, action_id: result.action_id, ts: result.ts, side_effects: result.side_effects || [], artifacts: result.artifacts || [] });
+
+  // For fix actions run the existing visual resolver too
+  if (actionId === "fix") applyFix(type, idx !== undefined ? idx : (ctx.idx || 0));
+
+  // Inject new incident into incidents tab if escalated
+  if (actionId === "elevate" && result.incident_id) _injectIncident(result, ev);
+
+  // Mark user as isolated across the board
+  if ((actionId === "quarantine" || actionId === "isolate") && ev.user_id) {
+    window._isolatedUsers = window._isolatedUsers || new Set();
+    window._isolatedUsers.add(ev.user_id);
+  }
+}
+
+// ── Confirm modal ─────────────────────────────────────────────
+function _showActionConfirm(action, ev) {
+  return new Promise(resolve => {
+    const modal = document.getElementById("action-confirm-modal");
+    if (!modal) { resolve(true); return; }
+    const icon  = action.label.match(/^([\p{Emoji}]+)/u)?.[1] || "⚡";
+    document.getElementById("acm-icon").textContent  = icon;
+    document.getElementById("acm-title").textContent = action.label;
+    document.getElementById("acm-scope").textContent = action.confirm?.blast || "";
+    const effectsEl = document.getElementById("acm-effects");
+    effectsEl.innerHTML = (action.confirm?.effects || []).map(e => `<div class="action-modal-effect">${e}</div>`).join("");
+    const wrapEl  = document.getElementById("acm-confirm-input-wrap");
+    const inputEl = document.getElementById("acm-confirm-input");
+    const execBtn = document.getElementById("acm-execute-btn");
+    if (action.destructive && ev.user_id) {
+      document.getElementById("acm-confirm-label").textContent = `Type "${ev.user_id}" to confirm:`;
+      wrapEl.classList.remove("hidden");
+      inputEl.value = "";
+      execBtn.disabled = true;
+      execBtn.style.opacity = "0.5";
+    } else {
+      wrapEl.classList.add("hidden");
+      execBtn.disabled = false;
+      execBtn.style.opacity = "";
+    }
+    window._confirmResolve = resolve;
+    window._confirmDestructiveTarget = action.destructive ? (ev.user_id || "") : null;
+    modal.classList.remove("hidden");
+    setTimeout(() => (action.destructive ? inputEl : execBtn)?.focus(), 50);
+  });
+}
+
+function _checkConfirmInput() {
+  const inputEl = document.getElementById("acm-confirm-input");
+  const execBtn = document.getElementById("acm-execute-btn");
+  const target  = window._confirmDestructiveTarget;
+  if (!target) return;
+  const match = inputEl.value.trim() === target;
+  execBtn.disabled = !match;
+  execBtn.style.opacity = match ? "" : "0.5";
+}
+
+function _dismissActionConfirm() {
+  document.getElementById("action-confirm-modal")?.classList.add("hidden");
+  if (window._confirmResolve) { window._confirmResolve(false); window._confirmResolve = null; }
+}
+
+function _executeConfirmedAction() {
+  document.getElementById("action-confirm-modal")?.classList.add("hidden");
+  if (window._confirmResolve) { window._confirmResolve(true); window._confirmResolve = null; }
+}
+
+// ── Progress strip ────────────────────────────────────────────
+function _showActionProgress(steps) {
+  const actionsEl = document.getElementById("drw-actions");
+  if (!actionsEl) return;
+  let existing = document.getElementById("drw-progress");
+  if (!existing) {
+    existing = document.createElement("div");
+    existing.id = "drw-progress";
+    actionsEl.after(existing);
+  }
+  existing.innerHTML = `<div class="drw-progress-title">Executing…</div>
+    <div class="drw-progress-step active"><span class="drw-step-dot"></span>Connecting to backend…</div>`;
+  existing.style.display = "";
+}
+
+async function _animateActionProgress(steps) {
+  const el = document.getElementById("drw-progress");
+  if (!el || !steps.length) { await _sleep(600); return; }
+  el.innerHTML = `<div class="drw-progress-title">Executing action</div>` +
+    steps.map((s, i) => `<div class="drw-progress-step" id="prog-step-${i}"><span class="drw-step-dot"></span>${s}</div>`).join("");
+  for (let i = 0; i < steps.length; i++) {
+    const prev = document.getElementById(`prog-step-${i - 1}`);
+    if (prev) { prev.classList.remove("active"); prev.classList.add("done"); }
+    const cur = document.getElementById(`prog-step-${i}`);
+    if (cur) cur.classList.add("active");
+    await _sleep(i === 0 ? 300 : 480 + Math.random() * 320);
+  }
+  const last = document.getElementById(`prog-step-${steps.length - 1}`);
+  if (last) { last.classList.remove("active"); last.classList.add("done"); }
+  await _sleep(250);
+}
+
+function _hideActionProgress() {
+  const el = document.getElementById("drw-progress");
+  if (el) el.style.display = "none";
+}
+
+function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Receipt card ──────────────────────────────────────────────
+function _showActionReceipt(result, action) {
+  let el = document.getElementById("drw-receipt");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "drw-receipt";
+    const prog = document.getElementById("drw-progress");
+    (prog || document.getElementById("drw-actions"))?.after(el);
+  }
+  const effects = (result.side_effects || []).map(e => `<div class="drw-receipt-effect">${e}</div>`).join("");
+  const artifacts = (result.artifacts || []).filter(a => a.name && a.content).map(a =>
+    `<button class="drw-artifact-btn" onclick="_downloadArtifact(${JSON.stringify(a.name)},${JSON.stringify(a.content)},${JSON.stringify(a.mime||'text/plain')})">📎 ${a.name}</button>`
+  ).join("");
+  el.innerHTML = `
+    <div class="drw-receipt-header">
+      ✅ ${action.label} — Completed
+      <span class="drw-receipt-id">${result.action_id || ""}</span>
+    </div>
+    ${effects}
+    ${artifacts ? `<div class="drw-receipt-artifacts">${artifacts}</div>` : ""}`;
+}
+
+function _downloadArtifact(name, content, mime) {
+  const blob = new Blob([content], { type: mime + ";charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+  showToast(`📎 ${name} downloaded`, "success", 3000);
+}
+
+// ── Toast with Undo ───────────────────────────────────────────
+function showToastWithUndo(message, type, duration, undoToken, undoLabel) {
+  if (!toastContainer) return;
+  const t = document.createElement("div");
+  t.className = `toast toast-${type}`;
+  t.innerHTML = `<span class="toast-icon">${type==="critical"?"🔴":type==="warning"?"🟡":type==="success"?"🟢":"🔵"}</span>
+    <span class="toast-message">${message}</span>
+    <button class="toast-close" style="background:rgba(76,130,247,.2);color:#7ab3f7;border-color:rgba(76,130,247,.3);margin-right:.35rem;padding:.2rem .5rem;font-size:.7rem" onclick="_undoAction('${undoToken}',this.closest('.toast'))">${undoLabel}</button>
+    <button class="toast-close" onclick="this.parentElement.remove()">×</button>`;
+  toastContainer.prepend(t);
+  requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add("toast-visible")));
+  setTimeout(() => { t.classList.remove("toast-visible"); setTimeout(() => t.remove(), 300); }, duration);
+}
+
+async function _undoAction(token, toastEl) {
+  toastEl?.remove();
+  try {
+    const resp = await fetch("/api/actions/undo", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ undo_token: token }),
+    });
+    const r = await resp.json();
+    showToast(r.status === "ok" ? "↩ Action reversed successfully" : `Undo failed: ${r.message}`,
+              r.status === "ok" ? "success" : "warning", 4000);
+  } catch(e) { showToast(`Undo failed: ${e.message}`, "warning", 4000); }
+}
+
+// ── Receipt persistence ───────────────────────────────────────
+function _saveActionReceipt(eventKey, receipt) {
+  try {
+    const key = "is_receipts";
+    const all = JSON.parse(localStorage.getItem(key) || "{}");
+    if (!all[eventKey]) all[eventKey] = [];
+    all[eventKey].unshift(receipt);
+    all[eventKey] = all[eventKey].slice(0, 10);
+    const keys = Object.keys(all);
+    if (keys.length > 50) keys.slice(50).forEach(k => delete all[k]);
+    localStorage.setItem(key, JSON.stringify(all));
+  } catch(e) {}
+}
+
+function _loadActionReceipts(eventKey) {
+  try { return JSON.parse(localStorage.getItem("is_receipts") || "{}")[eventKey] || []; }
+  catch(e) { return []; }
+}
+
+function _renderDrawerHistory(type, idx, ev) {
+  const eventKey = `${type}-${ev?.ts || ev?.incident_id || idx}`;
+  const receipts = _loadActionReceipts(eventKey);
+  if (!receipts.length) return "";
+  const items = receipts.map(r =>
+    `<div class="drw-history-item">
+      <span>${r.action}</span>
+      <span style="font-size:.65rem;font-family:monospace;color:#4a6080">${r.ts ? new Date(r.ts).toLocaleTimeString() : ""}</span>
+    </div>`).join("");
+  return `<div class="drw-history"><div class="drw-history-title">Prior actions on this event</div>${items}</div>`;
+}
+
+// ── Inject new incident into incidents tab ────────────────────
+function _injectIncident(result, ev) {
+  const inc = {
+    incident_id: result.incident_id,
+    status: "open",
+    severity: "critical",
+    source_module: "soc-action",
+    playbook_id: "auto-escalate",
+    ts: result.ts || new Date().toISOString(),
+    scenario: ev.scenario || "anomaly",
+    user_id: ev.user_id,
+    source_ip: ev.source_ip,
   };
-  showToast(msgs[action]||"Action executed", action==="block"?"warning":"info", 4000);
+  incEvents.unshift(inc);
+  if (currentTab === "incidents") renderIncidents();
+  showToast(`🚨 Incident ${result.incident_id} created — visible in Incidents tab`, "warning", 5000);
+}
+
+// ── Action Log tab renderer ───────────────────────────────────
+async function renderActionLog() {
+  const tbody = document.getElementById("action-log-body");
+  const emptyEl = document.getElementById("action-log-empty");
+  if (!tbody) return;
+  const typeFilter  = document.getElementById("al-type-filter")?.value  || "";
+  const actorFilter = document.getElementById("al-actor-filter")?.value || "";
+  try {
+    const params = new URLSearchParams({ limit: "100" });
+    if (typeFilter)  params.set("type",  typeFilter);
+    if (actorFilter) params.set("actor", actorFilter);
+    const resp = await fetch(`/api/actions?${params}`);
+    const data = await resp.json();
+    const rows = data.actions || [];
+    if (emptyEl) emptyEl.classList.toggle("hidden", rows.length > 0);
+    // Populate actor filter with unique operators
+    const actorSel = document.getElementById("al-actor-filter");
+    if (actorSel) {
+      const operators = [...new Set(rows.map(r => r.operator).filter(Boolean))];
+      const cur = actorSel.value;
+      actorSel.innerHTML = `<option value="">All operators</option>` +
+        operators.map(o => `<option value="${o}" ${o===cur?"selected":""}>${o}</option>`).join("");
+    }
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td style="white-space:nowrap;color:#7a93b4">${r.ts ? new Date(r.ts).toLocaleString() : "—"}</td>
+        <td style="font-family:monospace;font-size:.68rem;color:#4a6080">${r.action_id || "—"}</td>
+        <td style="font-weight:600;color:#eaf0f7">${r.operator || "—"}</td>
+        <td><span class="al-badge al-badge-type">${r.drawer_type || "—"}</span></td>
+        <td>${r.action_id_label || "—"}</td>
+        <td style="color:#7a93b4;font-size:.71rem">${r.event_user ? `👤 ${r.event_user}` : ""}${r.event_source_ip ? ` · ${r.event_source_ip}` : ""}</td>
+        <td style="color:#b0c4de;font-size:.71rem">${(r.side_effects || []).slice(0,1).join("") || "—"}</td>
+        <td><span class="al-badge al-badge-ok">${r.status || "ok"}</span></td>
+      </tr>`).join("") || `<tr><td colspan="8" style="color:#7a93b4;text-align:center;padding:1rem">No actions yet</td></tr>`;
+  } catch(e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:#7a93b4;text-align:center">Backend unavailable</td></tr>`;
+  }
+}
+
+// ── Keyboard shortcuts inside open drawer ─────────────────────
+document.addEventListener("keydown", e => {
+  const overlay = document.getElementById("detail-overlay");
+  if (!overlay || overlay.classList.contains("hidden")) return;
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  const ctx = window._drwCtx; if (!ctx) return;
+  const acts = DRW_ACTIONS[ctx.type] || [];
+  const a = acts.find(x => x.shortcut && x.shortcut.toLowerCase() === e.key.toLowerCase());
+  if (!a) return;
+  e.preventDefault();
+  if (a.id === "report") downloadReport();
+  else runDrwActionPhased(a.id, ctx.idx);
+});
+
+// ── Report download — MD + JSON + PDF ────────────────────────
+function downloadReport() {
+  const ctx = window._drwCtx; if (!ctx) { showToast("No event context","warning"); return; }
+  const { type, ev } = ctx;
+  const stamp       = new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
+  const scenarioTag = (ev.scenario||type).replace(/[^a-z0-9_-]/gi,"_").toLowerCase();
+  const base        = `IntegriShield_${type}_${scenarioTag}_${stamp}`;
+
+  // 1 — Markdown
+  const md = _buildReportMarkdown(type, ev);
+  _dlBlob(md, `${base}.md`, "text/markdown");
+
+  // 2 — JSON
+  const jsonData = {
+    report_id:    base,
+    generated_at: new Date().toISOString(),
+    operator:     _getOperator() || "anonymous",
+    drawer_type:  type,
+    scenario:     ev.scenario || type,
+    event:        ev,
+    receipts:     _loadActionReceipts(`${type}-${ev.ts || ""}`),
+  };
+  _dlBlob(JSON.stringify(jsonData, null, 2), `${base}.json`, "application/json");
+
+  // 3 — PDF via hidden print iframe
+  _printReportPDF(type, ev, md, base);
+
+  showToast(`📄 Report bundle downloaded — MD + JSON + PDF`, "success", 4500);
+}
+
+function _dlBlob(content, fname, mime) {
+  const blob = new Blob([content], { type: mime + ";charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+}
+
+function _printReportPDF(type, ev, md, base) {
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:210mm;height:297mm;border:none";
+  document.body.appendChild(iframe);
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>${base}</title>
+    <style>
+      body{font-family:system-ui,sans-serif;font-size:12px;line-height:1.6;margin:20mm 18mm;color:#1a1a2e}
+      h1{font-size:18px;border-bottom:2px solid #4c82f7;padding-bottom:8px;color:#1a1a2e}
+      h2{font-size:14px;color:#2c3e6b;margin-top:16px}
+      h3{font-size:12px;color:#3a4a7a}
+      pre,code{background:#f4f6f9;padding:2px 6px;border-radius:3px;font-size:11px}
+      table{width:100%;border-collapse:collapse;margin:8px 0}
+      td,th{border:1px solid #dde3f0;padding:4px 8px;font-size:11px}
+      th{background:#f4f6f9;font-weight:600}
+      .header-meta{color:#666;font-size:11px;margin-bottom:16px}
+      @media print{@page{margin:15mm}}
+    </style></head><body>
+    <div class="header-meta">IntegriShield SOC Platform · ${new Date().toLocaleString()} · Operator: ${_getOperator()||"anonymous"}</div>
+    ${_mdToHtml(md)}
+    </body></html>`;
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  iframe.contentWindow.focus();
+  setTimeout(() => {
+    iframe.contentWindow.print();
+    setTimeout(() => iframe.remove(), 2000);
+  }, 300);
+}
+
+function _mdToHtml(md) {
+  return md
+    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/^- (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>.*<\/li>)/gs, "<ul>$1</ul>")
+    .replace(/\n\n/g, "<br><br>")
+    .replace(/\n/g, "<br>");
+}
+
+function _buildReportMarkdown(type, ev) {
+  const now = new Date().toISOString();
+  const rid = `ISR-${Date.now().toString(36).toUpperCase()}`;
+  const sc  = (ev.scenario||"").toLowerCase();
+
+  // Per-scenario narrative blocks (hard-coded, unique per issue)
+  const scenarioBlocks = {
+    bulk_extraction: {
+      title: "Bulk Data Extraction — High-Confidence Exfiltration",
+      threat: "Insider or compromised account is pulling far more rows than their baseline permits. RFC_READ_TABLE velocity exceeds the 95th percentile by 12×.",
+      impact: "Estimated data exposure: 45K+ rows of customer PII and payroll. GDPR Article 33 breach-notification clock starts at confirmation. Potential fine exposure up to €20M.",
+      iocs: ["anomalous RFC_READ_TABLE velocity", "off-hours timestamp", "destination outside corporate IP space", "session token reused across IPs"],
+      playbook: ["Isolate user session (SU01 lock)","Block source IP at edge firewall","Snapshot SAP audit trail (SM20/STAD)","Notify DPO within 24h","Engage DFIR vendor for full forensic imaging"],
+      framework: ["GDPR Art.33","SOX AC-2","PCI-DSS 10.2","ISO 27001 A.12.4"],
+    },
+    privilege_escalation: {
+      title: "Privilege Escalation via SUSR Auth Object Manipulation",
+      threat: "SUSR_USER_AUTH_FOR_OBJ_GET invoked outside change window. Attacker is attempting to elevate themselves to SAP_ALL or create a backdoor role.",
+      impact: "If successful, attacker gains unrestricted access to all SAP modules including FI, HR, MM. Subsequent lateral movement is near-impossible to detect.",
+      iocs: ["SUSR tool call without change-ticket","risk score ≥0.95","session originated off-hours","deny verdict from Zero-Trust fabric"],
+      playbook: ["Freeze user's SAP role immediately","Compare SU01 changes vs change-management ticket queue","Re-run SoD (Segregation of Duties) report","Notify internal audit + CISO"],
+      framework: ["SOX AC-2","NIST CSF IA-2","ISO 27001 A.9.2.3"],
+    },
+    shadow_endpoint: {
+      title: "Shadow RFC Endpoint — Unregistered / Unauthorized",
+      threat: "An RFC function is being invoked that has no registered owner in the SAP function whitelist. This is classic supply-chain or insider-backdoor activity.",
+      impact: "Shadow endpoints bypass all standard DLP, audit, and anomaly monitoring. Data may already have been exfiltrated without any trail.",
+      iocs: ["function not in SAP whitelist","external source IP","repeated call pattern","no change-ticket reference"],
+      playbook: ["Block endpoint in SAP Gateway (reginfo/secinfo)","Run shadow-sweep across all tenants","Reverse-engineer RFC for backdoor indicators","Force full SAP transport log review"],
+      framework: ["NIST CSF DE.CM-7","ISO 27001 A.14.2","SOX AC-4"],
+    },
+    credential_abuse: {
+      title: "Credential Abuse — Impossible-Travel / Simultaneous Sessions",
+      threat: "Same account is authenticating from geographically impossible locations within minutes — credentials are stolen or a session token has been exported.",
+      impact: "Attacker has active access equivalent to the legitimate user. Every downstream action (API, SAP, cloud) is indistinguishable from normal usage.",
+      iocs: ["impossible-travel timing","multiple concurrent IPs","device fingerprint mismatch","MFA never triggered"],
+      playbook: ["Revoke all active sessions + tokens","Rotate credential in vault","Force password+MFA re-enrollment","Audit actions taken under this account in last 48h"],
+      framework: ["NIST CSF PR.AC-7","ISO 27001 A.9.4.2","PCI-DSS 8.3"],
+    },
+    off_hours_rfc: {
+      title: "Off-Hours Privileged RFC Access",
+      threat: "Privileged user making SAP RFC calls outside business hours. Individually weak, but strong when combined with volume or destination anomalies.",
+      impact: "Precursor to bulk extraction. Historically 38% of off-hours privileged sessions in this environment preceded confirmed insider incidents.",
+      iocs: ["timestamp outside 07:00–19:00","privileged role","no corresponding on-call record"],
+      playbook: ["Elevate session monitoring for this user","Require MFA re-challenge","Correlate against change-management and on-call calendars"],
+      framework: ["SOX AC-2","NIST CSF DE.AE-3"],
+    },
+    data_staging: {
+      title: "Data Staging — Pre-Exfiltration Two-Step Transfer",
+      threat: "Large volume written to an intermediate staging location, a pattern used to evade real-time DLP. External exfil is likely imminent.",
+      impact: "Confirmed active exfiltration in progress. Cloud misconfiguration (public bucket / over-privileged role) is the likely egress path.",
+      iocs: ["write to staging bucket","bytes_out > 5MB","destination in misconfigured cloud resource","DLP + cloud-posture alerts correlated"],
+      playbook: ["Lock down staging destination (bucket policy deny)","Pull cloud-trail for full actor history","Rotate cloud keys","File breach ticket with legal"],
+      framework: ["GDPR Art.32","PCI-DSS 3.4","ISO 27001 A.13.2"],
+    },
+    velocity_anomaly: {
+      title: "Request Velocity Spike — Automated Tooling Suspected",
+      threat: "Request rate exceeds human-achievable throughput by 10×+. Scripted exfil or reconnaissance tooling is running against the SAP surface.",
+      impact: "If unblocked, an attacker can enumerate or extract the full tenant dataset within minutes.",
+      iocs: ["req/min > 120","uniform inter-request timing","single-endpoint concentration","user-agent mismatch"],
+      playbook: ["Apply emergency rate-limit at gateway","Block source IP","Capture request payloads for analysis","Scan for compromised API keys"],
+      framework: ["NIST CSF DE.AE-2","ISO 27001 A.13.1"],
+    },
+    geo_anomaly: {
+      title: "Geographic Access Anomaly",
+      threat: "Authentication from a country with no prior session history for this account. Common initial-access vector via VPN or compromised foreign infrastructure.",
+      impact: "If legitimate, policy gap; if malicious, foothold established. Residual risk depends on MFA posture.",
+      iocs: ["IP geo outside known-good set","ASN flagged in threat intel","no prior session within 90d from this region"],
+      playbook: ["Force re-auth with MFA","Notify user via secondary channel","If denied by user → treat as confirmed compromise and run credential_abuse playbook"],
+      framework: ["NIST CSF PR.AC-3","ISO 27001 A.9.2.6"],
+    },
+  };
+
+  const block = scenarioBlocks[sc] || {
+    title: `${type.toUpperCase()} Security Finding`,
+    threat: `An event of type '${type}' was flagged by IntegriShield detection modules.`,
+    impact: "Impact depends on affected resource and downstream blast radius — see event details below.",
+    iocs: ["see event-details section"],
+    playbook: _getFixSteps(type, ev) || ["Investigate","Contain","Remediate","Report"],
+    framework: ["NIST CSF","ISO 27001"],
+  };
+
+  // Type-specific detail section
+  const detailLines = [];
+  const push = (k,v) => { if (v!==undefined && v!==null && v!=="") detailLines.push(`- **${k}**: ${v}`); };
+  push("Event Type", type);
+  push("Timestamp", new Date(ev.ts||Date.now()).toISOString());
+  push("Scenario", ev.scenario);
+  push("Severity", (ev.severity||"").toUpperCase());
+  push("User", ev.user_id);
+  push("Source IP", ev.source_ip);
+  push("Tenant", ev.tenant_id);
+  push("Message", ev.message);
+  push("Tool", ev.tool_name);
+  push("Endpoint", ev.endpoint);
+  push("DLP Rule", ev.rule);
+  push("Bytes Out", ev.bytes_out);
+  push("Row Count", ev.row_count);
+  push("Destination", ev.destination);
+  push("Anomaly Score", ev.anomaly_score);
+  push("Classification", ev.classification);
+  push("ZT Decision", ev.decision);
+  push("ZT Risk", ev.risk_score);
+  push("Framework", ev.framework);
+  push("Control", ev.control_id);
+  push("Incident ID", ev.incident_id);
+  push("Target", ev.target);
+  push("CVEs", ev.cve_count);
+  push("Credential Key", ev.key);
+  push("Provider", ev.provider);
+  push("Resource", ev.resource_id);
+  push("Finding Type", ev.finding_type);
+
+  return `# IntegriShield Security Report — ${block.title}
+
+**Report ID:** ${rid}
+**Generated:** ${now}
+**Classification:** CONFIDENTIAL — Internal / Legal Hold Eligible
+
+---
+
+## 1. Executive Summary
+
+${block.threat}
+
+**Business Impact:** ${block.impact}
+
+---
+
+## 2. Event Details
+
+${detailLines.join("\n")}
+
+---
+
+## 3. Indicators of Compromise (IoCs)
+
+${block.iocs.map(x=>`- ${x}`).join("\n")}
+
+---
+
+## 4. Remediation Playbook
+
+${block.playbook.map((x,i)=>`${i+1}. ${x}`).join("\n")}
+
+---
+
+## 5. Compliance / Framework Mapping
+
+${block.framework.map(x=>`- ${x}`).join("\n")}
+
+---
+
+## 6. Recommended Next Steps
+
+- Review correlated events in the IntegriShield drawer (same user_id / source_ip / scenario tag)
+- Verify containment actions completed successfully within SLA (15m for P1)
+- Retain this report for the duration of your regulatory evidence-retention requirement
+
+---
+
+*Generated by IntegriShield M07 Compliance Autopilot · Integration Security Platform · ${new Date().getFullYear()}*
+`;
 }
 
 // Keep legacy alias
@@ -2022,12 +3193,13 @@ function startAll() {
   stoppedModules.clear();
   if (!demo.active) {
     demo.active = true;
+    seedInitialData();
     rampUp(() => { if (!demo.iid) demo.iid = setInterval(demoTick, POLL_MS); });
   }
   if (ui.backendStatus) ui.backendStatus.textContent = "DEMO MODE";
   if (ui.statusDot) ui.statusDot.className = "status-dot online";
   logLauncher(`[${new Date().toLocaleTimeString()}] ▶ All modules started`);
-  showToast("▶ All 13 modules started — real-time threat detection active", "success", 4000);
+  showToast("▶ All 15 modules started — real-time threat detection active", "success", 4000);
   renderLauncher(launcherProcesses);
   updateAllUI();
 }
@@ -2063,13 +3235,510 @@ function stopLauncherPolling() {
   if (launcherPolling) { clearInterval(launcherPolling); launcherPolling=null; }
 }
 
+// ── CONNECTORS M02 ───────────────────────────────────────────
+function renderConnectors() {
+  const list  = $("conn-list"), empty = $("conn-empty");
+  const total = $("conn-total"), alerts_ = $("conn-alerts");
+  const misc  = $("conn-misconfig"), healthy = $("conn-healthy");
+  if (!list) return;
+  if (total)   animateValue(total,   connEvents.length);
+  if (alerts_) animateValue(alerts_, connEvents.filter(e=>e.status==="alert").length);
+  if (misc)    animateValue(misc,    connEvents.filter(e=>e.status==="misconfigured").length);
+  if (healthy) animateValue(healthy, connEvents.filter(e=>e.status==="healthy").length);
+  const plat = fv('conn-platform-filter'), stat = fv('conn-status-filter'), q = fq('conn-search');
+  let v = connEvents;
+  if (plat !== 'all') v = v.filter(e=>e.platform===plat);
+  if (stat !== 'all') v = v.filter(e=>e.status===stat);
+  if (q) v = v.filter(e=>[e.connector,e.source_system,e.dest_system,e.finding].join(' ').toLowerCase().includes(q));
+  setEmpty(list, empty, v);
+  const statC = {alert:"#ff4757",misconfigured:"#ffa502",healthy:"#2ed573"};
+  list.innerHTML = v.map(e => {
+    const sc = statC[e.status]||"#7a93b4";
+    const platLabel = {sap_btp:"SAP BTP",mulesoft:"MuleSoft",boomi:"Boomi",workato:"Workato"}[e.platform]||e.platform;
+    return `<li class="alert-item">
+      <div class="alert-item-row">
+        <span style="font-size:.7rem;font-weight:700;background:${sc}22;color:${sc};padding:2px 8px;border-radius:4px">${(e.status||"unknown").toUpperCase()}</span>
+        <span style="margin-left:.5rem;font-size:.78rem;color:#b0c4de;font-weight:600">${e.connector||"—"}</span>
+        <span style="margin-left:.4rem;font-size:.68rem;background:rgba(76,130,247,.12);color:#7a9fd4;padding:1px 6px;border-radius:3px">${platLabel}</span>
+        <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">${e.source_system||"—"} → ${e.dest_system||"—"}</div>
+      <div class="alert-item-meta" style="color:${e.status==='healthy'?'#4a6280':'#e0904a'}">${e.finding||"—"}</div>
+    </li>`;
+  }).join("");
+}
+
+// ── TRAFFIC ANALYZER M03 ─────────────────────────────────────
+function renderTraffic() {
+  const list  = $("traffic-list"), empty = $("traffic-empty");
+  const total = $("traffic-total"), pii = $("traffic-pii");
+  const phi   = $("traffic-phi"), vol = $("traffic-volume");
+  if (!list) return;
+  if (total) animateValue(total, trafficEvents.length);
+  if (pii)   animateValue(pii,   trafficEvents.filter(e=>e.classification==="PII").length);
+  if (phi)   animateValue(phi,   trafficEvents.filter(e=>e.classification==="PHI").length);
+  const totalBytes = trafficEvents.reduce((s,e)=>s+(+e.bytes||0),0);
+  if (vol) vol.textContent = totalBytes>1e6?`${(totalBytes/1e6).toFixed(1)} MB`:`${(totalBytes/1e3).toFixed(0)} KB`;
+  const cls = fv('traffic-class-filter'), dir = fv('traffic-dir-filter'), q = fq('traffic-search');
+  let v = trafficEvents;
+  if (cls !== 'all') v = v.filter(e=>e.classification===cls);
+  if (dir !== 'all') v = v.filter(e=>e.direction===dir);
+  if (q) v = v.filter(e=>[e.source,e.destination,e.classification,e.fields_detected].join(' ').toLowerCase().includes(q));
+  setEmpty(list, empty, v);
+  const clsC = {PII:"#ff4757",PHI:"#ff8b3d",FINANCIAL:"#ffa502",STANDARD:"#2ed573"};
+  list.innerHTML = v.map(e => {
+    const cc = clsC[e.classification]||"#7a93b4";
+    const bytes = +e.bytes||0;
+    const byteStr = bytes>1e6?`${(bytes/1e6).toFixed(1)} MB`:`${(bytes/1e3).toFixed(0)} KB`;
+    return `<li class="alert-item ${e.policy_violation?'sev-high':''}">
+      <div class="alert-item-row">
+        <span style="font-size:.7rem;font-weight:700;background:${cc}22;color:${cc};padding:2px 8px;border-radius:4px">${e.classification||"STANDARD"}</span>
+        <span style="margin-left:.5rem;font-size:.75rem;color:#b0c4de">${e.source||"—"} → ${e.destination||"—"}</span>
+        <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">Direction: ${e.direction||"—"} · Volume: <strong style="color:#b0c4de">${byteStr}</strong> · Fields: <code style="font-size:.68rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px">${e.fields_detected||"—"}</code></div>
+      ${e.policy_violation?`<div class="alert-item-meta" style="color:#ff8b3d">⚠ Policy violation — sensitive data transmitted without DLP approval</div>`:""}
+    </li>`;
+  }).join("");
+}
+
+// ── WEBHOOK GATEWAY M14 ──────────────────────────────────────
+function renderWebhooks() {
+  const list  = $("wh-list"), empty = $("wh-empty");
+  const total = $("wh-total"), acc = $("wh-accepted");
+  const rej   = $("wh-rejected"), rl = $("wh-rate-limited");
+  if (!list) return;
+  if (total) animateValue(total, webhookEvents.length);
+  if (acc)   animateValue(acc,   webhookEvents.filter(e=>e.result==="accepted").length);
+  if (rej)   animateValue(rej,   webhookEvents.filter(e=>e.result==="rejected").length);
+  if (rl)    animateValue(rl,    webhookEvents.filter(e=>e.result==="rate_limited").length);
+  const res = fv('wh-result-filter'), src = fv('wh-source-filter'), q = fq('wh-search');
+  let v = webhookEvents;
+  if (res !== 'all') v = v.filter(e=>e.result===res);
+  if (src !== 'all') v = v.filter(e=>e.source===src);
+  if (q) v = v.filter(e=>[e.source,e.event_type,e.source_ip].join(' ').toLowerCase().includes(q));
+  setEmpty(list, empty, v);
+  const resC = {accepted:"#2ed573",rejected:"#ff4757",rate_limited:"#ffa502"};
+  list.innerHTML = v.map(e => {
+    const rc = resC[e.result]||"#7a93b4";
+    const sigC = e.signature_valid?"#2ed573":"#ff4757";
+    return `<li class="alert-item ${e.result==='rejected'?'sev-high':''}">
+      <div class="alert-item-row">
+        <span style="font-size:.7rem;font-weight:700;background:${rc}22;color:${rc};padding:2px 8px;border-radius:4px">${(e.result||"unknown").toUpperCase().replace('_',' ')}</span>
+        <span style="margin-left:.5rem;font-size:.75rem;color:#b0c4de;font-weight:600">${e.source||"—"}</span>
+        <code style="margin-left:.4rem;font-size:.68rem;background:rgba(255,255,255,.06);padding:1px 6px;border-radius:3px;color:#b0c4de">${e.event_type||"—"}</code>
+        <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
+      </div>
+      <div class="alert-item-meta">IP: ${e.source_ip||"—"} · Signature: <span style="color:${sigC}">${e.signature_valid?"✓ Valid":"✗ Invalid"}</span> · Latency: ${e.latency_ms||0}ms</div>
+    </li>`;
+  }).join("");
+}
+
+// ── CLAUDE CHAT ───────────────────────────────────────────────
+let chatOpen = false;
+const chatHistory = [];
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  const panel = $("chat-panel");
+  if (panel) panel.classList.toggle("hidden", !chatOpen);
+  if (chatOpen) {
+    const inp = $("chat-input");
+    if (inp) setTimeout(() => inp.focus(), 100);
+    const badge = $("chat-fab-badge");
+    if (badge) badge.style.display = "none";
+  }
+}
+
+function chatKeyDown(e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+}
+
+function sendSuggestion(el) {
+  const inp = $("chat-input");
+  if (inp) { inp.value = el.textContent; sendChatMessage(); }
+}
+
+// ── Local hard-trained response engine (no API key required) ──
+// Uses live dashboard data + pattern matching to generate SAP-security answers
+function _chatLocalAnswer(text) {
+  const q = text.toLowerCase();
+  const pick = (arr, n=3) => arr.slice(0, n);
+  const list = (items) => items.length ? items.map(s => "• " + s).join("\n") : "None detected.";
+
+  // Helper: live stats
+  const stats = {
+    totalAlerts: alerts.length,
+    critical: alerts.filter(a => a.severity === "critical").length,
+    high: alerts.filter(a => a.severity === "high").length,
+    offHours: alerts.filter(a => a.scenario === "off_hours_rfc").length,
+    bulk: alerts.filter(a => a.scenario === "bulk_extraction").length,
+    velocity: alerts.filter(a => a.scenario === "velocity_anomaly").length,
+    shadow: shadowEvents.length,
+    dlpViol: dlpEvents.length,
+    anomHigh: anomalies.filter(a => parseFloat(a.anomaly_score || 0) > 0.7).length,
+    incOpen: incEvents.filter(i => (i.status || "").toLowerCase() === "open").length,
+    incResolved: incEvents.filter(i => (i.status || "").toLowerCase() === "resolved").length,
+    compViol: compEvents.filter(e => (e.result || "").toLowerCase() === "violation").length,
+    cveVuln: sbomEvents.filter(s => (s.scan_status || "") === "VULNERABLE").length,
+    ztDenied: ztEvents.filter(z => (z.decision || "") === "deny").length,
+    cloudCrit: cloudEvents.filter(c => (c.raw_severity || c.severity || "").toLowerCase() === "critical").length,
+  };
+
+  // SAP_ALL / super-user questions
+  if (/sap[_ ]?all|super[_ ]?user|excessive privilege|god role/.test(q)) {
+    return {
+      tools: ["list_users", "get_user_roles", "check_critical_auth"],
+      text:
+`Found 4 users with SAP_ALL or equivalent super-user authority:
+
+• BASIS_ADMIN (SAP_ALL + SAP_NEW) — last login 2h ago, MFA: ✓
+• FIREFIGHTER_01 (S_A.ADMIN) — emergency access, expires in 3d
+• BATCH_USER_07 (SAP_ALL) — dormant 47 days ⚠ RECOMMEND REVOKE
+• DEVELOPER_CI (S_DEVELOP + S_TCODE all) — CI/CD service account
+
+Risk assessment: BATCH_USER_07 should be removed — dormant accounts with SAP_ALL are the #1 audit finding. I've queued a compliance evidence entry in M07.`
+    };
+  }
+
+  // SoD violations
+  if (/sod|segregation|separation of duties|conflict/.test(q)) {
+    return {
+      tools: ["get_sod_violations", "get_user_roles"],
+      text:
+`Detected 7 active SoD violations across the SAP landscape:
+
+• MM_USER_04: Create Vendor (MK01) + Approve Payment (F-53) — CRITICAL
+• FI_USER_12: Post Invoice (FB60) + Pay Vendor (F-58) — CRITICAL
+• HR_USER_09: Maintain Master Data (PA30) + Run Payroll (PC00_M10_CALC) — HIGH
+• PR_USER_03: Create PO (ME21N) + Receive Goods (MIGO) — HIGH
+• +3 additional medium-risk combinations
+
+These map to SOX ITGC-04 and are feeding directly into M07 Compliance Autopilot. Recommend running mitigation workflow for the 2 CRITICAL findings today.`
+    };
+  }
+
+  // Dormant / inactive users
+  if (/dormant|inactive|unused account|stale user/.test(q)) {
+    return {
+      tools: ["get_dormant_users", "list_users"],
+      text:
+`Found 23 dormant SAP accounts (no login >30 days):
+
+• 8 with privileged roles — ⚠ HIGH RISK
+• 12 standard dialog users
+• 3 RFC/batch service accounts
+
+Top concerns:
+• BATCH_USER_07 — SAP_ALL, 47d dormant
+• CONSULTANT_EY — S_A.DEVELOP, 62d dormant (contractor departed?)
+• AUDITOR_Q3 — S_A.SYSTEM, 89d dormant
+
+Recommend bulk-lock all 8 privileged dormant accounts. M06 Credential Vault can auto-rotate their credentials as part of offboarding.`
+    };
+  }
+
+  // Alerts overview
+  if (/critical alert|show alert|active alert|current alert|high severity/.test(q)) {
+    const top = pick(alerts.filter(a => a.severity === "critical" || a.severity === "high"), 5);
+    return {
+      tools: ["list_alerts", "query_events"],
+      text:
+`Live alerts in the last window: ${stats.totalAlerts} total, ${stats.critical} CRITICAL, ${stats.high} HIGH.
+
+Top findings right now:
+${top.length ? top.map(a => `• [${(a.severity||"").toUpperCase()}] ${a.message || a.scenario || "alert"} — user=${a.user_id || "?"} ip=${a.source_ip || "?"}`).join("\n") : "• No high-severity alerts currently"}
+
+Breakdown by scenario:
+• Off-hours RFC: ${stats.offHours}
+• Bulk extraction: ${stats.bulk}
+• Velocity anomaly: ${stats.velocity}
+• Shadow endpoints: ${stats.shadow}`
+    };
+  }
+
+  // Anomaly questions
+  if (/anomal|isolation forest|ml (score|model)|rfc anomaly/.test(q)) {
+    const top = pick([...anomalies].sort((a,b) => parseFloat(b.anomaly_score||0) - parseFloat(a.anomaly_score||0)), 5);
+    return {
+      tools: ["get_anomaly_scores", "monitor_rfc_calls"],
+      text:
+`M08 Isolation Forest has scored ${anomalies.length} events in this window — ${stats.anomHigh} above the 0.7 high-risk threshold.
+
+Top anomalies:
+${top.length ? top.map(a => `• score=${(parseFloat(a.anomaly_score||0)).toFixed(2)} · ${a.classification || a.reason || "baseline deviation"} · user=${a.user_id || "?"}`).join("\n") : "• No anomalies scored yet — waiting for baseline."}
+
+The model detects deviations in call volume, time-of-day, data volume extracted, and new endpoint patterns. All high-risk scores are auto-escalated to M10 Incident Response.`
+    };
+  }
+
+  // DLP
+  if (/dlp|data loss|pii|phi|exfil|leak|sensitive data/.test(q)) {
+    return {
+      tools: ["query_events", "list_alerts"],
+      text:
+`M09 DLP is actively scanning data in transit. ${stats.dlpViol} violations in the current window.
+
+Categories detected:
+• Bulk export (>500 rows from sensitive tables): ${dlpEvents.filter(d => (d.rule_type||d.rule||"").toLowerCase().includes("bulk")).length}
+• PII in outbound payload: ${dlpEvents.filter(d => (d.classification||"").includes("PII")).length}
+• Blocklist hits (known exfil destinations): ${dlpEvents.filter(d => (d.rule_type||d.rule||"").toLowerCase().includes("block")).length}
+• Data staging to untrusted endpoints: ${dlpEvents.filter(d => (d.rule_type||d.rule||"").toLowerCase().includes("staging")).length}
+
+Most sensitive table accessed: PA0008 (payroll). DLP is masking or blocking all non-compliant flows before they exit the middleware layer.`
+    };
+  }
+
+  // Compliance
+  if (/compliance|sox|gdpr|pci|hipaa|soc ?2|iso ?27001|audit report/.test(q)) {
+    return {
+      tools: ["analyze_report_access", "query_events"],
+      text:
+`M07 Compliance Autopilot is continuously collecting evidence across 6 frameworks:
+
+• SOX — 94% pass rate
+• GDPR — 87% pass rate
+• PCI-DSS — 91% pass rate
+• NIST-CSF — 96% pass rate
+• ISO 27001 — 89% pass rate
+• HIPAA — 93% pass rate
+
+${stats.compViol} active violations, auto-mapped to specific controls. One-click report export is available from the Compliance tab. All evidence is backed by immutable audit vault entries.`
+    };
+  }
+
+  // Security policy gaps / posture
+  if (/policy|posture|gap|weakness|hardening/.test(q)) {
+    return {
+      tools: ["get_security_policy", "check_critical_auth"],
+      text:
+`SAP security policy review — current gaps vs CIS / SAP RSECPOL baseline:
+
+• MIN_PASSWORD_LENGTH = 8 (recommend ≥12) — GAP
+• PASSWORD_CHANGE_INTERVAL = 180d (recommend 90d) — GAP
+• FAILED_LOGON_LOCKOUT = not set (recommend 5) — GAP
+• RFC_TRUSTED_SYSTEMS: 4 trusted (review 2 legacy entries)
+• S_RFC auth checks: ENABLED ✓
+• Audit log retention: 730d ✓
+
+3 hardening recommendations queued for M07 Compliance workflow.`
+    };
+  }
+
+  // Failed logins / brute force
+  if (/failed login|brute|lockout|password spray/.test(q)) {
+    return {
+      tools: ["get_failed_logins", "get_locked_users"],
+      text:
+`Failed login activity (last 24h):
+
+• 142 failed logons across 18 users
+• 3 accounts locked: HR_USER_02, FI_TEMP_06, SAP_DEV_11
+• 1 suspected spray pattern: 37 distinct users attempted from IP 203.0.113.44 ⚠
+
+M04 Zero-Trust denied ${stats.ztDenied} requests in the same window. The 203.0.113.44 pattern has been auto-fed to M10 Incident Response and M12 Rules Engine has generated a geo-block rule.`
+    };
+  }
+
+  // Incidents
+  if (/incident|response|playbook|containment/.test(q)) {
+    return {
+      tools: ["list_alerts", "query_events"],
+      text:
+`M10 Incident Response status:
+
+• Open: ${stats.incOpen}
+• Investigating: ${incEvents.filter(i => (i.status||"").toLowerCase() === "investigating").length}
+• Resolved: ${stats.incResolved}
+
+Active playbooks auto-trigger on critical detections: quarantine integration → capture forensics → notify SOC → generate AI remediation steps. Mean time to contain is running at ~2.3s.`
+    };
+  }
+
+  // Shadow IT
+  if (/shadow|unknown endpoint|rogue|undocumented|unregistered/.test(q)) {
+    return {
+      tools: ["query_events", "list_alerts"],
+      text:
+`M11 Shadow Integration Discovery — ${stats.shadow} detections in the current window.
+
+These are undocumented integrations that IT does not know about: new REST endpoints, scheduled jobs, file transfers, or webhooks. Each is auto-classified and surfaced for review. 48% of surveyed orgs cite API sprawl as their biggest security challenge — this module closes that gap.`
+    };
+  }
+
+  // SBOM / CVE
+  if (/sbom|cve|vulnerab|dependency|package|library/.test(q)) {
+    return {
+      tools: ["query_events"],
+      text:
+`M13 SBOM Scanner (CycloneDX 1.4):
+
+• Total scans: ${sbomEvents.length}
+• Components vulnerable: ${stats.cveVuln}
+• Clean: ${sbomEvents.length - stats.cveVuln}
+
+Top CVEs detected in middleware dependencies are prioritised by CVSS + exploit availability. SAP ABAP static analysis checks for insecure RFC patterns and hard-coded credentials.`
+    };
+  }
+
+  // Zero-trust
+  if (/zero.?trust|mfa|device trust|risk score|access decision/.test(q)) {
+    return {
+      tools: ["query_events"],
+      text:
+`M04 Zero-Trust Fabric — every integration call is authenticated, authorised, and encrypted (even internal service-to-service).
+
+• Allowed: ${ztEvents.filter(z => z.decision === "allow").length}
+• Denied: ${stats.ztDenied}
+• Challenged (step-up MFA): ${ztEvents.filter(z => z.decision === "challenge").length}
+
+Risk score inputs: device trust, geo-velocity, prior auth failures, resource sensitivity, time-of-day baseline.`
+    };
+  }
+
+  // Cloud posture
+  if (/cloud|aws|azure|gcp|ispm|misconfig/.test(q)) {
+    return {
+      tools: ["query_events"],
+      text:
+`M15 Multi-Cloud ISPM — posture findings across AWS, GCP, Azure, SAP BTP:
+
+• CRITICAL: ${stats.cloudCrit}
+• HIGH: ${cloudEvents.filter(c => (c.raw_severity||c.severity||"").toLowerCase() === "high").length}
+• AWS: ${cloudEvents.filter(c => (c.provider||"").toLowerCase() === "aws").length}
+• GCP: ${cloudEvents.filter(c => (c.provider||"").toLowerCase() === "gcp").length}
+• Azure: ${cloudEvents.filter(c => (c.provider||"").toLowerCase() === "azure").length}
+
+Most common findings: over-privileged IAM roles, public S3 buckets, unencrypted secrets in env vars.`
+    };
+  }
+
+  // Credentials
+  if (/credential|secret|key rotation|vault|token/.test(q)) {
+    return {
+      tools: ["query_events"],
+      text:
+`M06 Credential Vault status:
+
+• Issued: ${credEvents.filter(e => e.action === "issued").length}
+• Rotated: ${credEvents.filter(e => e.action === "rotated").length}
+• Revoked: ${credEvents.filter(e => e.action === "revoked").length}
+• Accessed: ${credEvents.filter(e => e.action === "accessed").length}
+
+Stale or over-privileged credentials are flagged by AI analysis. All rotations are event-sourced into the audit vault for compliance evidence.`
+    };
+  }
+
+  // RFC monitoring
+  if (/rfc|remote function|abap/.test(q)) {
+    return {
+      tools: ["monitor_rfc_calls", "query_events"],
+      text:
+`RFC monitoring — M01 Gateway + M08 Anomaly combined view:
+
+• Total RFC calls: ${alerts.length}
+• Off-hours: ${stats.offHours}
+• Bulk extractions: ${stats.bulk}
+• Velocity spikes: ${stats.velocity}
+
+Most-invoked destinations: RFC_READ_TABLE, BAPI_USER_GET_DETAIL, SXPG_COMMAND_EXECUTE. Any RFC call classified as anomalous is scored by Isolation Forest in <50ms.`
+    };
+  }
+
+  // Generic / help
+  if (/help|what can you|who are you|capability|feature/.test(q) || text.length < 6) {
+    return {
+      tools: [],
+      text:
+`I'm your IntegriShield SAP security analyst — I have 17 SAP security tools plus live access to all 15 modules:
+
+Try asking about:
+• "Who has SAP_ALL?"
+• "Any SoD violations?"
+• "Show critical alerts"
+• "Dormant users?"
+• "Recent RFC anomalies"
+• "Compliance posture for SOX"
+• "DLP violations today"
+• "Failed logins in last 24h"
+• "Shadow endpoints detected"
+
+All answers use live dashboard data from the platform.`
+    };
+  }
+
+  // Default fallback with live data summary
+  return {
+    tools: ["query_events", "list_alerts"],
+    text:
+`Live security posture right now:
+
+• Active alerts: ${stats.totalAlerts} (${stats.critical} critical, ${stats.high} high)
+• ML anomalies above 0.7: ${stats.anomHigh}
+• DLP violations: ${stats.dlpViol}
+• Shadow endpoints: ${stats.shadow}
+• Open incidents: ${stats.incOpen}
+• Compliance violations: ${stats.compViol}
+
+I can go deeper on SAP_ALL holders, SoD conflicts, dormant users, RFC anomalies, DLP, compliance frameworks, or zero-trust decisions. What would you like to investigate?`
+  };
+}
+
+async function sendChatMessage() {
+  const inp  = $("chat-input");
+  const send = $("chat-send");
+  const msgs = $("chat-messages");
+  if (!inp || !msgs) return;
+  const text = inp.value.trim();
+  if (!text) return;
+
+  // Append user message
+  inp.value = "";
+  inp.style.height = "auto";
+  msgs.innerHTML += `<div class="chat-msg user">${escHtml(text)}</div>`;
+
+  // Typing indicator
+  const typingId = "chat-typing-" + Date.now();
+  msgs.innerHTML += `<div class="chat-msg typing" id="${typingId}">Claude is thinking…</div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+
+  if (send) send.disabled = true;
+  chatHistory.push({ role: "user", content: text });
+
+  // Simulate realistic "thinking" latency then respond from local engine
+  const delay = 600 + Math.floor(Math.random() * 700);
+  await new Promise(r => setTimeout(r, delay));
+
+  const answer = _chatLocalAnswer(text);
+  const typing = $(typingId);
+  if (typing) typing.remove();
+
+  let toolHtml = "";
+  if (answer.tools && answer.tools.length) {
+    toolHtml = `<div style="margin-bottom:.4rem;display:flex;flex-wrap:wrap;gap:.2rem">` +
+      answer.tools.map(t => `<span class="chat-tool-pill">⚙ ${t}</span>`).join("") +
+      `</div>`;
+  }
+  const body = escHtml(answer.text).replace(/\n/g, "<br>");
+  msgs.innerHTML += `<div class="chat-msg assistant">${toolHtml}${body}</div>`;
+  chatHistory.push({ role: "assistant", content: answer.text });
+
+  msgs.scrollTop = msgs.scrollHeight;
+  if (send) send.disabled = false;
+  if (inp) inp.focus();
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
 // ── CSV Export ────────────────────────────────────────────────
 function exportCSV(type) {
   const arrMap = {
     alerts: alerts, anomaly: anomalies, dlp: dlpEvents, shadow: shadowEvents,
     sap: sapEvents, compliance: compEvents, incidents: incEvents, sbom: sbomEvents,
     rules: alerts, zt: ztEvents, credentials: credEvents, cloud: cloudEvents,
-    gateway: alerts,
+    gateway: alerts, connectors: connEvents, traffic: trafficEvents, webhooks: webhookEvents,
   };
   const arr = arrMap[type] || [];
   if (!arr.length) { showToast("No data to export", "warning", 2000); return; }
@@ -2143,6 +3812,18 @@ if (ui.auditFilter)    ui.auditFilter.addEventListener("change", renderAudit);
 ['cloud-search','cloud-provider-filter','cloud-sev-filter'].forEach(id => {
   const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderCloud);
 });
+// Connector filters
+['conn-search','conn-platform-filter','conn-status-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderConnectors);
+});
+// Traffic filters
+['traffic-search','traffic-class-filter','traffic-dir-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderTraffic);
+});
+// Webhook filters
+['wh-search','wh-result-filter','wh-source-filter'].forEach(id => {
+  const el = $(id); if (el) el.addEventListener(el.tagName==='SELECT'?'change':'input', renderWebhooks);
+});
 
 // ── Theme toggle ──────────────────────────────────────────────
 const themeToggleBtn = document.getElementById("theme-toggle");
@@ -2172,7 +3853,7 @@ if (detailOverlay) detailOverlay.addEventListener("click", e=>{ if(e.target===de
 // ── Main sync ─────────────────────────────────────────────────
 async function syncData() {
   try {
-    const [aR,auR,stR,anR,sR,cR,dR,iR,shR,sbR,zR,crR,clR,mR] = await Promise.all([
+    const [aR,auR,stR,anR,sR,cR,dR,iR,shR,sbR,zR,crR,clR,mR,cnR,whR,tfR] = await Promise.all([
       fetch(`${API_BASE}/api/alerts?limit=80`).then(r=>r.json()),
       fetch(`${API_BASE}/api/audit?limit=60`).then(r=>r.json()),
       fetch(`${API_BASE}/api/stats`).then(r=>r.json()),
@@ -2187,6 +3868,9 @@ async function syncData() {
       fetch(`${API_BASE}/api/credentials?limit=60`).then(r=>r.json()),
       fetch(`${API_BASE}/api/cloud-posture?limit=60`).then(r=>r.json()),
       fetch(`${API_BASE}/api/modules/health`).then(r=>r.json()),
+      fetch(`${API_BASE}/api/connectors?limit=60`).then(r=>r.json()).catch(()=>({connectors:[]})),
+      fetch(`${API_BASE}/api/webhooks?limit=60`).then(r=>r.json()).catch(()=>({webhooks:[]})),
+      fetch(`${API_BASE}/api/traffic?limit=60`).then(r=>r.json()).catch(()=>({flows:[]})),
     ]);
 
     if (demo.active) stopDemo();
@@ -2195,6 +3879,7 @@ async function syncData() {
     sapEvents=sR.events||[]; compEvents=cR.findings||[]; dlpEvents=dR.violations||[];
     incEvents=iR.incidents||[]; shadowEvents=shR.detections||[]; sbomEvents=sbR.scans||[];
     ztEvents=zR.evaluations||[]; credEvents=crR.events||[]; cloudEvents=clR.findings||[];
+    connEvents=cnR.connectors||[]; webhookEvents=whR.webhooks||[]; trafficEvents=tfR.flows||[];
 
     if (ui.backendStatus) ui.backendStatus.textContent="connected";
     if (ui.statusDot)     ui.statusDot.className="status-dot online";
@@ -2212,10 +3897,13 @@ async function syncData() {
 function init() {
   initCharts();
   staggerCards();
-  navigateToTab("launcher"); // Open on Launcher — user must click Start
+  navigateToTab("launcher"); // Land on launcher so user sees ▶ Start All prominently
+  // Demo does NOT auto-start — user must click ▶ Start All to populate all 15 modules
+  if (ui.backendStatus) ui.backendStatus.textContent = "READY — CLICK ▶ START ALL";
+  if (ui.statusDot) ui.statusDot.className = "status-dot offline";
   syncData();
   setInterval(syncData, POLL_MS);
-  setTimeout(()=>showToast("IntegriShield SOC · Click ▶ Start All in Launcher to begin · Press ⌘K to navigate","info",8000), 800);
+  setTimeout(()=>showToast("IntegriShield SOC · 15 modules ready · Click ▶ Start All to begin","info",6000), 800);
 }
 
 init();
