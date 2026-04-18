@@ -97,6 +97,26 @@ const ui = {
   sidebar:$("sidebar"), sidebarToggle:$("sidebar-toggle"), sidebarOverlay:$("sidebar-overlay"),
 };
 
+// ── Template Helpers (use CSS vars instead of hardcoded colors) ──
+// Severity color: returns the CSS class name for a given severity level
+const sevClass = s => ({critical:'u-text-critical',high:'u-text-orange',medium:'u-text-warning',low:'u-text-ok'})[s?.toLowerCase()] || 'u-text-muted';
+// Risk color class based on score threshold
+const riskClass = v => parseFloat(v||0)>0.7 ? 'u-text-critical' : parseFloat(v||0)>0.4 ? 'u-text-warning' : 'u-text-ok';
+// Cloud provider color class
+const provClass = p => ({aws:'u-text-aws',gcp:'u-text-gcp',azure:'u-text-azure'})[p?.toLowerCase()] || 'u-text-muted';
+// Framework color class
+const fwClass = fw => ({SOX:'u-text-critical',GDPR:'u-text-accent','PCI-DSS':'u-text-orange','NIST-CSF':'u-text-ok',ISO27001:'u-text-purple',HIPAA:'u-text-cyan'})[fw] || 'u-text-muted';
+// Status color class
+const statusClass = (val, negatives, neutrals) => negatives?.some(n=>val?.includes(n)) ? 'u-text-critical' : neutrals?.some(n=>val?.includes(n)) ? 'u-text-warning' : 'u-text-ok';
+// Fix badge HTML — shows "✓ Fixed" or "⚡ Fix available"
+const mkFixBadge = key => fixedItems.has(key) ? '<span class="u-fix-resolved">✓ Fixed</span>' : '<span class="u-fix-available">⚡ Fix available</span>';
+// Click hint text
+const CLICK_HINT = '<span class="u-click-hint">click to view detail &amp; fix</span>';
+// Inline code tag
+const mkCode = (text, colorClass='') => `<code class="u-code ${colorClass}">${text}</code>`;
+// Read computed CSS variable value (for Chart.js canvas which can't use var())
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
 // ── Charts ────────────────────────────────────────────────────
 let alertChart=null, severityChart=null, rulesChart=null, riskGaugeChart=null;
 const alertTimeline = [];
@@ -530,7 +550,7 @@ function updateAllUI() {
   if (riskGaugeChart) {
     const maxScore  = anomalies.length ? Math.max(...anomalies.map(a=>parseFloat(a.anomaly_score||0))) : 0;
     const risk      = Math.min(100, Math.round((crit/Math.max(total,1))*60 + maxScore*40));
-    const colors    = risk>75?["#ff4757","rgba(255,71,87,0.15)"]:risk>50?["#ff8b3d","rgba(255,139,61,0.15)"]:risk>25?["#ffa502","rgba(255,165,2,0.15)"]:["#2ed573","rgba(46,213,115,0.12)"];
+    const colors    = risk>75?[cssVar('--critical'),cssVar('--critical-bg')]:risk>50?[cssVar('--orange'),cssVar('--orange-bg')]:risk>25?[cssVar('--warning'),cssVar('--warning-bg')]:[cssVar('--ok'),cssVar('--ok-bg')];
     const riskLabel = risk>75?"CRITICAL":risk>50?"HIGH":risk>25?"MEDIUM":"LOW";
     riskGaugeChart.data.datasets[0].data           = [risk,100-risk];
     riskGaugeChart.data.datasets[0].backgroundColor = colors;
@@ -580,7 +600,7 @@ function updateAllUI() {
       ui.scBadge.textContent  = threat ? "ACTIVE THREAT" : "MONITORING";
       ui.scBadge.className    = `scenario-badge ${threat?"":"scenario-badge-ok"}`;
       ui.scBadge.style.background = threat?"rgba(255,71,87,0.2)":"rgba(46,213,115,0.15)";
-      ui.scBadge.style.color      = threat?"#ff4757":"#2ed573";
+      ui.scBadge.style.color      = threat?"var(--critical)":"var(--ok)";
     }
     if (ui.scName)     ui.scName.textContent  = `${sc.name} · ${ph.label}`;
     if (ui.scPhase)    ui.scPhase.textContent  = `${demo.phIdx%sc.phases.length+1}/${sc.phases.length}`;
@@ -698,8 +718,8 @@ function renderAlerts() {
       </div>
       <div class="alert-item-meta">${a.message||"—"}</div>
       <div class="alert-item-meta">
-        IP: <code style="font-size:.72rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px">${a.source_ip||"—"}</code>
-        · user: <code style="font-size:.72rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px">${a.user_id||"—"}</code>
+        IP: <code style="font-size:.72rem;background:var(--bg-raised);padding:1px 5px;border-radius:3px">${a.source_ip||"—"}</code>
+        · user: <code style="font-size:.72rem;background:var(--bg-raised);padding:1px 5px;border-radius:3px">${a.user_id||"—"}</code>
         · ${ms(a.latencyMs)}
         <span class="item-detail-hint">→ click for detail</span>
       </div>
@@ -715,10 +735,10 @@ function renderAudit() {
   setEmpty(ui.auditBody, ui.auditEmpty, v);
   ui.auditBody.innerHTML = v.map(r => `<tr>
     <td>${ts(r.ts)}</td>
-    <td style="color:#b0c4de">${r.actor||"—"}</td>
+    <td style="color:var(--text-mid)">${r.actor||"—"}</td>
     <td><code style="font-size:.72rem;background:rgba(255,255,255,.05);padding:1px 6px;border-radius:3px">${r.action||"—"}</code></td>
     <td><span class="module-chip chip-default">${r.module||"—"}</span></td>
-    <td><span style="color:${r.status==="ok"?"#2ed573":"#ff4757"}">${r.status||"ok"}</span></td>
+    <td><span style="color:${r.status==="ok"?"var(--ok)":"var(--critical)"}">${r.status||"ok"}</span></td>
   </tr>`).join("");
 }
 
@@ -738,17 +758,17 @@ function renderGateway() {
   ui.gatewayList.innerHTML = v.map((a) => {
     const idx = alerts.indexOf(a);
     const sev = (a.severity||"low").toLowerCase();
-    const fixBadge = fixedItems.has('gateway-'+(a.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const fixBadge = fixedItems.has('gateway-'+(a.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-gateway sev-${sev}" onclick="showItemDetail('gateway',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>RFC CALL</strong> <span class="panel-subtitle">${scl(a.scenario)}</span>
         <span class="sev-badge sev-${sev}" style="margin-left:auto">${sev.toUpperCase()}</span>
         <span class="panel-subtitle" style="margin-left:.5rem">${ts(a.ts)}</span>
       </div>
-      <div class="alert-item-meta"><code style="font-size:.73rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px">${a.message||"—"}</code></div>
+      <div class="alert-item-meta"><code style="font-size:.73rem;background:var(--bg-raised);padding:1px 5px;border-radius:3px">${a.message||"—"}</code></div>
       <div class="alert-item-meta">IP: ${a.source_ip||"—"} · user: ${a.user_id||"—"} · latency: ${ms(a.latencyMs)}</div>
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -775,8 +795,8 @@ function renderAnomaly() {
     const idx = anomalies.indexOf(a);
     const sc = parseFloat(a.anomaly_score||0);
     const cls = sc>0.7?"sev-critical":sc>0.4?"sev-medium":"sev-low";
-    const barColor = sc>0.7?"#ff4757":sc>0.4?"#ffa502":"#2ed573";
-    const fixBadge = fixedItems.has('anomaly-'+(a.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const barColor = sc>0.7?"var(--critical)":sc>0.4?"var(--warning)":"var(--ok)";
+    const fixBadge = fixedItems.has('anomaly-'+(a.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-anomaly ${cls}" onclick="showItemDetail('anomaly',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>ANOMALY</strong>
@@ -791,7 +811,7 @@ function renderAnomaly() {
       </div>
       <div class="alert-item-meta">IP: ${a.source_ip||"—"} · user: ${a.user_id||"—"}</div>
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -813,17 +833,17 @@ function renderDlp() {
   ui.dlpList.innerHTML = vd.map((e) => {
     const idx = dlpEvents.indexOf(e);
     const sev = (e.severity||"high").toLowerCase();
-    const fixBadge = fixedItems.has('dlp-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const fixBadge = fixedItems.has('dlp-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-dlp sev-${sev}" onclick="showItemDetail('dlp',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>${(e.rule||"DLP VIOLATION").toUpperCase().replace(/_/g," ")}</strong>
         <span class="sev-badge sev-${sev}" style="margin-left:auto">${sev.toUpperCase()}</span>
         <span class="panel-subtitle" style="margin-left:.5rem">${ts(e.ts)}</span>
       </div>
-      <div class="alert-item-meta"><span style="color:#ff8b3d">📤 ${byt(e.bytes_out)}</span> · <span>${(e.row_count||0).toLocaleString()} rows</span> · dest: <code style="font-size:.72rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px">${e.destination||"—"}</code></div>
+      <div class="alert-item-meta"><span style="color:var(--orange)">📤 ${byt(e.bytes_out)}</span> · <span>${(e.row_count||0).toLocaleString()} rows</span> · dest: <code style="font-size:.72rem;background:var(--bg-raised);padding:1px 5px;border-radius:3px">${e.destination||"—"}</code></div>
       <div class="alert-item-meta">user: ${e.user_id||"—"}</div>
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -844,17 +864,17 @@ function renderShadow() {
   ui.shadowList.innerHTML = vsh.map((e) => {
     const idx = shadowEvents.indexOf(e);
     const sev = (e.severity||"high").toLowerCase();
-    const fixBadge = fixedItems.has('shadow-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const fixBadge = fixedItems.has('shadow-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-shadow sev-${sev}" onclick="showItemDetail('shadow',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>SHADOW ENDPOINT</strong>
-        <code style="font-size:.75rem;background:rgba(255,139,61,.15);color:#ff8b3d;padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.endpoint||"unknown"}</code>
+        <code style="font-size:.75rem;background:rgba(255,139,61,.15);color:var(--orange);padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.endpoint||"unknown"}</code>
         <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
       </div>
       <div class="alert-item-meta">${e.message||"Unknown RFC endpoint invoked"}</div>
       <div class="alert-item-meta">user: ${e.user_id||"—"} · IP: ${e.source_ip||"—"} · calls: ${e.call_count||"—"}</div>
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -876,8 +896,8 @@ function renderSap() {
   ui.sapList.innerHTML = vsa.map((e) => {
     const idx = sapEvents.indexOf(e);
     const flagged = e.anomalous || e.flagged;
-    const toolColor = flagged ? "#ff4757" : "#5b8def";
-    const fixBadge = fixedItems.has('sap-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const toolColor = flagged ? "var(--critical)" : "var(--accent)";
+    const fixBadge = fixedItems.has('sap-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-sap ${flagged?"sev-critical":""}" onclick="showItemDetail('sap',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>SAP MCP</strong>
@@ -885,10 +905,10 @@ function renderSap() {
         ${flagged?`<span class="sev-badge sev-critical" style="margin-left:.5rem">FLAGGED</span>`:""}
         <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
       </div>
-      <div class="alert-item-meta">result: <strong style="color:${e.result==="success"?flagged?"#ff4757":"#2ed573":"#ffa502"}">${e.result||"—"}</strong> · tenant: ${e.tenant_id||"—"}</div>
+      <div class="alert-item-meta">result: <strong style="color:${e.result==="success"?flagged?"var(--critical)":"var(--ok)":"var(--warning)"}">${e.result||"—"}</strong> · tenant: ${e.tenant_id||"—"}</div>
       <div class="alert-item-meta">user: ${e.user_id||"—"}</div>
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -908,24 +928,24 @@ function renderCompliance() {
   if (cres !== 'all') vc = vc.filter(e=>(e.result||'').toLowerCase()===cres);
   setEmpty(ui.complianceList, ui.complianceEmpty, vc);
 
-  const fwColors = {SOX:"#ff4757",GDPR:"#5b8def","PCI-DSS":"#ff8b3d","NIST-CSF":"#2ed573",ISO27001:"#a17fe0",HIPAA:"#39c5cf"};
+  const fwColors = {SOX:"var(--critical)",GDPR:"var(--accent)","PCI-DSS":"var(--orange)","NIST-CSF":"var(--ok)",ISO27001:"var(--purple)",HIPAA:"var(--cyan)"};
 
   ui.complianceList.innerHTML = vc.map((e) => {
     const idx = compEvents.indexOf(e);
     const res = (e.result||"unknown").toLowerCase();
     const cls = res==="violation"?"sev-critical":res==="warning"?"sev-medium":"sev-low";
-    const fwC = fwColors[e.framework]||"#7a93b4";
-    const fixBadge = fixedItems.has('comp-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const fwC = fwColors[e.framework]||"var(--text-muted)";
+    const fixBadge = fixedItems.has('comp-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-compliance ${cls}" onclick="showItemDetail('comp',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>${res.toUpperCase()}</strong>
         <span style="background:${fwC}22;color:${fwC};font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:.5rem">${e.framework||"—"}</span>
-        <code style="font-size:.7rem;background:rgba(255,255,255,.06);padding:1px 6px;border-radius:3px;margin-left:.4rem">${e.control_id||"—"}</code>
+        <code style="font-size:.7rem;background:var(--bg-raised);padding:1px 6px;border-radius:3px;margin-left:.4rem">${e.control_id||"—"}</code>
         <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
       </div>
       <div class="alert-item-meta">${e.description||e.message||"—"}</div>
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -936,21 +956,21 @@ function renderCompliance() {
 
 function renderComplianceScorecard() {
   if (!ui.compScorecard) return;
-  const fwColors = {SOX:"#ff4757",GDPR:"#5b8def","PCI-DSS":"#ff8b3d","NIST-CSF":"#2ed573",ISO27001:"#a17fe0",HIPAA:"#39c5cf"};
+  const fwColors = {SOX:"var(--critical)",GDPR:"var(--accent)","PCI-DSS":"var(--orange)","NIST-CSF":"var(--ok)",ISO27001:"var(--purple)",HIPAA:"var(--cyan)"};
   ui.compScorecard.innerHTML = Object.entries(FW_SCORES).map(([fw, base]) => {
     const viols = compEvents.filter(e=>e.framework===fw && (e.result||"")==="violation").length;
     const score = Math.max(60, base - viols*3);
-    const c = score>90?"#2ed573":score>80?"#5b8def":score>70?"#ffa502":"#ff4757";
+    const c = score>90?"var(--ok)":score>80?"var(--accent)":score>70?"var(--warning)":"var(--critical)";
     const fwC = fwColors[fw]||c;
     return `<div class="scorecard-row" style="display:flex;align-items:center;gap:.6rem;margin:.25rem 0;font-size:.8rem">
       <span style="width:70px;font-weight:600;color:${fwC};flex-shrink:0">${fw}</span>
-      <div style="flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden">
+      <div style="flex:1;height:6px;background:var(--bg-raised);border-radius:3px;overflow:hidden">
         <div style="width:${score}%;height:100%;background:${c};border-radius:3px;transition:width .8s ease"></div>
       </div>
       <span style="width:36px;font-weight:700;color:${c};text-align:right">${score}%</span>
       ${viols>0
-        ? `<span style="font-size:.67rem;background:rgba(255,71,87,.12);color:#ff4757;padding:1px 6px;border-radius:3px">${viols} viol.</span>`
-        : `<span style="font-size:.67rem;color:#2ed573">✓ Clean</span>`}
+        ? `<span style="font-size:.67rem;background:rgba(255,71,87,.12);color:var(--critical);padding:1px 6px;border-radius:3px">${viols} viol.</span>`
+        : `<span style="font-size:.67rem;color:var(--ok)">✓ Clean</span>`}
     </div>`;
   }).join("");
 }
@@ -972,14 +992,14 @@ function renderIncidents() {
   if (iq) vi = vi.filter(e=>[e.incident_id,e.title,e.source_module].join(' ').toLowerCase().includes(iq));
   setEmpty(ui.incidentsList, ui.incidentsEmpty, vi);
 
-  const stColor = {open:"#ff4757",investigating:"#ffa502",in_progress:"#ffa502",active:"#ffa502",resolved:"#2ed573",closed:"#2ed573",contained:"#2ed573"};
+  const stColor = {open:"var(--critical)",investigating:"var(--warning)",in_progress:"var(--warning)",active:"var(--warning)",resolved:"var(--ok)",closed:"var(--ok)",contained:"var(--ok)"};
 
   ui.incidentsList.innerHTML = vi.map((e) => {
     const idx = incEvents.indexOf(e);
     const st  = (e.status||"open").toLowerCase();
-    const stC = stColor[st]||"#7a93b4";
+    const stC = stColor[st]||"var(--text-muted)";
     const cls = st==="open"?"sev-critical":["investigating","in_progress","active"].includes(st)?"sev-medium":"sev-low";
-    const fixBadge = fixedItems.has('incident-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const fixBadge = fixedItems.has('incident-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-incident ${cls}" onclick="showItemDetail('incident',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <strong>${e.incident_id||"INC-?"}</strong>
@@ -987,10 +1007,10 @@ function renderIncidents() {
         <span style="background:${stC}22;color:${stC};font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:auto">${st.toUpperCase()}</span>
         <span class="panel-subtitle" style="margin-left:.5rem">${ts(e.ts)}</span>
       </div>
-      <div class="alert-item-meta">severity: <span style="color:${e.severity==="critical"?"#ff4757":e.severity==="high"?"#ff8b3d":"#ffa502"}">${(e.severity||"—").toUpperCase()}</span> · source: ${e.source_module||"—"}</div>
-      <div class="alert-item-meta">playbook: <code style="font-size:.7rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 6px;border-radius:3px">${e.playbook_id||"none"}</code>${e.playbook_run?`<span style="color:#2ed573;font-size:.7rem;margin-left:.4rem">▶ Running</span>`:""}</div>
+      <div class="alert-item-meta">severity: <span style="color:${e.severity==="critical"?"var(--critical)":e.severity==="high"?"var(--orange)":"var(--warning)"}">${(e.severity||"—").toUpperCase()}</span> · source: ${e.source_module||"—"}</div>
+      <div class="alert-item-meta">playbook: <code style="font-size:.7rem;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:3px">${e.playbook_id||"none"}</code>${e.playbook_run?`<span style="color:var(--ok);font-size:.7rem;margin-left:.4rem">▶ Running</span>`:""}</div>
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -1009,9 +1029,9 @@ function renderPlaybookTracker() {
   const done  = Math.min(steps.length, Math.floor(demo.tick/3));
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.7rem;flex-wrap:wrap">
-      <span style="font-size:.65rem;font-weight:700;background:rgba(91,141,239,.18);color:#5b8def;padding:2px 8px;border-radius:4px">🎯 PLAYBOOK RUNNING</span>
-      <strong style="color:#eaf0f7;font-size:.82rem">${inc.playbook_id}</strong>
-      <span style="font-size:.72rem;color:#7a93b4">→ ${inc.incident_id||"INC-?"}: ${inc.title||""}</span>
+      <span style="font-size:.65rem;font-weight:700;background:rgba(91,141,239,.18);color:var(--accent);padding:2px 8px;border-radius:4px">🎯 PLAYBOOK RUNNING</span>
+      <strong style="color:var(--text-hi);font-size:.82rem">${inc.playbook_id}</strong>
+      <span style="font-size:.72rem;color:var(--text-muted)">→ ${inc.incident_id||"INC-?"}: ${inc.title||""}</span>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:.35rem">
       ${steps.map((s,i)=>{
@@ -1019,7 +1039,7 @@ function renderPlaybookTracker() {
         const isActive = i === done;
         const bg    = isDone?"rgba(46,213,115,.1)":isActive?"rgba(255,165,2,.12)":"rgba(255,255,255,.02)";
         const bc    = isDone?"rgba(46,213,115,.25)":isActive?"rgba(255,165,2,.35)":"rgba(255,255,255,.07)";
-        const color = isDone?"#2ed573":isActive?"#ffa502":"#4a6080";
+        const color = isDone?"var(--ok)":isActive?"var(--warning)":"var(--text-dim)";
         const icon  = isDone?"✓":isActive?"▶":"○";
         return `<div style="display:flex;align-items:center;gap:.3rem;font-size:.7rem;padding:3px 9px;border-radius:4px;border:1px solid ${bc};background:${bg};color:${color}${isActive?";animation:none":""}">
           <span style="font-weight:700">${icon}</span><span>${s}</span>
@@ -1047,16 +1067,16 @@ function renderSbom() {
     const idx = sbomEvents.indexOf(e);
     const vuln = parseInt(e.cve_count||0)>0 || parseInt(e.insecure_rfc_count||0)>0;
     const cls  = e.scan_status==="VULNERABLE"?"sev-critical":"sev-low";
-    const fixBadge = fixedItems.has('sbom-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const fixBadge = fixedItems.has('sbom-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-sbom ${cls}" onclick="showItemDetail('sbom',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
-        <span style="font-size:.7rem;font-weight:700;background:${vuln?"rgba(255,71,87,.2)":"rgba(46,213,115,.15)"};color:${vuln?"#ff4757":"#2ed573"};padding:2px 8px;border-radius:4px">${e.scan_status||"SCAN"}</span>
-        <code style="font-size:.73rem;background:rgba(255,255,255,.06);padding:2px 7px;border-radius:4px;margin-left:.5rem;color:#b0c4de">${e.target||"—"}</code>
+        <span style="font-size:.7rem;font-weight:700;background:${vuln?"var(--critical-bg)":"var(--ok-bg)"};color:${vuln?"var(--critical)":"var(--ok)"};padding:2px 8px;border-radius:4px">${e.scan_status||"SCAN"}</span>
+        <code style="font-size:.73rem;background:var(--bg-raised);padding:2px 7px;border-radius:4px;margin-left:.5rem;color:var(--text-mid)">${e.target||"—"}</code>
         <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
       </div>
-      <div class="alert-item-meta">CVEs: <strong style="color:${parseInt(e.cve_count||0)>0?"#ff4757":"#2ed573"}">${e.cve_count||0}</strong> · Insecure RFC: <strong style="color:${parseInt(e.insecure_rfc_count||0)>0?"#ffa502":"#2ed573"}">${e.insecure_rfc_count||0}</strong> · format: CycloneDX 1.4</div>
+      <div class="alert-item-meta">CVEs: <strong style="color:${parseInt(e.cve_count||0)>0?"var(--critical)":"var(--ok)"}">${e.cve_count||0}</strong> · Insecure RFC: <strong style="color:${parseInt(e.insecure_rfc_count||0)>0?"var(--warning)":"var(--ok)"}">${e.insecure_rfc_count||0}</strong> · format: CycloneDX 1.4</div>
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -1081,8 +1101,8 @@ function renderRules() {
   ui.rulesList.innerHTML = vr.map((a) => {
     const idx = alerts.indexOf(a);
     const sev = (a.severity||"medium").toLowerCase();
-    const ruleColor = {bulk_extraction:"#ff4757",off_hours_rfc:"#ffa502",shadow_endpoint:"#ff8b3d",velocity_anomaly:"#5b8def",data_staging:"#ff4757",credential_abuse:"#a17fe0",privilege_escalation:"#ff4757",geo_anomaly:"#ffa502"}[a.scenario]||"#7a93b4";
-    const fixBadge = fixedItems.has('rules-'+(a.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const ruleColor = {bulk_extraction:"var(--critical)",off_hours_rfc:"var(--warning)",shadow_endpoint:"var(--orange)",velocity_anomaly:"var(--accent)",data_staging:"var(--critical)",credential_abuse:"var(--purple)",privilege_escalation:"var(--critical)",geo_anomaly:"var(--warning)"}[a.scenario]||"var(--text-muted)";
+    const fixBadge = fixedItems.has('rules-'+(a.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-rules sev-${sev}" onclick="showItemDetail('rules',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <span style="font-size:.7rem;font-weight:700;background:${ruleColor}22;color:${ruleColor};padding:2px 8px;border-radius:4px">${scl(a.scenario)||"RULE"}</span>
@@ -1092,7 +1112,7 @@ function renderRules() {
       <div class="alert-item-meta">${a.message||"—"}</div>
       <div class="alert-item-meta">${ms(a.latencyMs)} · IP: ${a.source_ip||"—"} · user: ${a.user_id||"—"}</div>
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -1121,15 +1141,15 @@ function renderZeroTrust() {
   ui.ztList.innerHTML = vz.map((e) => {
     const idx = ztEvents.indexOf(e);
     const dec  = (e.decision||"evaluated").toLowerCase();
-    const dC   = dec==="allow"?"#2ed573":dec==="deny"?"#ff4757":"#ffa502";
+    const dC   = dec==="allow"?"var(--ok)":dec==="deny"?"var(--critical)":"var(--warning)";
     const risk = parseFloat(e.risk_score||0);
     let fc = [];
     try { fc = Array.isArray(e.failed_controls) ? e.failed_controls : JSON.parse(e.failed_controls||"[]"); } catch {}
-    const fixBadge = fixedItems.has('zt-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const fixBadge = fixedItems.has('zt-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-zt-${dec}" onclick="showItemDetail('zt',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <span style="font-size:.72rem;font-weight:700;background:${dC}22;color:${dC};padding:2px 9px;border-radius:4px">${dec.toUpperCase()}</span>
-        <span style="margin-left:.6rem;font-size:.75rem;color:#b0c4de">risk: <strong style="color:${risk>0.7?"#ff4757":risk>0.4?"#ffa502":"#2ed573"}">${risk.toFixed(3)}</strong></span>
+        <span style="margin-left:.6rem;font-size:.75rem;color:var(--text-mid)">risk: <strong style="color:${risk>0.7?"var(--critical)":risk>0.4?"var(--warning)":"var(--ok)"}">${risk.toFixed(3)}</strong></span>
         <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
       </div>
       <div class="alert-item-meta" style="display:flex;align-items:center;gap:.5rem;margin-top:3px">
@@ -1138,9 +1158,9 @@ function renderZeroTrust() {
         </div>
       </div>
       <div class="alert-item-meta">user: ${e.user_id||"—"} · IP: ${e.source_ip||"—"}</div>
-      ${fc.length?`<div class="alert-item-meta">failed: ${fc.map(f=>`<span style="font-size:.65rem;background:rgba(255,71,87,.1);color:#ff8b8b;padding:1px 5px;border-radius:3px;margin-right:3px">${f}</span>`).join("")}</div>`:""}
+      ${fc.length?`<div class="alert-item-meta">failed: ${fc.map(f=>`<span style="font-size:.65rem;background:var(--critical-bg);color:var(--critical);padding:1px 5px;border-radius:3px;margin-right:3px">${f}</span>`).join("")}</div>`:""}
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -1164,18 +1184,18 @@ function renderCredentials() {
     const idx = credEvents.indexOf(e);
     const act   = e.action||"event";
     const icon  = icons[act]||icons.default;
-    const actC  = act.includes("revok")?"#ff4757":act.includes("rotat")?"#ffa502":"#2ed573";
-    const fixBadge = fixedItems.has('cred-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const actC  = act.includes("revok")?"var(--critical)":act.includes("rotat")?"var(--warning)":"var(--ok)";
+    const fixBadge = fixedItems.has('cred-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-credential" onclick="showItemDetail('cred',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <span style="font-size:.85rem">${icon}</span>
         <strong style="color:${actC};margin-left:.3rem">${act.toUpperCase()}</strong>
-        <code style="font-size:.7rem;background:rgba(255,255,255,.06);padding:1px 7px;border-radius:4px;margin-left:.5rem;color:#b0c4de">${e.key||"—"}</code>
+        <code style="font-size:.7rem;background:var(--bg-raised);padding:1px 7px;border-radius:4px;margin-left:.5rem;color:var(--text-mid)">${e.key||"—"}</code>
         <span class="panel-subtitle" style="margin-left:auto">${ts(e.ts)}</span>
       </div>
       <div class="alert-item-meta">tenant: ${e.tenant_id||"—"} · status: <span style="color:${actC}">${e.status||act}</span></div>
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -1196,26 +1216,26 @@ function renderCloud() {
   if (csev  !== 'all') vcl = vcl.filter(e=>(e.raw_severity||e.severity||'').toLowerCase()===csev);
   if (cq) vcl = vcl.filter(e=>[e.finding_type,e.resource_id,e.provider].join(' ').toLowerCase().includes(cq));
   setEmpty(ui.cloudList, ui.cloudEmpty, vcl);
-  const provC = {aws:"#ff9900",gcp:"#4285f4",azure:"#00a4ef"};
+  const provC = {aws:"var(--aws)",gcp:"var(--gcp)",azure:"var(--azure)"};
   const provBg = {aws:"rgba(255,153,0,.15)",gcp:"rgba(66,133,244,.15)",azure:"rgba(0,164,239,.15)"};
   ui.cloudList.innerHTML = vcl.map((e) => {
     const idx = cloudEvents.indexOf(e);
     const prov = (e.provider||"cloud").toLowerCase();
     const sev  = (e.raw_severity||e.severity||"medium").toLowerCase();
-    const pc   = provC[prov]||"#7a93b4";
+    const pc   = provC[prov]||"var(--text-muted)";
     const pb   = provBg[prov]||"rgba(255,255,255,.06)";
-    const fixBadge = fixedItems.has('cloud-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:rgba(46,213,115,.15);color:#2ed573;padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:rgba(91,141,239,.12);color:#5b8def;padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
+    const fixBadge = fixedItems.has('cloud-'+(e.ts||idx)) ? `<span style="font-size:.68rem;background:var(--ok-bg);color:var(--ok);padding:1px 7px;border-radius:3px">✓ Fixed</span>` : `<span style="font-size:.68rem;background:var(--accent-bg);color:var(--accent);padding:1px 7px;border-radius:3px;font-weight:600">⚡ Fix available</span>`;
     return `<li class="alert-item ev-cloud sev-${sev}" onclick="showItemDetail('cloud',${idx})" style="cursor:pointer">
       <div class="alert-item-row">
         <span style="font-size:.7rem;font-weight:700;background:${pb};color:${pc};padding:2px 8px;border-radius:4px">${prov.toUpperCase()}</span>
-        <code style="font-size:.7rem;background:rgba(255,71,87,.1);color:#ff8b8b;padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.finding_type||"FINDING"}</code>
+        <code style="font-size:.7rem;background:var(--critical-bg);color:var(--critical);padding:2px 7px;border-radius:4px;margin-left:.5rem">${e.finding_type||"FINDING"}</code>
         <span class="sev-badge sev-${sev}" style="margin-left:auto">${sev.toUpperCase()}</span>
         <span class="panel-subtitle" style="margin-left:.5rem">${ts(e.ts)}</span>
       </div>
-      <div class="alert-item-meta"><code style="font-size:.68rem;background:rgba(255,255,255,.04);padding:1px 6px;border-radius:3px;color:#7a93b4">${e.resource_id||"—"}</code></div>
-      <div class="alert-item-meta">risk score: <strong style="color:${parseFloat(e.risk_score||0)>0.7?"#ff4757":"#ffa502"}">${e.risk_score||"—"}</strong></div>
+      <div class="alert-item-meta"><code style="font-size:.68rem;background:var(--bg-raised);padding:1px 6px;border-radius:3px;color:var(--text-muted)">${e.resource_id||"—"}</code></div>
+      <div class="alert-item-meta">risk score: <strong style="color:${parseFloat(e.risk_score||0)>0.7?"var(--critical)":"var(--warning)"}">${e.risk_score||"—"}</strong></div>
       <div class="alert-item-meta" style="margin-top:3px;display:flex;justify-content:space-between">
-        <span style="font-size:.68rem;color:#4a6080;font-style:italic">click to view detail &amp; fix</span>
+        ${CLICK_HINT}
         ${fixBadge}
       </div>
     </li>`;
@@ -1285,10 +1305,10 @@ function showItemDetail(type, idx) {
     if (corrCount > 0) {
       corrHTML = `<div>
         <div class="drw-section-title">🔗 Correlated Events (${corrCount})</div>
-        ${corrAlerts.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(255,71,87,.08);color:#ff9aa2">⚠️ ALERT: ${x.message||x.scenario} — ${ts(x.ts)}</div>`).join("")}
-        ${corrAnom.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(161,127,224,.09);color:#c4a5f5">🧠 ANOMALY: score ${x.anomaly_score} · ${x.classification} — ${ts(x.ts)}</div>`).join("")}
-        ${corrDlp.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(57,197,207,.07);color:#67e8f9">🔒 DLP: ${x.rule} · ${byt(x.bytes_out)} — ${ts(x.ts)}</div>`).join("")}
-        ${corrZT.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:rgba(91,141,239,.09);color:#93bbff">🔐 ZERO-TRUST: ${(x.decision||"").toUpperCase()} · risk ${x.risk_score} — ${ts(x.ts)}</div>`).join("")}
+        ${corrAlerts.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:var(--critical-bg);color:var(--critical)">⚠️ ALERT: ${x.message||x.scenario} — ${ts(x.ts)}</div>`).join("")}
+        ${corrAnom.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:var(--purple-bg);color:var(--purple)">🧠 ANOMALY: score ${x.anomaly_score} · ${x.classification} — ${ts(x.ts)}</div>`).join("")}
+        ${corrDlp.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:var(--cyan-bg);color:var(--cyan)">🔒 DLP: ${x.rule} · ${byt(x.bytes_out)} — ${ts(x.ts)}</div>`).join("")}
+        ${corrZT.map(x=>`<div style="font-size:.73rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;background:var(--accent-bg);color:var(--accent)">🔐 ZERO-TRUST: ${(x.decision||"").toUpperCase()} · risk ${x.risk_score} — ${ts(x.ts)}</div>`).join("")}
       </div>`;
     }
   }
@@ -1300,7 +1320,7 @@ function showItemDetail(type, idx) {
     </div>
     <div>
       <div class="drw-section-title">🧠 What Is This?</div>
-      <div style="background:rgba(91,141,239,.07);border:1px solid rgba(91,141,239,.18);border-radius:6px;padding:.75rem;font-size:.78rem;color:#b0c4de;line-height:1.6">
+      <div style="background:var(--accent-bg);border:1px solid rgba(91,141,239,.18);border-radius:6px;padding:.75rem;font-size:.78rem;color:var(--text-mid);line-height:1.6">
         ${explanation}
       </div>
     </div>
@@ -1308,8 +1328,8 @@ function showItemDetail(type, idx) {
       <div class="drw-section-title">🔧 How To Fix It</div>
       <div style="display:flex;flex-direction:column;gap:.35rem">
         ${fixSteps.map((s,i)=>`<div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.76rem;padding:.4rem .6rem;border-radius:5px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)">
-          <span style="flex-shrink:0;width:18px;height:18px;border-radius:50%;background:rgba(91,141,239,.2);color:#5b8def;font-weight:700;font-size:.65rem;display:flex;align-items:center;justify-content:center">${i+1}</span>
-          <span style="color:#b0c4de;line-height:1.5">${s}</span>
+          <span style="flex-shrink:0;width:18px;height:18px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-weight:700;font-size:.65rem;display:flex;align-items:center;justify-content:center">${i+1}</span>
+          <span style="color:var(--text-mid);line-height:1.5">${s}</span>
         </div>`).join("")}
       </div>
     </div>
@@ -1319,22 +1339,22 @@ function showItemDetail(type, idx) {
   if (drwActions) {
     if (alreadyFixed) {
       drwActions.innerHTML = `
-        <div style="flex:1;padding:.5rem .7rem;border:1px solid rgba(46,213,115,.3);border-radius:6px;background:rgba(46,213,115,.1);color:#2ed573;font-size:.76rem;font-weight:600;text-align:center">
+        <div style="flex:1;padding:.5rem .7rem;border:1px solid rgba(16,185,129,.3);border-radius:6px;background:var(--ok-bg);color:var(--ok);font-size:.76rem;font-weight:600;text-align:center">
           ✓ Already resolved by IntegriShield
         </div>
-        <button onclick="closeDetailDrawer()" style="padding:.5rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.06);color:#7a93b4;font-size:.76rem;cursor:pointer">Close</button>`;
+        <button onclick="closeDetailDrawer()" style="padding:.5rem .9rem;border:1px solid var(--border-subtle);border-radius:6px;background:var(--bg-raised);color:var(--text-muted);font-size:.76rem;cursor:pointer">Close</button>`;
     } else {
       drwActions.innerHTML = `
         <button onclick="applyFix('${type}',${idx})"
-          style="flex:1;padding:.55rem .8rem;border:none;border-radius:6px;background:linear-gradient(135deg,#2ed573,#5b8def);color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.03em;box-shadow:0 0 16px rgba(46,213,115,.35)">
+          style="flex:1;padding:.55rem .8rem;border:none;border-radius:6px;background:var(--grad-success);color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;letter-spacing:.03em;box-shadow:0 0 16px rgba(16,185,129,.35)">
           ⚡ Fix It Now
         </button>
         <button onclick="demoActionAlt('block','${type}','${ev.source_ip||ev.user_id||""}')"
-          style="padding:.5rem .7rem;border:1px solid rgba(255,71,87,.3);border-radius:6px;background:rgba(255,71,87,.15);color:#ff4757;font-size:.76rem;font-weight:600;cursor:pointer">
+          style="padding:.5rem .7rem;border:1px solid rgba(239,68,68,.3);border-radius:6px;background:var(--critical-bg);color:var(--critical);font-size:.76rem;font-weight:600;cursor:pointer">
           🚫 Block
         </button>
         <button onclick="demoActionAlt('report','${type}','')"
-          style="padding:.5rem .7rem;border:1px solid rgba(91,141,239,.3);border-radius:6px;background:rgba(91,141,239,.14);color:#5b8def;font-size:.76rem;font-weight:600;cursor:pointer">
+          style="padding:.5rem .7rem;border:1px solid var(--border-glow);border-radius:6px;background:var(--accent-bg);color:var(--accent);font-size:.76rem;font-weight:600;cursor:pointer">
           📄 Report
         </button>
       `;
@@ -1353,11 +1373,11 @@ function _buildFields(type, ev) {
            f("Scenario", scl(ev.scenario)) + f("Latency", ms(ev.latencyMs)) +
            c("Source IP", ev.source_ip) + c("User", ev.user_id);
   if (type==="anomaly")
-    return base + f("Score",`<strong style="color:${parseFloat(ev.anomaly_score||0)>0.7?"#ff4757":"#ffa502"}">${parseFloat(ev.anomaly_score||0).toFixed(4)}</strong>`) +
+    return base + f("Score",`<strong style="color:${parseFloat(ev.anomaly_score||0)>0.7?"var(--critical)":"var(--warning)"}">${parseFloat(ev.anomaly_score||0).toFixed(4)}</strong>`) +
            f("Classification", ev.classification) + c("Source IP", ev.source_ip) + c("User", ev.user_id);
   if (type==="sap")
     return base + c("Tool", ev.tool_name) + f("Result", ev.result) + f("Tenant", ev.tenant_id) +
-           c("User", ev.user_id) + f("Flagged", ev.flagged?"<span style='color:#ff4757'>YES</span>":"No");
+           c("User", ev.user_id) + f("Flagged", ev.flagged?"<span style='color:var(--critical)'>YES</span>":"No");
   if (type==="dlp")
     return base + f("Rule", (ev.rule||"").replace(/_/g," ")) + f("Severity",`<span class="sev-badge sev-${(ev.severity||"high").toLowerCase()}">${(ev.severity||"high").toUpperCase()}</span>`) +
            f("Data Volume", byt(ev.bytes_out)) + f("Row Count", (ev.row_count||0).toLocaleString()) +
@@ -1367,30 +1387,30 @@ function _buildFields(type, ev) {
            c("User", ev.user_id) + c("Source IP", ev.source_ip) + f("Call Count", ev.call_count||"—");
   if (type==="comp")
     return base + f("Framework", ev.framework) + c("Control", ev.control_id) +
-           f("Result",`<span style="color:${(ev.result||"")=="violation"?"#ff4757":"#2ed573"}">${(ev.result||"").toUpperCase()}</span>`) +
+           f("Result",`<span style="color:${(ev.result||"")=="violation"?"var(--critical)":"var(--ok)"}">${(ev.result||"").toUpperCase()}</span>`) +
            f("Severity",`<span class="sev-badge sev-${(ev.severity||"medium").toLowerCase()}">${(ev.severity||"medium").toUpperCase()}</span>`);
   if (type==="incident")
-    return base + f("Incident ID", ev.incident_id) + f("Status",`<span style="color:${(ev.status||"open")==="open"?"#ff4757":(ev.status||"")==="investigating"?"#ffa502":"#2ed573"}">${(ev.status||"open").toUpperCase()}</span>`) +
+    return base + f("Incident ID", ev.incident_id) + f("Status",`<span style="color:${(ev.status||"open")==="open"?"var(--critical)":(ev.status||"")==="investigating"?"var(--warning)":"var(--ok)"}">${(ev.status||"open").toUpperCase()}</span>`) +
            f("Severity",`<span class="sev-badge sev-${(ev.severity||"critical").toLowerCase()}">${(ev.severity||"critical").toUpperCase()}</span>`) +
            f("Source Module", ev.source_module) + c("Playbook", ev.playbook_id||"none");
   if (type==="sbom")
-    return base + c("Target", ev.target) + f("Status",`<span style="color:${ev.scan_status==="VULNERABLE"?"#ff4757":"#2ed573"}">${ev.scan_status||"—"}</span>`) +
-           f("CVEs", `<strong style="color:${parseInt(ev.cve_count||0)>0?"#ff4757":"#2ed573"}">${ev.cve_count||0}</strong>`) +
-           f("Insecure RFCs", `<strong style="color:${parseInt(ev.insecure_rfc_count||0)>0?"#ffa502":"#2ed573"}">${ev.insecure_rfc_count||0}</strong>`);
+    return base + c("Target", ev.target) + f("Status",`<span style="color:${ev.scan_status==="VULNERABLE"?"var(--critical)":"var(--ok)"}">${ev.scan_status||"—"}</span>`) +
+           f("CVEs", `<strong style="color:${parseInt(ev.cve_count||0)>0?"var(--critical)":"var(--ok)"}">${ev.cve_count||0}</strong>`) +
+           f("Insecure RFCs", `<strong style="color:${parseInt(ev.insecure_rfc_count||0)>0?"var(--warning)":"var(--ok)"}">${ev.insecure_rfc_count||0}</strong>`);
   if (type==="zt") {
     let fc = []; try { fc = Array.isArray(ev.failed_controls)?ev.failed_controls:JSON.parse(ev.failed_controls||"[]"); } catch {}
-    return base + f("Decision",`<span style="color:${(ev.decision||"")==="deny"?"#ff4757":(ev.decision||"")==="allow"?"#2ed573":"#ffa502"}">${(ev.decision||"").toUpperCase()}</span>`) +
-           f("Risk Score",`<strong style="color:${parseFloat(ev.risk_score||0)>0.7?"#ff4757":"#ffa502"}">${parseFloat(ev.risk_score||0).toFixed(4)}</strong>`) +
+    return base + f("Decision",`<span style="color:${(ev.decision||"")==="deny"?"var(--critical)":(ev.decision||"")==="allow"?"var(--ok)":"var(--warning)"}">${(ev.decision||"").toUpperCase()}</span>`) +
+           f("Risk Score",`<strong style="color:${parseFloat(ev.risk_score||0)>0.7?"var(--critical)":"var(--warning)"}">${parseFloat(ev.risk_score||0).toFixed(4)}</strong>`) +
            c("User", ev.user_id) + c("Source IP", ev.source_ip) +
-           `<div class="drw-field" style="grid-column:1/-1"><label>Failed Controls</label><span>${fc.length?fc.map(f2=>`<span style="font-size:.65rem;background:rgba(255,71,87,.1);color:#ff8b8b;padding:1px 5px;border-radius:3px;margin:2px">${f2}</span>`).join(""):"None"}</span></div>`;
+           `<div class="drw-field" style="grid-column:1/-1"><label>Failed Controls</label><span>${fc.length?fc.map(f2=>`<span style="font-size:.65rem;background:var(--critical-bg);color:var(--critical);padding:1px 5px;border-radius:3px;margin:2px">${f2}</span>`).join(""):"None"}</span></div>`;
   }
   if (type==="cred")
-    return base + f("Action",`<span style="color:${(ev.action||"").includes("revok")?"#ff4757":(ev.action||"").includes("rotat")?"#ffa502":"#2ed573"}">${(ev.action||"").toUpperCase()}</span>`) +
+    return base + f("Action",`<span style="color:${(ev.action||"").includes("revok")?"var(--critical)":(ev.action||"").includes("rotat")?"var(--warning)":"var(--ok)"}">${(ev.action||"").toUpperCase()}</span>`) +
            c("Key", ev.key) + f("Tenant", ev.tenant_id) + f("Status", ev.status||ev.action);
   if (type==="cloud")
-    return base + f("Provider",`<span style="color:${(ev.provider||"")==="aws"?"#ff9900":(ev.provider||"")==="gcp"?"#4285f4":"#00a4ef"}">${(ev.provider||"").toUpperCase()}</span>`) +
+    return base + f("Provider",`<span style="color:${(ev.provider||"")==="aws"?"var(--aws)":(ev.provider||"")==="gcp"?"var(--gcp)":"var(--azure)"}">${(ev.provider||"").toUpperCase()}</span>`) +
            f("Finding", ev.finding_type) + f("Severity",`<span class="sev-badge sev-${(ev.raw_severity||"medium").toLowerCase()}">${(ev.raw_severity||"medium").toUpperCase()}</span>`) +
-           f("Risk Score",`<strong style="color:${parseFloat(ev.risk_score||0)>0.7?"#ff4757":"#ffa502"}">${ev.risk_score||"—"}</strong>`) +
+           f("Risk Score",`<strong style="color:${parseFloat(ev.risk_score||0)>0.7?"var(--critical)":"var(--warning)"}">${ev.risk_score||"—"}</strong>`) +
            `<div class="drw-field" style="grid-column:1/-1"><label>Resource</label><code style="font-size:.7rem">${ev.resource_id||"—"}</code></div>`;
   return base;
 }
@@ -1596,10 +1616,10 @@ function applyFix(type, idx) {
 
   const actionsEl = $("drw-actions");
   if (actionsEl) {
-    actionsEl.innerHTML = `<div style="flex:1;padding:.55rem .8rem;border:1px solid rgba(46,213,115,.35);border-radius:6px;background:rgba(46,213,115,.12);color:#2ed573;font-size:.78rem;font-weight:700;text-align:center;animation:none">
+    actionsEl.innerHTML = `<div style="flex:1;padding:.55rem .8rem;border:1px solid rgba(16,185,129,.3);border-radius:6px;background:var(--ok-bg);color:var(--ok);font-size:.78rem;font-weight:700;text-align:center;animation:none">
       ✅ IntegriShield applied all ${_getFixSteps(type,ev).length} fix steps automatically
     </div>
-    <button onclick="closeDetailDrawer()" style="padding:.5rem .9rem;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.06);color:#7a93b4;font-size:.76rem;cursor:pointer">Close</button>`;
+    <button onclick="closeDetailDrawer()" style="padding:.5rem .9rem;border:1px solid var(--border-subtle);border-radius:6px;background:var(--bg-raised);color:var(--text-muted);font-size:.76rem;cursor:pointer">Close</button>`;
   }
 
   // Type-specific success messages
@@ -1901,8 +1921,8 @@ function renderLauncher(processes) {
       const stopped = stoppedModules.has(name) || !engineRunning;
       const dot   = stopped ? "stopped" : "running";
       const meta  = stopped
-        ? `<span style="color:#ff4757">⏹ Stopped</span>`
-        : `${info.type} · <span style="color:#00e5a0">● LIVE</span>`;
+        ? `<span class="u-text-critical">⏹ Stopped</span>`
+        : `${info.type} · <span class="u-text-ok">● LIVE</span>`;
       return `<div class="launcher-card">
         <div class="launcher-card-header">
           <div class="launcher-dot ${dot}"></div>
@@ -1921,7 +1941,7 @@ function renderLauncher(processes) {
 
   if (!processes||processes.length===0) {
     if (notice) notice.style.display="block";
-    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;color:#4a6080;padding:2rem">No modules found. Start the backend first.</div>`;
+    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;color:var(--text-dim);padding:2rem">No modules found. Start the backend first.</div>`;
     return;
   }
   if (notice) notice.style.display="none";
