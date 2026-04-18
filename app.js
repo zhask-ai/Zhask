@@ -3906,4 +3906,285 @@ function init() {
   setTimeout(()=>showToast("IntegriShield SOC · 15 modules ready · Click ▶ Start All to begin","info",6000), 800);
 }
 
+// ════════════════════════════════════════════════════════════════
+// M16 POLICY DECISIONS
+// ════════════════════════════════════════════════════════════════
+let policyDecisions = [];
+let policyCounters = { total: 0, ALLOW: 0, DENY: 0, MODIFY: 0 };
+let policyRulesData = [];
+
+async function fetchPolicyData() {
+  try {
+    const [dR, rR] = await Promise.all([
+      fetch(`${API_BASE}/api/m16/decisions?limit=100`).then(r => r.json()),
+      fetch(`${API_BASE}/api/m16/rules`).then(r => r.json()),
+    ]);
+    policyDecisions = dR.decisions || [];
+    policyCounters = dR.counters || policyCounters;
+    policyRulesData = rR.rules || [];
+    if (currentTab === "policy") renderPolicy();
+  } catch(e) { /* backend offline */ }
+}
+
+function renderPolicy() {
+  const list = document.getElementById("policy-list");
+  const empty = document.getElementById("policy-empty");
+  if (!list) return;
+
+  // Update counters
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  set("policy-total", policyCounters.total || policyDecisions.length);
+  set("policy-allow", policyCounters.ALLOW || 0);
+  set("policy-deny",  policyCounters.DENY  || 0);
+  set("policy-modify", policyCounters.MODIFY || 0);
+  set("policy-rule-count", policyRulesData.length);
+
+  const search = (document.getElementById("policy-search")?.value || "").toLowerCase();
+  const decFilter = document.getElementById("policy-decision-filter")?.value || "all";
+  const roleFilter = document.getElementById("policy-role-filter")?.value || "all";
+
+  let v = policyDecisions;
+  if (search) v = v.filter(d =>
+    (d.user_id||"").toLowerCase().includes(search) ||
+    (d.tool_name||"").toLowerCase().includes(search) ||
+    (d.decision||"").toLowerCase().includes(search) ||
+    (d.reason||"").toLowerCase().includes(search)
+  );
+  if (decFilter !== "all") v = v.filter(d => d.decision === decFilter);
+  if (roleFilter !== "all") v = v.filter(d => d.role === roleFilter);
+
+  if (empty) empty.classList.toggle("hidden", v.length > 0);
+
+  const decBadge = dec => {
+    const cls = dec === "ALLOW" ? "badge-allow" : dec === "DENY" ? "badge-deny" : "badge-modify";
+    return `<span class="${cls}">${dec}</span>`;
+  };
+
+  list.innerHTML = v.map(d => {
+    const mod = d.modified_args ? `<div class="alert-item-meta" style="color:var(--amber)">Modified args: ${JSON.stringify(d.modified_args)}</div>` : "";
+    return `<li class="alert-item sev-${d.decision === "DENY" ? "critical" : d.decision === "MODIFY" ? "medium" : "low"}">
+      <div class="alert-item-row">
+        ${decBadge(d.decision)}
+        <code style="font-size:.78rem;margin-left:6px">${d.tool_name}</code>
+        <span style="margin-left:auto;font-size:.72rem;color:var(--text-dim)">${ts(d.timestamp)}</span>
+      </div>
+      <div class="alert-item-meta">
+        User: <strong>${d.user_id}</strong> · Role: <code style="font-size:.72rem">${d.role}</code>
+        · Rule: <code style="font-size:.72rem">${d.rule_id}</code>
+        · Source: ${d.source_module}
+        · <span style="font-size:.72rem;color:var(--text-dim)">${d.session_id}</span>
+      </div>
+      <div class="alert-item-meta" style="color:var(--text-dim)">${d.reason}</div>
+      ${mod}
+    </li>`;
+  }).join("");
+}
+
+function togglePolicyRules() {
+  const box = document.getElementById("policy-rules-table");
+  const btn = document.getElementById("policy-rules-toggle");
+  if (!box) return;
+  const hidden = box.style.display === "none";
+  box.style.display = hidden ? "block" : "none";
+  if (btn) btn.textContent = hidden ? "Hide ruleset ▴" : "Show ruleset ▾";
+  if (hidden && policyRulesData.length > 0) {
+    box.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.78rem">
+      <thead><tr style="color:var(--text-dim);border-bottom:1px solid var(--border)">
+        <th style="padding:4px 8px;text-align:left">Rule ID</th>
+        <th style="padding:4px 8px;text-align:left">Roles</th>
+        <th style="padding:4px 8px;text-align:left">Tool Pattern</th>
+        <th style="padding:4px 8px;text-align:left">Action</th>
+        <th style="padding:4px 8px;text-align:left">Description</th>
+      </tr></thead>
+      <tbody>${policyRulesData.map((r,i) => `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?"transparent":"rgba(255,255,255,.02)"}">
+        <td style="padding:5px 8px"><code>${r.rule_id}</code></td>
+        <td style="padding:5px 8px">${r.roles.join(", ")}</td>
+        <td style="padding:5px 8px"><code>${r.tool_pattern}</code></td>
+        <td style="padding:5px 8px">
+          <span class="${r.action==="ALLOW"?"badge-allow":r.action==="DENY"?"badge-deny":"badge-modify"}">${r.action}</span>
+        </td>
+        <td style="padding:5px 8px;color:var(--text-dim)">${r.description}</td>
+      </tr>`).join("")}</tbody>
+    </table>`;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// M13 CVE FEED
+// ════════════════════════════════════════════════════════════════
+let cveFeedData = null;
+
+async function fetchCveFeed() {
+  try {
+    const data = await fetch(`${API_BASE}/api/m13/cve-feed`).then(r => r.json());
+    cveFeedData = data;
+    if (currentTab === "cve-feed") renderCveFeed();
+  } catch(e) { /* offline */ }
+}
+
+function renderCveFeed() {
+  if (!cveFeedData) return;
+  const { feeds, top_cves, total_cached, cache_age_minutes } = cveFeedData;
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+
+  if (feeds?.nvd) {
+    set("nvd-cve-count", feeds.nvd.cached_cves.toLocaleString());
+    set("nvd-last-refresh", fmtRefreshTime(feeds.nvd.last_refresh));
+    const badge = document.getElementById("nvd-status-badge");
+    if (badge) { badge.textContent = feeds.nvd.status; badge.className = `cve-feed-badge cve-badge-${feeds.nvd.status}`; }
+  }
+  if (feeds?.osv) {
+    set("osv-cve-count", feeds.osv.cached_cves.toLocaleString());
+    set("osv-last-refresh", fmtRefreshTime(feeds.osv.last_refresh));
+    const badge = document.getElementById("osv-status-badge");
+    if (badge) { badge.textContent = feeds.osv.status; badge.className = `cve-feed-badge cve-badge-${feeds.osv.status}`; }
+  }
+  set("cve-total-count", (total_cached || 0).toLocaleString());
+  set("cve-cache-age", cache_age_minutes ? `${cache_age_minutes} min` : "—");
+
+  const cves = top_cves || [];
+  const sevFilter = document.getElementById("cve-sev-filter")?.value || "all";
+  let v = sevFilter === "all" ? cves : cves.filter(c => c.severity === sevFilter);
+
+  set("cve-critical-count", cves.filter(c => c.cvss >= 9).length);
+  set("cve-high-count",     cves.filter(c => c.cvss >= 7 && c.cvss < 9).length);
+  set("cve-medium-count",   cves.filter(c => c.cvss >= 4 && c.cvss < 7).length);
+
+  const list = document.getElementById("cve-list");
+  if (!list) return;
+  const sevCls = s => s === "CRITICAL" ? "critical" : s === "HIGH" ? "high" : "medium";
+  list.innerHTML = v.map(c => `<li class="alert-item sev-${sevCls(c.severity)}">
+    <div class="alert-item-row">
+      <span class="sev-badge sev-${sevCls(c.severity)}">${c.severity}</span>
+      <strong style="margin-left:6px">${c.cve_id}</strong>
+      <span style="margin-left:auto;font-weight:700;color:${c.cvss>=9?"var(--critical)":c.cvss>=7?"var(--amber)":"var(--accent)"}">${c.cvss} CVSS</span>
+    </div>
+    <div class="alert-item-meta"><code style="font-size:.78rem">${c.dependency}</code></div>
+    <div class="alert-item-meta" style="color:var(--text-dim)">${c.description}</div>
+    <div class="alert-item-meta" style="font-size:.7rem;color:var(--text-dim)">Published: ${c.published}</div>
+  </li>`).join("");
+}
+
+function fmtRefreshTime(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) + " · " + d.toLocaleDateString([], {month:"short",day:"numeric"});
+  } catch { return iso; }
+}
+
+async function refreshCveFeeds() {
+  const btn = document.getElementById("cve-refresh-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Refreshing…"; }
+  try {
+    const r = await fetch(`${API_BASE}/api/m13/cve-feed/refresh`, {method:"POST"}).then(r=>r.json());
+    showToast(`CVE feeds refreshed — ${r.new_cves_added || 0} new CVEs added`, "success", 4000);
+    await fetchCveFeed();
+  } catch(e) {
+    showToast("Refresh failed — backend offline", "warning", 3000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↻ Refresh feeds"; }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// M14 WEBHOOK DLQ
+// ════════════════════════════════════════════════════════════════
+let dlqData = { entries: [], total: 0, dead: 0, retrying: 0 };
+
+async function fetchDlqData() {
+  try {
+    const data = await fetch(`${API_BASE}/api/m14/dlq?limit=50`).then(r => r.json());
+    dlqData = data;
+    if (currentTab === "webhook-dlq") renderDlq();
+  } catch(e) { /* offline */ }
+}
+
+function renderDlq() {
+  const list = document.getElementById("dlq-list");
+  const empty = document.getElementById("dlq-empty");
+  if (!list) return;
+
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  set("dlq-total",    dlqData.total || 0);
+  set("dlq-dead",     dlqData.dead || 0);
+  set("dlq-retrying", dlqData.retrying || 0);
+
+  const search = (document.getElementById("dlq-search")?.value || "").toLowerCase();
+  const statusFilter = document.getElementById("dlq-status-filter")?.value || "all";
+  let v = dlqData.entries || [];
+  if (search) v = v.filter(e =>
+    (e.subscriber||"").toLowerCase().includes(search) ||
+    (e.event_type||"").toLowerCase().includes(search)
+  );
+  if (statusFilter !== "all") v = v.filter(e => e.status === statusFilter);
+
+  if (empty) empty.classList.toggle("hidden", v.length > 0);
+
+  list.innerHTML = v.map(e => {
+    const nextRetry = e.next_retry ? `· next retry: <strong>${fmtRefreshTime(e.next_retry)}</strong>` : "";
+    return `<li class="alert-item sev-${e.status === "dead" ? "critical" : "medium"}">
+      <div class="alert-item-row">
+        <span class="dlq-${e.status}">${e.status.toUpperCase()}</span>
+        <span style="margin-left:8px;font-weight:600;font-size:.82rem">${e.event_type}</span>
+        <span style="margin-left:auto;font-size:.72rem;color:var(--text-dim)">${ts(e.last_attempt)}</span>
+      </div>
+      <div class="alert-item-meta">
+        Subscriber: <code style="font-size:.78rem">${e.subscriber}</code>
+        · Attempts: <strong>${e.attempts}/5</strong>
+        ${nextRetry}
+      </div>
+      <div class="alert-item-meta" style="color:var(--critical);font-size:.78rem">${e.last_error}</div>
+      <div class="alert-item-meta" style="margin-top:4px">
+        <button class="link-btn" onclick="retryDlqEntry('${e.delivery_id}')" ${e.status==="dead"?"":"style='color:var(--amber)'"}>
+          ${e.status === "dead" ? "Force retry" : "Retry now"}
+        </button>
+        &nbsp;· ID: <code style="font-size:.7rem;color:var(--text-dim)">${e.delivery_id}</code>
+      </div>
+    </li>`;
+  }).join("");
+}
+
+async function retryDlqEntry(deliveryId) {
+  try {
+    const r = await fetch(`${API_BASE}/api/m14/dlq/retry`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({delivery_id:deliveryId})}).then(r=>r.json());
+    showToast(r.ok ? `Retry queued for ${deliveryId}` : `Retry failed: ${r.error}`, r.ok ? "success" : "warning", 3000);
+    await fetchDlqData();
+  } catch(e) {
+    showToast("Backend offline", "warning", 3000);
+  }
+}
+
+// ── Wire new tabs into renderActiveTab ───────────────────────────
+const _origRenderActiveTab = renderActiveTab;
+// Extend renderActiveTab to include new tabs
+{
+  const origMap = {
+    alerts: renderAlerts, audit: renderAudit, gateway: renderGateway,
+    anomalies: renderAnomaly, dlp: renderDlp, shadow: renderShadow,
+    sap: renderSap, compliance: renderCompliance, incidents: renderIncidents,
+    sbom: renderSbom, rules: renderRules, "zero-trust": renderZeroTrust,
+    credentials: renderCredentials, cloud: renderCloud,
+    connectors: renderConnectors, traffic: renderTraffic, webhooks: renderWebhooks,
+    launcher: () => renderLauncher(launcherProcesses),
+    policy: renderPolicy,
+    "cve-feed": renderCveFeed,
+    "webhook-dlq": renderDlq,
+  };
+  renderActiveTab = function() {
+    const btn = document.querySelector(".nav-btn.active");
+    if (!btn) return;
+    (origMap[btn.dataset.tab] || (() => {}))();
+  };
+}
+
+// ── Fetch new panel data on sync ─────────────────────────────────
+const _origSyncData = syncData;
+syncData = async function() {
+  await _origSyncData();
+  fetchPolicyData();
+  fetchCveFeed();
+  fetchDlqData();
+};
+
 init();
