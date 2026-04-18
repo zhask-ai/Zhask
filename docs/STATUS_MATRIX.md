@@ -20,7 +20,7 @@
 | m13 | SBOM Scanner | ✅ FastAPI | ➖ | **🟡 NVD 2.0 + OSV.dev + SQLite cache** | 🟡 Unit | 🟡 Deepened | Stub CVEs replaced with live NVD/OSV; 24h SQLite cache; /cve/refresh admin endpoint |
 | m14 | Webhook Gateway | ✅ FastAPI | ➖ | **🟡 SQLite subscriber registry + delivery log** | 🟡 E2E | 🟡 Deepened | Full fan-out: subscription CRUD, HMAC signing, retry (5 attempts), DLQ → Redis stream |
 | m15 | MultiCloud ISPM | ✅ FastAPI | ➖ | Redis Streams | 🟡 Unit | ✅ Live | Cloud posture misconfig detection |
-| m16 | MCP Security Layer | 🔴 Stub | ➖ | ➖ | 🔴 None | 🔴 Stub | Auth/authz layer for MCP tools — planned Sprint Dev-5 |
+| m16 | MCP Security Layer | ✅ FastAPI | ➖ | 🟡 In-memory audit log (→ Postgres Dev-5) | 🔴 None | 🟡 Partial | 10-rule RBAC engine, prompt-injection heuristics, rolling audit log — Dev-4 bonus delivery. JWT/Postgres deferred to Dev-5 |
 
 ## Infrastructure
 
@@ -54,6 +54,6 @@
 | Sprint | Focus | Coverage Target |
 |--------|-------|----------------|
 | Dev-1 to Dev-3 | Core modules, event bus, ML model | ~1.6% |
-| **Dev-4 (current)** | **Feature deepening: m05/m06/m13/m14** | **Target: 40% on deepened modules** |
-| Dev-5 (planned) | m16 MCP Security Layer, full JWT auth | TBD |
+| **Dev-4 (complete)** | **Feature deepening: m05/m06/m13/m14 + m16 RBAC engine (bonus) + 3 new dashboard panels** | **~15% on deepened modules** |
+| **Dev-5 (planned)** | **m16 full JWT/OIDC, JWT across all modules, OTel tracing, 40% test coverage** | **Target: 40% on m05/m06/m13/m14** |
 | Dev-6 (planned) | Production Kubernetes rollout, load testing | TBD |

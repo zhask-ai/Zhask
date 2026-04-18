@@ -578,6 +578,192 @@ def _execute_sap_tool(tool_name: str, tool_input: dict) -> dict:
     return {"error": f"Tool '{tool_name}' executed but returned no data"}
 
 
+# ──────────────────────────────────────────────────────────────
+# M16 Policy Decisions — demo data
+# ──────────────────────────────────────────────────────────────
+
+import random, uuid as _uuid
+
+_M16_DEMO_USERS = [
+    ("alice.soc@corp.com", "SOC_ADMIN"),
+    ("bob.analyst@corp.com", "SOC_ANALYST"),
+    ("carol.audit@corp.com", "AUDITOR"),
+    ("dave.analyst@corp.com", "SOC_ANALYST"),
+    ("svc-sbom@corp.com", "SERVICE"),
+]
+_M16_DEMO_TOOLS = [
+    ("rfc_read_table", {"table": "BKPF", "max_rows": 5000}),
+    ("get_user_roles", {"user_id": "BAUER_M"}),
+    ("rfc_call_function", {"func": "BAPI_USER_CREATE"}),
+    ("list_incidents", {"severity": "critical"}),
+    ("get_authorization_profile", {"profile": "SAP_ALL"}),
+    ("rfc_read_table", {"table": "KNA1", "max_rows": 200}),
+    ("unknown_tool_xyz", {}),
+    ("get_compliance_status", {"framework": "SOX"}),
+]
+_M16_DECISIONS_STORE: list[dict] = []
+_M16_DECISIONS_LOCK = threading.Lock()
+_M16_COUNTERS: dict[str, int] = {"total": 0, "ALLOW": 0, "DENY": 0, "MODIFY": 0}
+
+_M16_RULES = [
+    {"rule_id": "R-001", "description": "SOC admins can invoke any MCP tool without restriction.", "roles": ["SOC_ADMIN"], "tool_pattern": "*", "action": "ALLOW", "modifier": {}},
+    {"rule_id": "R-010", "description": "Auditors may read metadata and compliance tools only.", "roles": ["AUDITOR"], "tool_pattern": "get_*", "action": "ALLOW", "modifier": {}},
+    {"rule_id": "R-011", "description": "Auditors invoking table reads are row-capped to 500.", "roles": ["AUDITOR"], "tool_pattern": "rfc_read_table", "action": "MODIFY", "modifier": {"max_rows": 500}},
+    {"rule_id": "R-012", "description": "Auditors cannot call any write or execute tool.", "roles": ["AUDITOR"], "tool_pattern": "rfc_call_function", "action": "DENY", "modifier": {}},
+    {"rule_id": "R-020", "description": "Analysts reading SAP tables are row-capped to 1000.", "roles": ["SOC_ANALYST"], "tool_pattern": "rfc_read_table", "action": "MODIFY", "modifier": {"max_rows": 1000}},
+    {"rule_id": "R-021", "description": "Analysts may query user, role, and authorization metadata.", "roles": ["SOC_ANALYST"], "tool_pattern": "get_*", "action": "ALLOW", "modifier": {}},
+    {"rule_id": "R-022", "description": "Analysts may run incident and compliance lookups.", "roles": ["SOC_ANALYST"], "tool_pattern": "list_*", "action": "ALLOW", "modifier": {}},
+    {"rule_id": "R-023", "description": "Analysts cannot invoke privileged RFC functions directly.", "roles": ["SOC_ANALYST"], "tool_pattern": "rfc_call_function", "action": "DENY", "modifier": {}},
+    {"rule_id": "R-030", "description": "Service accounts may publish webhook and evidence events.", "roles": ["SERVICE"], "tool_pattern": "publish_*", "action": "ALLOW", "modifier": {}},
+    {"rule_id": "R-031", "description": "Service accounts may not read SAP tables.", "roles": ["SERVICE"], "tool_pattern": "rfc_*", "action": "DENY", "modifier": {}},
+]
+
+def _m16_seed_demo() -> None:
+    import time as _time
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    demo_decisions = [
+        {"user": "alice.soc@corp.com", "role": "SOC_ADMIN", "tool": "rfc_call_function", "decision": "ALLOW", "rule": "R-001", "reason": "SOC admins can invoke any MCP tool without restriction."},
+        {"user": "bob.analyst@corp.com", "role": "SOC_ANALYST", "tool": "rfc_read_table", "decision": "MODIFY", "rule": "R-020", "reason": "Analysts reading SAP tables are row-capped to 1000."},
+        {"user": "carol.audit@corp.com", "role": "AUDITOR", "tool": "rfc_call_function", "decision": "DENY", "rule": "R-012", "reason": "Auditors cannot call any write or execute tool."},
+        {"user": "dave.analyst@corp.com", "role": "SOC_ANALYST", "tool": "get_user_roles", "decision": "ALLOW", "rule": "R-021", "reason": "Analysts may query user, role, and authorization metadata."},
+        {"user": "bob.analyst@corp.com", "role": "SOC_ANALYST", "tool": "unknown_tool_xyz", "decision": "DENY", "rule": "R-DEFAULT", "reason": "No policy rule permits role='SOC_ANALYST' to invoke tool='unknown_tool_xyz'. Default-deny applied."},
+        {"user": "svc-sbom@corp.com", "role": "SERVICE", "tool": "rfc_read_table", "decision": "DENY", "rule": "R-031", "reason": "Service accounts may not read SAP tables."},
+        {"user": "alice.soc@corp.com", "role": "SOC_ADMIN", "tool": "get_authorization_profile", "decision": "ALLOW", "rule": "R-001", "reason": "SOC admins can invoke any MCP tool without restriction."},
+        {"user": "carol.audit@corp.com", "role": "AUDITOR", "tool": "rfc_read_table", "decision": "MODIFY", "rule": "R-011", "reason": "Auditors invoking table reads are row-capped to 500."},
+        {"user": "dave.analyst@corp.com", "role": "SOC_ANALYST", "tool": "list_incidents", "decision": "ALLOW", "rule": "R-022", "reason": "Analysts may run incident and compliance lookups."},
+        {"user": "bob.analyst@corp.com", "role": "SOC_ANALYST", "tool": "get_compliance_status", "decision": "ALLOW", "rule": "R-021", "reason": "Analysts may query user, role, and authorization metadata."},
+    ]
+    for i, d in enumerate(demo_decisions):
+        ts = (now - timedelta(minutes=len(demo_decisions) - i)).replace(microsecond=0)
+        entry = {
+            "audit_id": str(_uuid.uuid4()),
+            "timestamp": ts.isoformat(),
+            "decision": d["decision"],
+            "rule_id": d["rule"],
+            "reason": d["reason"],
+            "user_id": d["user"],
+            "role": d["role"],
+            "tool_name": d["tool"],
+            "source_module": "m05",
+            "session_id": f"sess-{_uuid.uuid4().hex[:8]}",
+        }
+        _M16_DECISIONS_STORE.append(entry)
+        _M16_COUNTERS["total"] += 1
+        _M16_COUNTERS[d["decision"]] = _M16_COUNTERS.get(d["decision"], 0) + 1
+
+_m16_seed_demo()
+
+def _m16_decisions_snapshot(limit: int = 100) -> dict:
+    with _M16_DECISIONS_LOCK:
+        items = list(reversed(_M16_DECISIONS_STORE))[:limit]
+    return {"decisions": items, "counters": dict(_M16_COUNTERS)}
+
+def _m16_simulate_evaluate(body: dict) -> dict:
+    user_id = body.get("user_id", "unknown@corp.com")
+    role = body.get("role", "SOC_ANALYST")
+    tool_name = body.get("tool_name", "rfc_read_table")
+    decisions_map = {
+        ("SOC_ADMIN", "*"): ("ALLOW", "R-001"),
+        ("SOC_ANALYST", "rfc_read_table"): ("MODIFY", "R-020"),
+        ("SOC_ANALYST", "get_"): ("ALLOW", "R-021"),
+        ("SOC_ANALYST", "list_"): ("ALLOW", "R-022"),
+        ("SOC_ANALYST", "rfc_call_function"): ("DENY", "R-023"),
+        ("AUDITOR", "rfc_read_table"): ("MODIFY", "R-011"),
+        ("AUDITOR", "rfc_call_function"): ("DENY", "R-012"),
+        ("AUDITOR", "get_"): ("ALLOW", "R-010"),
+        ("SERVICE", "rfc_"): ("DENY", "R-031"),
+    }
+    decision, rule_id = "DENY", "R-DEFAULT"
+    reason = f"No policy rule permits role='{role}' to invoke tool='{tool_name}'. Default-deny applied."
+    for (r, t), (dec, rid) in decisions_map.items():
+        if r == role or r == "*":
+            if t == "*" or tool_name == t or tool_name.startswith(t):
+                decision, rule_id = dec, rid
+                for rule in _M16_RULES:
+                    if rule["rule_id"] == rid:
+                        reason = rule["description"]
+                break
+    audit_id = str(_uuid.uuid4())
+    entry = {
+        "audit_id": audit_id, "timestamp": _now_iso(), "decision": decision,
+        "rule_id": rule_id, "reason": reason, "user_id": user_id, "role": role,
+        "tool_name": tool_name, "source_module": body.get("source_module", "m05"),
+        "session_id": body.get("session_id", f"sess-{_uuid.uuid4().hex[:8]}"),
+    }
+    with _M16_DECISIONS_LOCK:
+        _M16_DECISIONS_STORE.append(entry)
+        _M16_COUNTERS["total"] += 1
+        _M16_COUNTERS[decision] = _M16_COUNTERS.get(decision, 0) + 1
+    return entry
+
+
+# ──────────────────────────────────────────────────────────────
+# M13 CVE Feed Status — demo data
+# ──────────────────────────────────────────────────────────────
+
+_M13_LAST_REFRESH = {"nvd": "2026-04-18T06:12:00Z", "osv": "2026-04-18T06:14:33Z"}
+_M13_CVE_COUNT = {"nvd": 2847, "osv": 1203}
+_M13_TOP_CVES = [
+    {"cve_id": "CVE-2025-23121", "cvss": 9.8, "severity": "CRITICAL", "dependency": "requests==2.28.0", "description": "HTTP header injection via redirect chain in requests library.", "published": "2025-11-14"},
+    {"cve_id": "CVE-2025-31200", "cvss": 8.8, "severity": "HIGH", "dependency": "pydantic==1.10.9", "description": "Remote code execution via crafted validation model in pydantic v1.", "published": "2025-10-02"},
+    {"cve_id": "CVE-2024-56334", "cvss": 8.1, "severity": "HIGH", "dependency": "cryptography==41.0.2", "description": "Weak RSA key generation under specific entropy conditions.", "published": "2024-12-19"},
+    {"cve_id": "CVE-2025-29441", "cvss": 7.5, "severity": "HIGH", "dependency": "aiohttp==3.9.1", "description": "Path traversal in aiohttp static file handler.", "published": "2025-09-07"},
+    {"cve_id": "CVE-2024-52302", "cvss": 6.5, "severity": "MEDIUM", "dependency": "uvicorn==0.23.2", "description": "HTTP/1.1 request smuggling in uvicorn connection handler.", "published": "2024-11-28"},
+]
+
+def _m13_cve_feed_snapshot() -> dict:
+    return {
+        "feeds": {
+            "nvd": {"last_refresh": _M13_LAST_REFRESH["nvd"], "cached_cves": _M13_CVE_COUNT["nvd"], "status": "healthy"},
+            "osv": {"last_refresh": _M13_LAST_REFRESH["osv"], "cached_cves": _M13_CVE_COUNT["osv"], "status": "healthy"},
+        },
+        "top_cves": _M13_TOP_CVES,
+        "total_cached": _M13_CVE_COUNT["nvd"] + _M13_CVE_COUNT["osv"],
+        "cache_age_minutes": 372,
+    }
+
+def _m13_refresh_feeds() -> dict:
+    _M13_LAST_REFRESH["nvd"] = _now_iso()
+    _M13_LAST_REFRESH["osv"] = _now_iso()
+    _M13_CVE_COUNT["nvd"] += random.randint(0, 12)
+    _M13_CVE_COUNT["osv"] += random.randint(0, 5)
+    return {"status": "refreshed", "nvd": _M13_LAST_REFRESH["nvd"], "osv": _M13_LAST_REFRESH["osv"], "new_cves_added": random.randint(2, 15)}
+
+
+# ──────────────────────────────────────────────────────────────
+# M14 Webhook DLQ — demo data
+# ──────────────────────────────────────────────────────────────
+
+_M14_DLQ_ENTRIES = [
+    {"delivery_id": "dlv-001", "subscriber": "siem.corp.com/hook", "event_type": "anomaly_event", "attempts": 5, "last_error": "Connection timeout after 10s", "last_attempt": "2026-04-18T09:43:12Z", "next_retry": None, "status": "dead"},
+    {"delivery_id": "dlv-002", "subscriber": "pagerduty.com/v2/enqueue", "event_type": "incident_event", "attempts": 3, "last_error": "HTTP 429 Too Many Requests", "last_attempt": "2026-04-18T10:01:55Z", "next_retry": "2026-04-18T10:16:55Z", "status": "retrying"},
+    {"delivery_id": "dlv-003", "subscriber": "slack.com/api/chat.postMessage", "event_type": "dlp_alert", "attempts": 2, "last_error": "HTTP 403 Forbidden — token revoked", "last_attempt": "2026-04-18T10:05:30Z", "next_retry": "2026-04-18T10:15:30Z", "status": "retrying"},
+    {"delivery_id": "dlv-004", "subscriber": "splunk.corp.com/collector", "event_type": "compliance_evidence", "attempts": 5, "last_error": "SSL certificate verification failed", "last_attempt": "2026-04-18T07:20:00Z", "next_retry": None, "status": "dead"},
+    {"delivery_id": "dlv-005", "subscriber": "teams.microsoft.com/webhook/xxx", "event_type": "alert_event", "attempts": 1, "last_error": "DNS resolution failed: teams.microsoft.com", "last_attempt": "2026-04-18T10:10:05Z", "next_retry": "2026-04-18T10:20:05Z", "status": "retrying"},
+]
+_M14_DLQ_STORE = list(_M14_DLQ_ENTRIES)
+_M14_DLQ_LOCK = threading.Lock()
+
+def _m14_dlq_snapshot(limit: int = 50) -> dict:
+    with _M14_DLQ_LOCK:
+        items = list(_M14_DLQ_STORE)[:limit]
+    dead = sum(1 for i in items if i["status"] == "dead")
+    retrying = sum(1 for i in items if i["status"] == "retrying")
+    return {"entries": items, "total": len(items), "dead": dead, "retrying": retrying}
+
+def _m14_retry_dlq(delivery_id: str) -> dict:
+    with _M14_DLQ_LOCK:
+        for entry in _M14_DLQ_STORE:
+            if entry["delivery_id"] == delivery_id:
+                entry["status"] = "retrying"
+                entry["attempts"] += 1
+                entry["last_attempt"] = _now_iso()
+                entry["last_error"] = "Manually triggered retry"
+                return {"ok": True, "delivery_id": delivery_id, "message": "Retry queued"}
+    return {"ok": False, "error": "delivery_id not found"}
+
+
 def _handle_chat(body: dict) -> dict:
     """Handle Claude SAP security chat request using tool use."""
     message = str(body.get("message", "")).strip()
@@ -753,6 +939,16 @@ class Handler(BaseHTTPRequestHandler):
             token  = body.get("undo_token", "")
             result = ah.undo_action(token)
             self._json(200, result)
+
+        elif parsed.path == "/api/m13/cve-feed/refresh":
+            self._json(200, _m13_refresh_feeds()); return
+
+        elif parsed.path == "/api/m14/dlq/retry":
+            delivery_id = body.get("delivery_id", "")
+            self._json(200, _m14_retry_dlq(delivery_id)); return
+
+        elif parsed.path == "/api/m16/evaluate":
+            self._json(200, _m16_simulate_evaluate(body)); return
 
         elif parsed.path.startswith("/webhook/"):
             # M14 webhook intake — validates signature presence, rate-limit stub
@@ -937,6 +1133,20 @@ class Handler(BaseHTTPRequestHandler):
                 "traffic_flows":      n_traffic,
                 "stream_counts":      counts,
             }); return
+
+        # ── M16 Policy Decisions (demo data) ────────────────────
+        if path == "/api/m16/decisions":
+            self._json(200, _m16_decisions_snapshot(limit)); return
+        if path == "/api/m16/rules":
+            self._json(200, {"rules": _M16_RULES, "default_action": "DENY"}); return
+
+        # ── M13 CVE Feed Status (demo data) ─────────────────────
+        if path == "/api/m13/cve-feed":
+            self._json(200, _m13_cve_feed_snapshot()); return
+
+        # ── M14 Webhook DLQ (demo data) ─────────────────────────
+        if path == "/api/m14/dlq":
+            self._json(200, _m14_dlq_snapshot(limit)); return
 
         if path == "/api/actions":
             import action_handlers as ah

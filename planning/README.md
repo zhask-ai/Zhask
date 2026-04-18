@@ -21,17 +21,17 @@
 | docs/README.md | ✅ Complete | Documentation index |
 | Root README.md | ✅ Updated | Added module count + sprint badges |
 | planning/README.md | ✅ This file | Live planning trail |
-| IntegriShield_Dev4_StatusReport.docx | 🟡 Pending | Exec report via docx skill |
+| IntegriShield_Dev4_StatusReport.docx | ✅ Complete | Exec report — 10-section Word doc with cover page, TOC, banded tables, KPI matrix |
+| docs/Dev4_StatusReport.md | ✅ Complete | Markdown source of truth for report |
 
 ---
 
 ## Sprint Dev-5 Roadmap (planned)
 
-### P1 — m16 MCP Security Layer
-- JWT/API-key auth on all MCP tool endpoints
-- Per-tool RBAC (e.g. only SOC_ADMIN can call `read_table`)
-- Rate limiting per tenant on MCP calls
-- Estimated: 3–4 days
+### P1 — m16 MCP Security Layer (full JWT — partial work done in Dev-4)
+- Dev-4 delivered: 10-rule RBAC engine, prompt-injection heuristics, rolling audit log, ALLOW/DENY/MODIFY decisions
+- Remaining in Dev-5: JWT/OIDC caller identification (replace trusted role header), persistent Postgres audit log, per-tenant rate limiting
+- Estimated: 2 days (reduced from 3–4 due to Dev-4 headstart)
 
 ### P2 — Full JWT auth across all modules
 - Currently in `auth_poc_mode=True` passthrough

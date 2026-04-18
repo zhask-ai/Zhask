@@ -142,6 +142,20 @@
           <span class="nav-chip chip-pink">M15</span>
           <span>Cloud</span>
         </button>
+
+        <span class="nav-group-label">Security Layer</span>
+        <button class="nav-btn" data-tab="policy" id="nav-policy">
+          <span class="nav-chip chip-red">M16</span>
+          <span>MCP Policy</span>
+        </button>
+        <button class="nav-btn" data-tab="cve-feed" id="nav-cve-feed">
+          <span class="nav-chip chip-purple">M13</span>
+          <span>CVE Feeds</span>
+        </button>
+        <button class="nav-btn" data-tab="webhook-dlq" id="nav-webhook-dlq">
+          <span class="nav-chip chip-orange">M14</span>
+          <span>Webhook DLQ</span>
+        </button>
         <div class="nav-footer">
           <div class="shortcut-hint">
             <kbd>⌘K</kbd> Quick nav
@@ -812,6 +826,119 @@
           </div>
           <ul id="wh-list" class="feed-list"></ul>
           <p class="empty-state" id="wh-empty">No webhook events yet — <button class="link-btn" onclick="navigateToTab('launcher')">Start the demo in ⚡ Launcher</button></p>
+        </section>
+
+        <!-- ══════════════ M16 MCP POLICY DECISIONS ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-policy">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-red">M16</span>
+              <h2>MCP Policy Decisions</h2>
+              <span class="panel-subtitle">RBAC enforcement · prompt-injection detection · row-cap rewrites · rolling audit log</span>
+            </div>
+            <div class="panel-controls">
+              <input type="text" id="policy-search" placeholder="Search user, tool, decision…" class="filter-input">
+              <select id="policy-decision-filter">
+                <option value="all">All decisions</option>
+                <option value="ALLOW">Allow</option>
+                <option value="DENY">Deny</option>
+                <option value="MODIFY">Modify</option>
+              </select>
+              <select id="policy-role-filter">
+                <option value="all">All roles</option>
+                <option value="SOC_ADMIN">SOC Admin</option>
+                <option value="SOC_ANALYST">SOC Analyst</option>
+                <option value="AUDITOR">Auditor</option>
+                <option value="SERVICE">Service</option>
+              </select>
+              <button class="export-btn" onclick="exportCSV('policy')">⬇ CSV</button>
+            </div>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-info"><span id="policy-total">0</span><label>Total Decisions</label></div>
+            <div class="mini-stat mini-stat-ok"><span id="policy-allow">0</span><label>Allowed</label></div>
+            <div class="mini-stat mini-stat-critical"><span id="policy-deny">0</span><label>Denied</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="policy-modify">0</span><label>Modified</label></div>
+          </div>
+          <div class="policy-rules-strip" id="policy-rules-strip">
+            <strong>Active rules:</strong> <span id="policy-rule-count">—</span> &nbsp;|&nbsp; Default action: <span class="badge-deny">DENY</span>
+            <button class="link-btn" id="policy-rules-toggle" onclick="togglePolicyRules()" style="margin-left:8px">Show ruleset ▾</button>
+          </div>
+          <div id="policy-rules-table" style="display:none;margin-bottom:12px"></div>
+          <ul id="policy-list" class="feed-list"></ul>
+          <p class="empty-state hidden" id="policy-empty">No policy decisions yet.</p>
+        </section>
+
+        <!-- ══════════════ M13 CVE FEED STATUS ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-cve-feed">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-purple">M13</span>
+              <h2>CVE Feed Status</h2>
+              <span class="panel-subtitle">NVD 2.0 · OSV.dev · live vulnerability intelligence · 24h SQLite cache</span>
+            </div>
+            <div class="panel-controls">
+              <select id="cve-sev-filter">
+                <option value="all">All severities</option>
+                <option value="CRITICAL">Critical</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+              </select>
+              <button class="action-btn" id="cve-refresh-btn" onclick="refreshCveFeeds()">↻ Refresh feeds</button>
+              <button class="export-btn" onclick="exportCSV('cve')">⬇ CSV</button>
+            </div>
+          </div>
+          <div class="cve-feed-cards" id="cve-feed-cards">
+            <div class="cve-feed-card" id="cve-card-nvd">
+              <div class="cve-feed-card-header"><span class="cve-feed-source">NVD 2.0</span><span class="cve-feed-badge cve-badge-healthy" id="nvd-status-badge">healthy</span></div>
+              <div class="cve-feed-stat"><span id="nvd-cve-count">—</span><label>Cached CVEs</label></div>
+              <div class="cve-feed-refresh">Last refresh: <span id="nvd-last-refresh">—</span></div>
+            </div>
+            <div class="cve-feed-card" id="cve-card-osv">
+              <div class="cve-feed-card-header"><span class="cve-feed-source">OSV.dev</span><span class="cve-feed-badge cve-badge-healthy" id="osv-status-badge">healthy</span></div>
+              <div class="cve-feed-stat"><span id="osv-cve-count">—</span><label>Cached CVEs</label></div>
+              <div class="cve-feed-refresh">Last refresh: <span id="osv-last-refresh">—</span></div>
+            </div>
+            <div class="cve-feed-card cve-feed-card-total">
+              <div class="cve-feed-card-header"><span class="cve-feed-source">Total Cache</span></div>
+              <div class="cve-feed-stat"><span id="cve-total-count">—</span><label>All CVEs</label></div>
+              <div class="cve-feed-refresh">Cache age: <span id="cve-cache-age">—</span></div>
+            </div>
+          </div>
+          <h3 class="section-subheading">Top CVEs by CVSS Score</h3>
+          <div class="mini-stats" style="margin-bottom:4px">
+            <div class="mini-stat mini-stat-critical"><span id="cve-critical-count">0</span><label>Critical (9+)</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="cve-high-count">0</span><label>High (7–8.9)</label></div>
+            <div class="mini-stat mini-stat-info"><span id="cve-medium-count">0</span><label>Medium (4–6.9)</label></div>
+          </div>
+          <ul id="cve-list" class="feed-list"></ul>
+        </section>
+
+        <!-- ══════════════ M14 WEBHOOK DLQ ══════════════ -->
+        <section class="panel tab-content hidden" id="tab-webhook-dlq">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <span class="module-chip chip-orange">M14</span>
+              <h2>Webhook Dead-Letter Queue</h2>
+              <span class="panel-subtitle">Failed deliveries · retry status · subscriber health · 5-attempt limit</span>
+            </div>
+            <div class="panel-controls">
+              <input type="text" id="dlq-search" placeholder="Search subscriber, event type…" class="filter-input">
+              <select id="dlq-status-filter">
+                <option value="all">All statuses</option>
+                <option value="dead">Dead</option>
+                <option value="retrying">Retrying</option>
+              </select>
+              <button class="export-btn" onclick="exportCSV('dlq')">⬇ CSV</button>
+            </div>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat-info"><span id="dlq-total">0</span><label>Total Failed</label></div>
+            <div class="mini-stat mini-stat-critical"><span id="dlq-dead">0</span><label>Dead (max attempts)</label></div>
+            <div class="mini-stat mini-stat-warn"><span id="dlq-retrying">0</span><label>Retrying</label></div>
+          </div>
+          <ul id="dlq-list" class="feed-list"></ul>
+          <p class="empty-state hidden" id="dlq-empty">No failed deliveries — all webhooks healthy.</p>
         </section>
 
         <!-- ══════════════ MODULE STREAM STATUS ══════════════ -->
