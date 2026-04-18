@@ -341,6 +341,7 @@ class McpToolRegistry:
     def __init__(self, cache: EventCache, redis_client: redis_lib.Redis | None = None) -> None:
         self._cache = cache
         self._redis = redis_client
+        self._driver = None  # lazy-initialised via get_driver()
 
     def list_tools(self) -> list[McpToolDefinition]:
         return list(_TOOL_DEFINITIONS)
@@ -617,8 +618,23 @@ class McpToolRegistry:
                 "rows": [],
                 "row_count": 0,
             }
-        mock_rows = [{"MANDT": "100", "KEY1": f"VAL{i}", "CREATED": "2026-01-01"} for i in range(min(max_rows, 10))]
-        return {"table": table_name, "blocked": False, "rows": mock_rows, "row_count": len(mock_rows), "dlp_classification": "standard"}
+        if self._driver is None:
+            from integrishield.m05.drivers import get_driver  # noqa: PLC0415
+            self._driver = get_driver()
+            logger.info("m05 SAP driver initialised: %s", self._driver.driver_name())
+        try:
+            rows = self._driver.read_table(table_name, max_rows)
+        except Exception as exc:
+            logger.error("SAP driver read_table failed for %s: %s", table_name, exc)
+            rows = []
+        return {
+            "table": table_name,
+            "blocked": False,
+            "rows": rows,
+            "row_count": len(rows),
+            "dlp_classification": "standard",
+            "driver": self._driver.driver_name(),
+        }
 
     # ── Change & Audit handlers ────────────────────────────────────────
 

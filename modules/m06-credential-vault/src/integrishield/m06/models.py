@@ -78,6 +78,22 @@ class VaultStatsResponse(BaseModel):
     revoked: int = 0
 
 
+class RevokeResponse(BaseModel):
+    key: str
+    revoked: bool
+
+
+class CredAccessEvent(BaseModel):
+    """Audit event published to integrishield:cred_access on every secret access."""
+
+    event_id: str
+    key: str
+    action: str  # "created", "read", "read:m05", "rotated:scheduled", "revoked"
+    tenant_id: str = ""
+    timestamp_utc: datetime = Field(default_factory=datetime.utcnow)
+    source_module: str = "m06-credential-vault"
+
+
 class HealthResponse(BaseModel):
     status: str = "ok"
     service: str = "m06-credential-vault"

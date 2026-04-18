@@ -1,23 +1,27 @@
-"""Health endpoints for M14."""
+"""Health endpoints for M14 Webhook Gateway."""
 
-from fastapi import APIRouter
-from pydantic import BaseModel
+import os
+
+from fastapi import APIRouter, Request
+
+from integrishield.m14.models import HealthResponse, WebhookStatsResponse
 
 router = APIRouter(tags=["health"])
 
 
-class HealthResponse(BaseModel):
-    status: str
-    service: str
-    version: str
-    note: str
-
-
 @router.get("/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
+async def health(request: Request) -> HealthResponse:
+    db_path = os.getenv("M14_DB_PATH", "/app/data/m14_webhooks.db")
     return HealthResponse(
         status="ok",
         service="m14-webhook-gateway",
-        version="0.0.1-stub",
-        note="POC stub — full implementation post-funding",
+        version="1.0.0",
+        backend=f"sqlite:{db_path}",
     )
+
+
+@router.get("/stats", response_model=WebhookStatsResponse)
+async def stats(request: Request) -> WebhookStatsResponse:
+    """Return delivery queue and subscription statistics."""
+    raw = request.app.state.db.stats()
+    return WebhookStatsResponse(**raw)

@@ -23,5 +23,15 @@ class Settings(BaseSettings):
     rotation_warning_days: int = 7
     encryption_algorithm: str = "AES-256-GCM"
 
+    # --- backend selection ---
+    vault_backend: str = "memory"  # "memory" | "vault"
+    vault_addr: str = "http://localhost:8200"
+    vault_token: str = ""
+    vault_mount: str = "integrishield"
+    vault_kv_path: str = "secrets"
+
+    # --- audit stream ---
+    cred_access_stream: str = "integrishield:cred_access"
+
 
 settings = Settings()

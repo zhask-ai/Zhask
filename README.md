@@ -6,6 +6,8 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
 [![Redis Streams](https://img.shields.io/badge/Redis-7-red.svg)](https://redis.io)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org)
+[![Modules](https://img.shields.io/badge/microservices-15%2F16-brightgreen.svg)](docs/STATUS_MATRIX.md)
+[![Sprint](https://img.shields.io/badge/sprint-Dev--4-orange.svg)](planning/README.md)
 [![License: Proprietary](https://img.shields.io/badge/license-Proprietary-lightgrey.svg)]()
 
 ---

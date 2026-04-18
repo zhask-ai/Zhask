@@ -23,8 +23,15 @@ class Settings(BaseSettings):
     max_concurrent_scans: int = 10
     scan_store_max_size: int = 500
 
+    # --- CVE feeds ---
+    cve_stubs_path: str = "/app/config/cve_stubs.json"  # legacy fallback
+    nvd_api_key: str = ""  # optional; increases NVD rate limit to 50 req/30s
+    nvd_search_prefix: str = "SAP"  # prepended to component names for NVD keyword search
+    osv_ecosystem: str = ""  # empty = general keyword search; e.g. "PyPI" for Python pkgs
+    cve_cache_db_path: str = "/app/data/cve_cache.db"
+    cve_cache_ttl_hours: int = 24
+
     # --- scanner config ---
-    cve_stubs_path: str = "/app/config/cve_stubs.json"
     insecure_rfc_blocklist: str = (
         "RFC_READ_TABLE,BAPI_USER_CHANGE,BAPI_USER_CREATE,RFC_SYSTEM_INFO,"
         "TH_POPUP,SE16_READ,STRUST_MODIFY,SUSR_USER_AUTH_FOR_OBJ_GET,"

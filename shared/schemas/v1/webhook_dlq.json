@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "integrishield:webhook_dlq:v1",
+  "title": "WebhookDLQEntry",
+  "description": "Dead-letter queue entry published to integrishield:webhook_dlq when M14 exhausts all delivery retries.",
+  "type": "object",
+  "required": ["event_id", "event_type", "subscription_id", "delivery_id", "error"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "description": "Original Redis Stream entry ID."
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Stream name suffix (e.g. 'alerts', 'incidents')."
+    },
+    "subscription_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "delivery_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "error": {
+      "type": "string",
+      "description": "Last error message (truncated to 500 chars)."
+    },
+    "payload": {
+      "type": "string",
+      "description": "JSON-serialised original event payload (truncated to 4000 chars)."
+    }
+  },
+  "additionalProperties": false
+}

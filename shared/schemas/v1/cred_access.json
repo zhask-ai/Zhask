@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "integrishield:cred_access:v1",
+  "title": "CredAccessEvent",
+  "description": "Audit event published to integrishield:cred_access on every M06 secret access. Used for compliance audit trails (SOX AC-2, SOC2 CC6.1).",
+  "type": "object",
+  "required": ["event_id", "key", "action", "timestamp_utc", "source_module"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique event identifier."
+    },
+    "key": {
+      "type": "string",
+      "description": "Secret key name (never the value)."
+    },
+    "action": {
+      "type": "string",
+      "description": "Action performed: 'created', 'read', 'read:<requester>', 'rotated:<reason>', 'revoked'."
+    },
+    "tenant_id": {
+      "type": "string",
+      "default": ""
+    },
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_module": {
+      "type": "string",
+      "default": "m06-credential-vault"
+    }
+  },
+  "additionalProperties": false
+}

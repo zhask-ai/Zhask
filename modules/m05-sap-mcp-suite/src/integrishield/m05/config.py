@@ -30,5 +30,11 @@ class Settings(BaseSettings):
     # --- auth ---
     auth_poc_mode: bool = True
 
+    # --- SAP data driver ---
+    sap_driver: str = "mock"  # "mock" | "rfc" | "sql"
+    m06_url: str = "http://localhost:8006"  # M06 Credential Vault URL
+    sap_rfc_cred_key: str = "sap_rfc_creds"  # vault key for RFC credentials JSON
+    sap_sql_cred_key: str = "sap_sql_creds"  # vault key for SQL credentials JSON
+
 
 settings = Settings()
