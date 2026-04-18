@@ -34,7 +34,7 @@ const typeToTab = {
 };
 
 // ── KPI state ─────────────────────────────────────────────────
-let kpiBlocked = 2847;
+let kpiBlocked = 0;
 const FW_SCORES = { SOX:94, GDPR:87, "PCI-DSS":91, "NIST-CSF":96, ISO27001:89, HIPAA:93 };
 
 // ── DOM ───────────────────────────────────────────────────────
@@ -843,8 +843,8 @@ function seedInitialData() {
   ];
   auditSeeds.forEach((a,i)=>auditRows.push({...a, ts:tstep(i)}));
 
-  // Seed KPIs to look realistic
-  kpiBlocked = 2847;
+  // Start counter at 0 — ramps up organically as events flow
+  kpiBlocked = 0;
 }
 
 function stopDemo() {
@@ -1740,17 +1740,14 @@ function showItemDetail(type, idx) {
     ${corrHTML}
   `;
 
+  window._drwCtx = { type, idx, ev };
   if (drwActions) {
     if (alreadyFixed) {
       drwActions.innerHTML = `
         <div class="drw-resolved-pill">✓ Already resolved by IntegriShield</div>
         <button onclick="closeDetailDrawer()" class="drw-btn drw-btn--neutral">Close</button>`;
     } else {
-      drwActions.innerHTML = `
-        <button onclick="applyFix('${type}',${idx})" class="drw-btn drw-btn--fix">⚡ Fix It Now</button>
-        <button onclick="demoActionAlt('block','${type}','${ev.source_ip||ev.user_id||""}')" class="drw-btn drw-btn--block">🚫 Block</button>
-        <button onclick="demoActionAlt('report','${type}','')" class="drw-btn drw-btn--report">📄 Report</button>
-      `;
+      drwActions.innerHTML = _drwActionButtons(type, idx, ev);
     }
   }
 
@@ -2046,12 +2043,300 @@ function closeDetailDrawer(e) {
   overlay.classList.add("hidden");
 }
 
-function demoActionAlt(action, type, param) {
-  const msgs = {
-    block: `🚫 ${param||type} blocked at perimeter — firewall rule propagated across all zones`,
-    report: `📄 ${type.charAt(0).toUpperCase()+type.slice(1)} report exported — PDF sent to SOC team & CISO`,
+// ── Drawer action catalog ─────────────────────────────────────
+// Each entry: { id, label, cls, toast, severity }
+const DRW_ACTIONS = {
+  alert: [
+    { id:"fix",        label:"⚡ Fix It Now",         cls:"drw-btn--fix" },
+    { id:"block_ip",   label:"🚫 Block Source IP",    cls:"drw-btn--block",  toast:ev=>`🚫 IP ${ev.source_ip||"?"} blocked at edge — propagated to 14 firewalls`, sev:"warning" },
+    { id:"quarantine", label:"🔒 Quarantine User",    cls:"drw-btn--block",  toast:ev=>`🔒 User ${ev.user_id||"?"} session terminated — account locked pending review`, sev:"warning" },
+    { id:"forensic",   label:"🧪 Forensic Snapshot",  cls:"drw-btn--neutral",toast:()=>`🧪 Memory + session snapshot captured — evidence sealed in S3 vault`, sev:"info" },
+    { id:"slack",      label:"📣 Page SOC",           cls:"drw-btn--neutral",toast:()=>`📣 Slack #sec-incidents pinged + PagerDuty fired to L2 oncall`, sev:"info" },
+    { id:"jira",       label:"🎫 Create Jira",        cls:"drw-btn--neutral",toast:()=>`🎫 SEC-${_int(4000,9999)} created in Jira with full event chain attached`, sev:"info" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  anomaly: [
+    { id:"fix",        label:"⚡ Retrain Baseline",   cls:"drw-btn--fix" },
+    { id:"quarantine", label:"🔒 Isolate Session",    cls:"drw-btn--block",  toast:ev=>`🔒 Session for ${ev.user_id||"user"} suspended — ML model retraining queued`, sev:"warning" },
+    { id:"elevate",    label:"🚨 Escalate to Incident", cls:"drw-btn--block",toast:()=>`🚨 Auto-elevated — incident INC-${_int(5000,9999)} opened with P1 severity`, sev:"warning" },
+    { id:"forensic",   label:"🧪 Capture Features",   cls:"drw-btn--neutral",toast:()=>`🧪 24 ML features snapshotted — appended to threat-intel corpus`, sev:"info" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  sap: [
+    { id:"fix",        label:"⚡ Revoke SAP Auth",    cls:"drw-btn--fix" },
+    { id:"freeze",     label:"❄️ Freeze SAP Role",   cls:"drw-btn--block",  toast:ev=>`❄️ Role for ${ev.user_id} frozen — SU01 lock applied on ${ev.tenant_id}`, sev:"warning" },
+    { id:"tool_block", label:"🚫 Disable MCP Tool",  cls:"drw-btn--block",  toast:ev=>`🚫 MCP tool ${ev.tool_name} globally disabled — guardrail added`, sev:"warning" },
+    { id:"audit",      label:"📋 Pull Audit Trail",  cls:"drw-btn--neutral",toast:()=>`📋 STAD + SM20 logs pulled for last 72h — exported to evidence locker`, sev:"info" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  dlp: [
+    { id:"fix",        label:"⚡ Block Egress",       cls:"drw-btn--fix" },
+    { id:"mask",       label:"🕶️ Mask PII",          cls:"drw-btn--block",  toast:()=>`🕶️ PII fields tokenised in transit — egress stream rewritten`, sev:"warning" },
+    { id:"dest_block", label:"🚫 Blocklist Dest",    cls:"drw-btn--block",  toast:ev=>`🚫 Destination ${ev.destination} added to global DLP blocklist`, sev:"warning" },
+    { id:"dpo",        label:"⚖️ Notify DPO",        cls:"drw-btn--neutral",toast:()=>`⚖️ DPO paged — GDPR 72h breach-clock started`, sev:"info" },
+    { id:"revoke",     label:"🔑 Revoke Tokens",     cls:"drw-btn--neutral",toast:ev=>`🔑 All access tokens for ${ev.user_id} revoked — forced re-auth`, sev:"info" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  shadow: [
+    { id:"fix",        label:"⚡ Block Endpoint",     cls:"drw-btn--fix" },
+    { id:"register",   label:"📝 Register & Audit",  cls:"drw-btn--block",  toast:ev=>`📝 ${ev.endpoint} added to registry with mandatory audit tag`, sev:"info" },
+    { id:"forensic",   label:"🧪 Forensic Dump",     cls:"drw-btn--neutral",toast:()=>`🧪 Full RFC payload + caller chain dumped to incident vault`, sev:"info" },
+    { id:"sweep",      label:"🔍 Sweep for More",    cls:"drw-btn--neutral",toast:()=>`🔍 Shadow-sweep launched across all tenants — ${_int(30,90)}s ETA`, sev:"info" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  comp: [
+    { id:"fix",        label:"⚡ Apply Control",      cls:"drw-btn--fix" },
+    { id:"evidence",   label:"📎 Attach Evidence",   cls:"drw-btn--neutral",toast:ev=>`📎 Evidence pack built for ${ev.framework} ${ev.control_id}`, sev:"info" },
+    { id:"legal",      label:"⚖️ Notify Legal",      cls:"drw-btn--neutral",toast:()=>`⚖️ Legal + Compliance teams paged with framework mapping`, sev:"info" },
+    { id:"exception",  label:"📝 File Exception",    cls:"drw-btn--block",  toast:()=>`📝 Compensating-control exception filed — expires in 90d`, sev:"warning" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  incident: [
+    { id:"fix",        label:"⚡ Run Playbook",       cls:"drw-btn--fix" },
+    { id:"contain",    label:"🔒 Contain Now",       cls:"drw-btn--block",  toast:()=>`🔒 Containment steps fired — network ACL + EDR isolation active`, sev:"warning" },
+    { id:"war_room",   label:"🚨 Open War Room",    cls:"drw-btn--block",  toast:ev=>`🚨 Zoom bridge opened for ${ev.incident_id} — SOC + IR + Legal invited`, sev:"warning" },
+    { id:"handoff",    label:"🤝 Hand to IR",        cls:"drw-btn--neutral",toast:()=>`🤝 Escalated to L3 IR team — SLA clock at 15m`, sev:"info" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  sbom: [
+    { id:"fix",        label:"⚡ Apply Patch",        cls:"drw-btn--fix" },
+    { id:"pin",        label:"📌 Pin Safe Version",  cls:"drw-btn--block",  toast:ev=>`📌 ${ev.target} pinned to safe version across all environments`, sev:"warning" },
+    { id:"isolate",    label:"🔒 Isolate Component", cls:"drw-btn--block",  toast:ev=>`🔒 ${ev.target} network-isolated pending patch rollout`, sev:"warning" },
+    { id:"cve_ticket", label:"🎫 File CVE Ticket",   cls:"drw-btn--neutral",toast:()=>`🎫 CVE ticket opened — SLA 30d for CVSS ≥7`, sev:"info" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  zt: [
+    { id:"fix",        label:"⚡ Update Policy",      cls:"drw-btn--fix" },
+    { id:"mfa",        label:"🔐 Require MFA",       cls:"drw-btn--block",  toast:ev=>`🔐 MFA enforcement added for ${ev.user_id} on all SAP surfaces`, sev:"warning" },
+    { id:"isolate",    label:"🔒 Isolate Session",   cls:"drw-btn--block",  toast:()=>`🔒 Session terminated + device posture re-evaluated`, sev:"warning" },
+    { id:"reeval",     label:"🔁 Re-eval All Sessions", cls:"drw-btn--neutral",toast:()=>`🔁 Policy broadcast — ${_int(400,900)} active sessions re-evaluated`, sev:"info" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  cred: [
+    { id:"fix",        label:"⚡ Rotate Now",         cls:"drw-btn--fix" },
+    { id:"revoke",     label:"🚫 Revoke Credential", cls:"drw-btn--block",  toast:ev=>`🚫 Credential ${ev.key} revoked — downstream services notified`, sev:"warning" },
+    { id:"owner",      label:"👤 Quarantine Owner",  cls:"drw-btn--block",  toast:()=>`👤 Credential owner's account locked pending review`, sev:"warning" },
+    { id:"vault_scan", label:"🗝️ Vault Sweep",      cls:"drw-btn--neutral",toast:()=>`🗝️ Full credential vault swept for related keys`, sev:"info" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  cloud: [
+    { id:"fix",        label:"⚡ Auto-Remediate",     cls:"drw-btn--fix" },
+    { id:"isolate",    label:"🔒 Isolate Resource",  cls:"drw-btn--block",  toast:ev=>`🔒 ${ev.resource_id} network-isolated + SG rewritten`, sev:"warning" },
+    { id:"rotate",     label:"🔑 Rotate Cloud Keys", cls:"drw-btn--block",  toast:ev=>`🔑 ${ev.provider?.toUpperCase()} keys rotated across account`, sev:"warning" },
+    { id:"csp_ticket", label:"🎫 Open CSP Ticket",   cls:"drw-btn--neutral",toast:ev=>`🎫 ${ev.provider?.toUpperCase()} support ticket opened with finding detail`, sev:"info" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  gateway: [
+    { id:"fix",        label:"⚡ Fix It Now",         cls:"drw-btn--fix" },
+    { id:"block_ip",   label:"🚫 Block Source IP",    cls:"drw-btn--block",  toast:ev=>`🚫 IP ${ev.source_ip||"?"} blocked at gateway`, sev:"warning" },
+    { id:"rate_limit", label:"🐢 Rate-Limit",         cls:"drw-btn--block",  toast:()=>`🐢 Rate-limit rule installed (10 req/min) for source`, sev:"warning" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+  rules: [
+    { id:"fix",        label:"⚡ Apply Rule",         cls:"drw-btn--fix" },
+    { id:"tune",       label:"🎛️ Tune Threshold",    cls:"drw-btn--neutral",toast:()=>`🎛️ Rule threshold tuned based on last 7d telemetry`, sev:"info" },
+    { id:"report",     label:"📄 Download Report",    cls:"drw-btn--report" },
+  ],
+};
+
+function _drwActionButtons(type, idx, ev) {
+  const acts = DRW_ACTIONS[type] || DRW_ACTIONS.alert;
+  return acts.map(a => {
+    if (a.id==="fix")    return `<button onclick="applyFix('${type}',${idx})" class="drw-btn ${a.cls}">${a.label}</button>`;
+    if (a.id==="report") return `<button onclick="downloadReport()" class="drw-btn ${a.cls}">${a.label}</button>`;
+    return `<button onclick="runDrwAction('${a.id}')" class="drw-btn ${a.cls}">${a.label}</button>`;
+  }).join("");
+}
+
+function runDrwAction(actionId) {
+  const ctx = window._drwCtx; if (!ctx) return;
+  const acts = DRW_ACTIONS[ctx.type] || DRW_ACTIONS.alert;
+  const a = acts.find(x=>x.id===actionId);
+  if (!a) return;
+  const msg = typeof a.toast === "function" ? a.toast(ctx.ev) : (a.toast||"Action executed");
+  showToast(msg, a.sev||"info", 4200);
+}
+
+// ── Report download (unique per scenario / type) ──────────────
+function downloadReport() {
+  const ctx = window._drwCtx; if (!ctx) { showToast("No event context","warning"); return; }
+  const { type, ev } = ctx;
+  const md = _buildReportMarkdown(type, ev);
+  const stamp = new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
+  const scenarioTag = (ev.scenario||type).replace(/[^a-z0-9_-]/gi,"_").toLowerCase();
+  const fname = `IntegriShield_${type}_${scenarioTag}_${stamp}.md`;
+  const blob = new Blob([md], { type:"text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+  showToast(`📄 Report downloaded — ${fname}`, "success", 4500);
+}
+
+function _buildReportMarkdown(type, ev) {
+  const now = new Date().toISOString();
+  const rid = `ISR-${Date.now().toString(36).toUpperCase()}`;
+  const sc  = (ev.scenario||"").toLowerCase();
+
+  // Per-scenario narrative blocks (hard-coded, unique per issue)
+  const scenarioBlocks = {
+    bulk_extraction: {
+      title: "Bulk Data Extraction — High-Confidence Exfiltration",
+      threat: "Insider or compromised account is pulling far more rows than their baseline permits. RFC_READ_TABLE velocity exceeds the 95th percentile by 12×.",
+      impact: "Estimated data exposure: 45K+ rows of customer PII and payroll. GDPR Article 33 breach-notification clock starts at confirmation. Potential fine exposure up to €20M.",
+      iocs: ["anomalous RFC_READ_TABLE velocity", "off-hours timestamp", "destination outside corporate IP space", "session token reused across IPs"],
+      playbook: ["Isolate user session (SU01 lock)","Block source IP at edge firewall","Snapshot SAP audit trail (SM20/STAD)","Notify DPO within 24h","Engage DFIR vendor for full forensic imaging"],
+      framework: ["GDPR Art.33","SOX AC-2","PCI-DSS 10.2","ISO 27001 A.12.4"],
+    },
+    privilege_escalation: {
+      title: "Privilege Escalation via SUSR Auth Object Manipulation",
+      threat: "SUSR_USER_AUTH_FOR_OBJ_GET invoked outside change window. Attacker is attempting to elevate themselves to SAP_ALL or create a backdoor role.",
+      impact: "If successful, attacker gains unrestricted access to all SAP modules including FI, HR, MM. Subsequent lateral movement is near-impossible to detect.",
+      iocs: ["SUSR tool call without change-ticket","risk score ≥0.95","session originated off-hours","deny verdict from Zero-Trust fabric"],
+      playbook: ["Freeze user's SAP role immediately","Compare SU01 changes vs change-management ticket queue","Re-run SoD (Segregation of Duties) report","Notify internal audit + CISO"],
+      framework: ["SOX AC-2","NIST CSF IA-2","ISO 27001 A.9.2.3"],
+    },
+    shadow_endpoint: {
+      title: "Shadow RFC Endpoint — Unregistered / Unauthorized",
+      threat: "An RFC function is being invoked that has no registered owner in the SAP function whitelist. This is classic supply-chain or insider-backdoor activity.",
+      impact: "Shadow endpoints bypass all standard DLP, audit, and anomaly monitoring. Data may already have been exfiltrated without any trail.",
+      iocs: ["function not in SAP whitelist","external source IP","repeated call pattern","no change-ticket reference"],
+      playbook: ["Block endpoint in SAP Gateway (reginfo/secinfo)","Run shadow-sweep across all tenants","Reverse-engineer RFC for backdoor indicators","Force full SAP transport log review"],
+      framework: ["NIST CSF DE.CM-7","ISO 27001 A.14.2","SOX AC-4"],
+    },
+    credential_abuse: {
+      title: "Credential Abuse — Impossible-Travel / Simultaneous Sessions",
+      threat: "Same account is authenticating from geographically impossible locations within minutes — credentials are stolen or a session token has been exported.",
+      impact: "Attacker has active access equivalent to the legitimate user. Every downstream action (API, SAP, cloud) is indistinguishable from normal usage.",
+      iocs: ["impossible-travel timing","multiple concurrent IPs","device fingerprint mismatch","MFA never triggered"],
+      playbook: ["Revoke all active sessions + tokens","Rotate credential in vault","Force password+MFA re-enrollment","Audit actions taken under this account in last 48h"],
+      framework: ["NIST CSF PR.AC-7","ISO 27001 A.9.4.2","PCI-DSS 8.3"],
+    },
+    off_hours_rfc: {
+      title: "Off-Hours Privileged RFC Access",
+      threat: "Privileged user making SAP RFC calls outside business hours. Individually weak, but strong when combined with volume or destination anomalies.",
+      impact: "Precursor to bulk extraction. Historically 38% of off-hours privileged sessions in this environment preceded confirmed insider incidents.",
+      iocs: ["timestamp outside 07:00–19:00","privileged role","no corresponding on-call record"],
+      playbook: ["Elevate session monitoring for this user","Require MFA re-challenge","Correlate against change-management and on-call calendars"],
+      framework: ["SOX AC-2","NIST CSF DE.AE-3"],
+    },
+    data_staging: {
+      title: "Data Staging — Pre-Exfiltration Two-Step Transfer",
+      threat: "Large volume written to an intermediate staging location, a pattern used to evade real-time DLP. External exfil is likely imminent.",
+      impact: "Confirmed active exfiltration in progress. Cloud misconfiguration (public bucket / over-privileged role) is the likely egress path.",
+      iocs: ["write to staging bucket","bytes_out > 5MB","destination in misconfigured cloud resource","DLP + cloud-posture alerts correlated"],
+      playbook: ["Lock down staging destination (bucket policy deny)","Pull cloud-trail for full actor history","Rotate cloud keys","File breach ticket with legal"],
+      framework: ["GDPR Art.32","PCI-DSS 3.4","ISO 27001 A.13.2"],
+    },
+    velocity_anomaly: {
+      title: "Request Velocity Spike — Automated Tooling Suspected",
+      threat: "Request rate exceeds human-achievable throughput by 10×+. Scripted exfil or reconnaissance tooling is running against the SAP surface.",
+      impact: "If unblocked, an attacker can enumerate or extract the full tenant dataset within minutes.",
+      iocs: ["req/min > 120","uniform inter-request timing","single-endpoint concentration","user-agent mismatch"],
+      playbook: ["Apply emergency rate-limit at gateway","Block source IP","Capture request payloads for analysis","Scan for compromised API keys"],
+      framework: ["NIST CSF DE.AE-2","ISO 27001 A.13.1"],
+    },
+    geo_anomaly: {
+      title: "Geographic Access Anomaly",
+      threat: "Authentication from a country with no prior session history for this account. Common initial-access vector via VPN or compromised foreign infrastructure.",
+      impact: "If legitimate, policy gap; if malicious, foothold established. Residual risk depends on MFA posture.",
+      iocs: ["IP geo outside known-good set","ASN flagged in threat intel","no prior session within 90d from this region"],
+      playbook: ["Force re-auth with MFA","Notify user via secondary channel","If denied by user → treat as confirmed compromise and run credential_abuse playbook"],
+      framework: ["NIST CSF PR.AC-3","ISO 27001 A.9.2.6"],
+    },
   };
-  showToast(msgs[action]||"Action executed", action==="block"?"warning":"info", 4000);
+
+  const block = scenarioBlocks[sc] || {
+    title: `${type.toUpperCase()} Security Finding`,
+    threat: `An event of type '${type}' was flagged by IntegriShield detection modules.`,
+    impact: "Impact depends on affected resource and downstream blast radius — see event details below.",
+    iocs: ["see event-details section"],
+    playbook: _getFixSteps(type, ev) || ["Investigate","Contain","Remediate","Report"],
+    framework: ["NIST CSF","ISO 27001"],
+  };
+
+  // Type-specific detail section
+  const detailLines = [];
+  const push = (k,v) => { if (v!==undefined && v!==null && v!=="") detailLines.push(`- **${k}**: ${v}`); };
+  push("Event Type", type);
+  push("Timestamp", new Date(ev.ts||Date.now()).toISOString());
+  push("Scenario", ev.scenario);
+  push("Severity", (ev.severity||"").toUpperCase());
+  push("User", ev.user_id);
+  push("Source IP", ev.source_ip);
+  push("Tenant", ev.tenant_id);
+  push("Message", ev.message);
+  push("Tool", ev.tool_name);
+  push("Endpoint", ev.endpoint);
+  push("DLP Rule", ev.rule);
+  push("Bytes Out", ev.bytes_out);
+  push("Row Count", ev.row_count);
+  push("Destination", ev.destination);
+  push("Anomaly Score", ev.anomaly_score);
+  push("Classification", ev.classification);
+  push("ZT Decision", ev.decision);
+  push("ZT Risk", ev.risk_score);
+  push("Framework", ev.framework);
+  push("Control", ev.control_id);
+  push("Incident ID", ev.incident_id);
+  push("Target", ev.target);
+  push("CVEs", ev.cve_count);
+  push("Credential Key", ev.key);
+  push("Provider", ev.provider);
+  push("Resource", ev.resource_id);
+  push("Finding Type", ev.finding_type);
+
+  return `# IntegriShield Security Report — ${block.title}
+
+**Report ID:** ${rid}
+**Generated:** ${now}
+**Classification:** CONFIDENTIAL — Internal / Legal Hold Eligible
+
+---
+
+## 1. Executive Summary
+
+${block.threat}
+
+**Business Impact:** ${block.impact}
+
+---
+
+## 2. Event Details
+
+${detailLines.join("\n")}
+
+---
+
+## 3. Indicators of Compromise (IoCs)
+
+${block.iocs.map(x=>`- ${x}`).join("\n")}
+
+---
+
+## 4. Remediation Playbook
+
+${block.playbook.map((x,i)=>`${i+1}. ${x}`).join("\n")}
+
+---
+
+## 5. Compliance / Framework Mapping
+
+${block.framework.map(x=>`- ${x}`).join("\n")}
+
+---
+
+## 6. Recommended Next Steps
+
+- Review correlated events in the IntegriShield drawer (same user_id / source_ip / scenario tag)
+- Verify containment actions completed successfully within SLA (15m for P1)
+- Retain this report for the duration of your regulatory evidence-retention requirement
+
+---
+
+*Generated by IntegriShield M07 Compliance Autopilot · Integration Security Platform · ${new Date().getFullYear()}*
+`;
 }
 
 // Keep legacy alias
