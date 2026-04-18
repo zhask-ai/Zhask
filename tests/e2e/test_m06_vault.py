@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import httpx
 
-from tests.e2e.conftest import M06_URL
+from .conftest import M06_URL
 
 
 def _url(path: str) -> str:

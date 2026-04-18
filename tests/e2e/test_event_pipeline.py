@@ -15,7 +15,7 @@ import uuid
 
 import pytest
 
-from tests.e2e.conftest import REDIS_URL
+from .conftest import REDIS_URL
 
 
 INJECT_STREAM  = "integrishield:api_call_events"

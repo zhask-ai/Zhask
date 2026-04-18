@@ -8,7 +8,7 @@ import time
 import pytest
 import httpx
 
-from tests.e2e.conftest import M14_URL, REDIS_URL
+from .conftest import M14_URL, REDIS_URL
 
 WEBHOOK_SITE_PLACEHOLDER = "https://webhook.site/00000000-0000-0000-0000-000000000000"
 

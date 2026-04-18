@@ -8,7 +8,7 @@ import time
 import pytest
 import httpx
 
-from tests.e2e.conftest import M13_URL
+from .conftest import M13_URL
 
 # Minimal ABAP snippet using a third-party function module known to appear in NVD SAP advisories
 _ABAP_SNIPPET = """
