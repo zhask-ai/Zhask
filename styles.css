@@ -3273,32 +3273,3 @@ h1, h2, h3, h4 { letter-spacing: -0.018em; color: var(--text-hi); }
   background: #d7dde6;
 }
 
-/* ═══════════════════════════════════════════════════════
-   CLAUDE AI ASSISTANT — cat icon (user-provided asset)
-   ═══════════════════════════════════════════════════════ */
-.chat-fab {
-  background: #0b1220 !important;
-  background-image: url('./assets/ai-assistant.png') !important;
-  background-size: cover !important;
-  background-position: center !important;
-  color: transparent !important;
-  font-size: 0 !important;
-  border: 2px solid rgba(76, 130, 247, 0.35) !important;
-  box-shadow: 0 6px 22px rgba(37, 99, 235, 0.28) !important;
-}
-.chat-fab:hover {
-  box-shadow: 0 8px 30px rgba(37, 99, 235, 0.45) !important;
-}
-.chat-header-icon {
-  display: inline-block;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background-image: url('./assets/ai-assistant.png');
-  background-size: cover;
-  background-position: center;
-  font-size: 0 !important;
-  color: transparent !important;
-  border: 1.5px solid rgba(76, 130, 247, 0.35);
-  flex-shrink: 0;
-}
