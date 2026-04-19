@@ -52,6 +52,19 @@
           <span id="backend-status">connecting…</span>
           <span class="separator">|</span>
           <span id="events-processed">0</span>&thinsp;events
+          <div class="dl-dropdown" style="margin-left:10px">
+            <button class="export-btn dl-dropdown-toggle" style="background:rgba(25,167,206,0.12);border-color:rgba(25,167,206,0.35);color:#19A7CE;font-size:0.72rem;padding:0.3rem 0.75rem">📊 Reports ▾</button>
+            <div class="dl-dropdown-menu dl-dropdown-menu-left">
+              <a class="dl-dropdown-item" onclick="downloadReport('executive')">📊 Executive Report (DOCX)</a>
+              <div class="dl-dropdown-divider"></div>
+              <a class="dl-dropdown-item" onclick="downloadReport('compliance',{framework:'SOX'})">📄 SOX Compliance (DOCX)</a>
+              <a class="dl-dropdown-item" onclick="downloadReport('compliance',{framework:'GDPR'})">📄 GDPR Compliance (DOCX)</a>
+              <a class="dl-dropdown-item" onclick="downloadReport('incidents')">📄 Incidents (DOCX)</a>
+              <a class="dl-dropdown-item" onclick="downloadReport('sbom')">📄 SBOM / CVE (DOCX)</a>
+              <a class="dl-dropdown-item" onclick="downloadReport('dlp')">📄 DLP (DOCX)</a>
+              <a class="dl-dropdown-item" onclick="downloadReport('rbac-audit')">📄 RBAC Audit (DOCX)</a>
+            </div>
+          </div>
           <button id="theme-toggle" class="theme-toggle" aria-label="Toggle Theme" style="background: none; border: none; cursor: pointer; color: var(--text-dim); margin-left: 10px; font-size: 1.1rem; transition: color 0.2s;">
             <span class="theme-icon">☾</span>
           </button>
@@ -521,7 +534,13 @@
               <input type="text" id="dlp-search" placeholder="Search user, destination…" class="filter-input">
               <select id="dlp-rule-filter"><option value="all">All rules</option><option value="bulk">Bulk export</option><option value="staging">Data staging</option><option value="blocklist">Blocklist</option><option value="pii">PII exfil</option></select>
               <select id="dlp-sev-filter"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option></select>
-              <button class="export-btn" onclick="exportCSV('dlp')">⬇ CSV</button>
+              <div class="dl-dropdown">
+                <button class="export-btn dl-dropdown-toggle">⬇ Download ▾</button>
+                <div class="dl-dropdown-menu">
+                  <a class="dl-dropdown-item" onclick="downloadReport('dlp')">📄 Report (DOCX)</a>
+                  <a class="dl-dropdown-item" onclick="exportCSV('dlp')">🗃 Raw data (CSV)</a>
+                </div>
+              </div>
             </div>
           </div>
           <div class="mini-stats">
@@ -589,7 +608,13 @@
             <div class="panel-controls">
               <select id="comp-fw-filter"><option value="all">All frameworks</option><option value="SOX">SOX</option><option value="GDPR">GDPR</option><option value="PCI-DSS">PCI-DSS</option><option value="NIST-CSF">NIST-CSF</option><option value="ISO27001">ISO27001</option><option value="HIPAA">HIPAA</option></select>
               <select id="comp-result-filter"><option value="all">All results</option><option value="violation">Violations</option><option value="warning">Warnings</option><option value="pass">Passed</option></select>
-              <button class="export-btn" onclick="exportCSV('compliance')">⬇ CSV</button>
+              <div class="dl-dropdown">
+                <button class="export-btn dl-dropdown-toggle">⬇ Download ▾</button>
+                <div class="dl-dropdown-menu">
+                  <a class="dl-dropdown-item" onclick="downloadReport('compliance',{framework:document.getElementById('comp-fw-filter').value||'SOX'})">📄 Report (DOCX)</a>
+                  <a class="dl-dropdown-item" onclick="exportCSV('compliance')">🗃 Raw data (CSV)</a>
+                </div>
+              </div>
             </div>
           </div>
           <div class="mini-stats">
@@ -615,7 +640,13 @@
               <input type="text" id="inc-search" placeholder="Search incident ID, title…" class="filter-input">
               <select id="inc-status-filter"><option value="all">All statuses</option><option value="open">Open</option><option value="investigating">Investigating</option><option value="resolved">Resolved</option></select>
               <select id="inc-sev-filter"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option></select>
-              <button class="export-btn" onclick="exportCSV('incidents')">⬇ CSV</button>
+              <div class="dl-dropdown">
+                <button class="export-btn dl-dropdown-toggle">⬇ Download ▾</button>
+                <div class="dl-dropdown-menu">
+                  <a class="dl-dropdown-item" onclick="downloadReport('incidents')">📄 Report (DOCX)</a>
+                  <a class="dl-dropdown-item" onclick="exportCSV('incidents')">🗃 Raw data (CSV)</a>
+                </div>
+              </div>
             </div>
           </div>
           <div class="mini-stats">
@@ -640,7 +671,13 @@
             <div class="panel-controls">
               <input type="text" id="sbom-search" placeholder="Search package, target…" class="filter-input">
               <select id="sbom-status-filter"><option value="all">All statuses</option><option value="VULNERABLE">Vulnerable</option><option value="CLEAN">Clean</option></select>
-              <button class="export-btn" onclick="exportCSV('sbom')">⬇ CSV</button>
+              <div class="dl-dropdown">
+                <button class="export-btn dl-dropdown-toggle">⬇ Download ▾</button>
+                <div class="dl-dropdown-menu">
+                  <a class="dl-dropdown-item" onclick="downloadReport('sbom')">📄 Report (DOCX)</a>
+                  <a class="dl-dropdown-item" onclick="exportCSV('sbom')">🗃 Raw data (CSV)</a>
+                </div>
+              </div>
             </div>
           </div>
           <div class="mini-stats">
@@ -852,7 +889,13 @@
                 <option value="AUDITOR">Auditor</option>
                 <option value="SERVICE">Service</option>
               </select>
-              <button class="export-btn" onclick="exportCSV('policy')">⬇ CSV</button>
+              <div class="dl-dropdown">
+                <button class="export-btn dl-dropdown-toggle">⬇ Download ▾</button>
+                <div class="dl-dropdown-menu">
+                  <a class="dl-dropdown-item" onclick="downloadReport('rbac-audit')">📄 Report (DOCX)</a>
+                  <a class="dl-dropdown-item" onclick="exportCSV('policy')">🗃 Raw data (CSV)</a>
+                </div>
+              </div>
             </div>
           </div>
           <div class="mini-stats">
@@ -886,7 +929,13 @@
                 <option value="MEDIUM">Medium</option>
               </select>
               <button class="action-btn" id="cve-refresh-btn" onclick="refreshCveFeeds()">↻ Refresh feeds</button>
-              <button class="export-btn" onclick="exportCSV('cve')">⬇ CSV</button>
+              <div class="dl-dropdown">
+                <button class="export-btn dl-dropdown-toggle">⬇ Download ▾</button>
+                <div class="dl-dropdown-menu">
+                  <a class="dl-dropdown-item" onclick="downloadReport('sbom')">📄 CVE Report (DOCX)</a>
+                  <a class="dl-dropdown-item" onclick="exportCSV('cve')">🗃 Raw data (CSV)</a>
+                </div>
+              </div>
             </div>
           </div>
           <div class="cve-feed-cards" id="cve-feed-cards">
