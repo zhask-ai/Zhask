@@ -22,7 +22,7 @@ from shared.telemetry import get_logger
 
 logger = get_logger(__name__)
 
-_STREAM_NAME  = "rfc_events"
+_STREAM_NAME  = os.getenv("STREAM_API_CALLS", "integrishield:api_call_events")
 _REDIS_URL    = os.getenv("REDIS_URL", "redis://redis:6379")
 
 
