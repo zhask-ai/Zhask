@@ -933,7 +933,7 @@ def _webhook_verify_signature(body_bytes: bytes, sig_header: str) -> bool:
         return bool(sig_header)  # secret not configured — presence check only
 
     secret_bytes = WEBHOOK_SECRET.encode("utf-8")
-    expected_mac = hmac.new(secret_bytes, body_bytes, hashlib.sha256).hexdigest()
+    expected_mac = hmac.HMAC(secret_bytes, body_bytes, digestmod=hashlib.sha256).hexdigest()
 
     provided = sig_header.removeprefix("sha256=").strip()
     return hmac.compare_digest(expected_mac, provided)

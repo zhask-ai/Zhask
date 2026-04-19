@@ -9,6 +9,7 @@ services:
     build:
       context: ..
       dockerfile: apps/dashboard/backend/Dockerfile
+    image: integrishield-dashboard-backend
     container_name: integrishield-dashboard-backend
     environment:
       REDIS_URL: redis://redis:6379/0

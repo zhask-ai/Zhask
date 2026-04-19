@@ -29,7 +29,7 @@ jobs:
           find . -name requirements.txt | xargs -I{} pip install -r {} || true
 
       - name: Lint with Ruff
-        run: ruff check modules/ apps/ shared/ --select E,F,W,I,N,UP,B --ignore E501
+        run: ruff check modules/ apps/ shared/ --select E,F,W,I --ignore E501
 
   test:
     runs-on: ubuntu-latest

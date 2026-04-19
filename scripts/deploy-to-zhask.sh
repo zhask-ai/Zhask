@@ -28,12 +28,12 @@ echo "📦 Building Docker images..."
 docker compose -f poc/docker-compose.dev4.yml build --no-cache
 
 # 2. Tag images for zhask.io registry
+# Note: only the custom-built dashboard-backend image is tagged/pushed.
+#       The UI (nginx:alpine) and Redis (redis:7-alpine) use upstream images directly.
 echo ""
 echo "🏷️  Tagging images for zhask.io registry..."
 REGISTRY=${ZHASK_REGISTRY:-"registry.zhask.io"}
 docker tag integrishield-dashboard-backend "$REGISTRY/$ZHASK_APP_NAME/dashboard-backend:latest"
-docker tag integrishield-dashboard-ui "$REGISTRY/$ZHASK_APP_NAME/dashboard-ui:latest"
-docker tag integrishield-redis "$REGISTRY/$ZHASK_APP_NAME/redis:latest"
 
 # 3. Push images to registry (if credentials available)
 if [ -n "$ZHASK_REGISTRY_USER" ] && [ -n "$ZHASK_REGISTRY_PASS" ]; then
@@ -41,8 +41,6 @@ if [ -n "$ZHASK_REGISTRY_USER" ] && [ -n "$ZHASK_REGISTRY_PASS" ]; then
   echo "📤 Pushing images to zhask.io registry..."
   echo "$ZHASK_REGISTRY_PASS" | docker login -u "$ZHASK_REGISTRY_USER" --password-stdin "$REGISTRY"
   docker push "$REGISTRY/$ZHASK_APP_NAME/dashboard-backend:latest"
-  docker push "$REGISTRY/$ZHASK_APP_NAME/dashboard-ui:latest"
-  docker push "$REGISTRY/$ZHASK_APP_NAME/redis:latest"
   docker logout "$REGISTRY"
 else
   echo "⚠️  Registry credentials not provided, skipping image push"

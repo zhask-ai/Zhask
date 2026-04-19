@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY . /workspace
 
-ENV PYTHONPATH=/workspace/shared/src
+ENV PYTHONPATH=/workspace
 
 EXPOSE 8787
 
