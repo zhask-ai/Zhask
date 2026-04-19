@@ -60,7 +60,7 @@ class AuthMiddleware:
             str_headers[key] = val
 
         # Extract tenant ID
-        from integrishield_auth.tenant import extract_tenant_id, TenantError
+        from shared.auth.tenant import TenantError, extract_tenant_id
 
         try:
             tenant_id = extract_tenant_id(str_headers, poc_mode=self.poc_mode)
@@ -74,7 +74,7 @@ class AuthMiddleware:
 
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
-            from integrishield_auth.jwt_validator import get_validator
+            from shared.auth.jwt_validator import get_validator
 
             try:
                 claims = get_validator().validate(token)
