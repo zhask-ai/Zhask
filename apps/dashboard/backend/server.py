@@ -1026,6 +1026,82 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_docx(self, docx_bytes: bytes, filename: str) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(docx_bytes)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+        self.wfile.write(docx_bytes)
+
+    def _handle_report_download(self, path: str, params: dict) -> None:
+        try:
+            import report_builder as rb
+        except ImportError:
+            self._json(500, {"error": "report_builder not available"}); return
+
+        tenant = params.get("tenant", ["Acme Corp"])[0]
+        date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+
+        with LOCK:
+            compliance = list(COMPLIANCE)
+            incidents  = list(INCIDENTS)
+            dlp        = list(DLP_ALERTS)
+            sbom       = list(SBOM_SCANS)
+            alerts     = list(ALERTS)
+            anomalies  = list(ANOMALIES)
+            cloud      = list(CLOUD)
+            shadow     = list(SHADOW)
+
+        m16_snap = _m16_decisions_snapshot(200)
+        m16_decisions = m16_snap.get("decisions", [])
+        m16_counters  = m16_snap.get("counters", {})
+
+        try:
+            if path == "/api/reports/compliance.docx":
+                fw = (params.get("framework", ["SOX"])[0] or "SOX").upper()
+                fw_findings = [f for f in compliance if str(f.get("framework", "")).upper() == fw]
+                docx_bytes = rb.build_compliance_report(fw, fw_findings, tenant)
+                filename   = f"compliance_{fw}_{date_str}.docx"
+
+            elif path == "/api/reports/incidents.docx":
+                docx_bytes = rb.build_incidents_report(incidents, tenant)
+                filename   = f"incidents_{date_str}.docx"
+
+            elif path == "/api/reports/sbom.docx":
+                docx_bytes = rb.build_sbom_report(sbom, tenant)
+                filename   = f"sbom_cve_{date_str}.docx"
+
+            elif path == "/api/reports/dlp.docx":
+                docx_bytes = rb.build_dlp_report(dlp, tenant)
+                filename   = f"dlp_{date_str}.docx"
+
+            elif path == "/api/reports/rbac-audit.docx":
+                docx_bytes = rb.build_rbac_report(m16_decisions, m16_counters, tenant)
+                filename   = f"rbac_audit_{date_str}.docx"
+
+            elif path == "/api/reports/executive.docx":
+                all_data = {
+                    "alerts": alerts, "anomalies": anomalies,
+                    "incidents": incidents, "dlp": dlp,
+                    "compliance": compliance, "sbom": sbom,
+                    "cloud": cloud, "shadow": shadow,
+                    "m16_counters": m16_counters,
+                }
+                docx_bytes = rb.build_executive_report(all_data, tenant)
+                filename   = f"executive_posture_{date_str}.docx"
+
+            else:
+                self._json(404, {"error": "unknown report type"}); return
+
+            self._send_docx(docx_bytes, filename)
+        except Exception as exc:
+            import traceback; traceback.print_exc()
+            self._json(500, {"error": f"Report generation failed: {exc}"})
+
     def do_OPTIONS(self) -> None:
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin",  "*")
@@ -1338,6 +1414,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/actions/state":
             import action_handlers as ah
             self._json(200, ah.get_state_flags()); return
+
+        # ── DOCX Report Downloads ───────────────────────────────
+        if path.startswith("/api/reports/") and path.endswith(".docx"):
+            self._handle_report_download(path, params); return
 
         self._json(404, {"error": "not_found"})
 

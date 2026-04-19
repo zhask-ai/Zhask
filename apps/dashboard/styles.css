@@ -2927,3 +2927,185 @@ tbody tr:hover {
   font-weight: 700;
   text-align: center;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Download Dropdown Menu
+   ═══════════════════════════════════════════════════════════════ */
+
+.dl-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.dl-dropdown-toggle {
+  white-space: nowrap;
+}
+
+.dl-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 196px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+  z-index: 9999;
+  padding: 4px 0;
+  animation: fadeInDown 0.14s ease;
+}
+
+.dl-dropdown-menu-left {
+  right: auto;
+  left: 0;
+}
+
+.dl-dropdown:hover .dl-dropdown-menu,
+.dl-dropdown:focus-within .dl-dropdown-menu {
+  display: block;
+}
+
+.dl-dropdown-item {
+  display: block;
+  padding: 7px 14px;
+  font-size: 0.78rem;
+  color: var(--text-hi);
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 2px 4px;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+
+.dl-dropdown-item:hover {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.dl-dropdown-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 10px;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Incident Playbook Timeline
+   ═══════════════════════════════════════════════════════════════ */
+
+.pb-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 0.5rem;
+  border-left: 2px solid var(--border);
+  margin-left: 0.6rem;
+  padding-left: 0;
+}
+
+.pb-stage {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.4rem 0.75rem;
+  position: relative;
+}
+
+.pb-stage::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.pb-stage-done::before  { background: var(--ok); border-color: var(--ok); }
+.pb-stage-active::before { background: var(--warning); border-color: var(--warning); animation: pulse-dot 1.4s infinite; }
+
+.pb-stage-icon {
+  width: 20px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 0.9rem;
+  margin-top: 1px;
+}
+
+.pb-stage-body {
+  flex: 1;
+}
+
+.pb-stage-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+
+.pb-stage-done .pb-stage-label  { color: var(--ok); }
+.pb-stage-active .pb-stage-label { color: var(--warning); }
+.pb-stage-pending .pb-stage-label { color: var(--text-dim); }
+
+.pb-stage-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.pb-stage-duration {
+  font-size: 0.68rem;
+  color: var(--accent);
+  margin-top: 2px;
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   M16 Policy Decision Detail Grid
+   ═══════════════════════════════════════════════════════════════ */
+
+.policy-detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 0.4rem;
+}
+
+.policy-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+}
+
+.policy-detail-row:last-child { border-bottom: none; }
+.policy-detail-row:nth-child(even) { background: var(--bg-raised); }
+
+.policy-detail-key {
+  min-width: 110px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.policy-detail-val {
+  color: var(--text-hi);
+  word-break: break-all;
+}
+
+.badge-allow  { background: rgba(34,197,94,.15);  color: #22c55e; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 700; }
+.badge-deny   { background: rgba(239,68,68,.15);  color: #ef4444; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 700; }
+.badge-modify { background: rgba(234,179,8,.15);  color: #eab308; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 700; }

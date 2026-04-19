@@ -62,8 +62,9 @@ async def create_report(req: ReportRequest, request: Request):
     return {
         "report_id": report_id,
         "framework": req.framework.value,
-        "download_url": f"/api/v1/compliance/reports/{report_id}",
-        "download_csv_url": f"/api/v1/compliance/reports/{report_id}?format=csv",
+        "download_url":      f"/api/v1/compliance/reports/{report_id}",
+        "download_csv_url":  f"/api/v1/compliance/reports/{report_id}?format=csv",
+        "download_docx_url": f"/api/v1/compliance/reports/{report_id}?format=docx",
     }
 
 
@@ -78,6 +79,19 @@ async def get_report(report_id: str, request: Request, format: str = "json"):
             content=csv_data,
             media_type="text/csv",
             headers={"Content-Disposition": f'attachment; filename="compliance_{report_id}.csv"'},
+        )
+    elif format == "docx":
+        docx_data = generator.get_docx(report_id)
+        if docx_data is None:
+            raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
+        if not docx_data:
+            raise HTTPException(status_code=500, detail="DOCX generation failed — python-docx may not be installed")
+        report = generator.get_json(report_id)
+        fw = report.get("framework", "compliance") if report else "compliance"
+        return Response(
+            content=docx_data,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="compliance_{fw}_{report_id[:8]}.docx"'},
         )
     else:
         report = generator.get_json(report_id)

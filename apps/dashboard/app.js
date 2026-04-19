@@ -1382,23 +1382,43 @@ function renderCompliance() {
   renderComplianceScorecard();
 }
 
+// Live compliance scores fetched from backend; fall back to FW_SCORES constants
+const _liveFwScores = {};
+function _fetchLiveComplianceScores() {
+  const fws = Object.keys(FW_SCORES);
+  fws.forEach(fw => {
+    fetch(`${API_BASE}/api/compliance/report?framework=${fw}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && typeof data.posture_score === "number") {
+          _liveFwScores[fw] = Math.max(60, Math.round(data.posture_score));
+        }
+      })
+      .catch(() => {});
+  });
+}
+_fetchLiveComplianceScores();
+
 function renderComplianceScorecard() {
   if (!ui.compScorecard) return;
   const fwColors = {SOX:"var(--critical)",GDPR:"var(--accent)","PCI-DSS":"var(--orange)","NIST-CSF":"var(--ok)",ISO27001:"var(--purple)",HIPAA:"var(--cyan)"};
   ui.compScorecard.innerHTML = Object.entries(FW_SCORES).map(([fw, base]) => {
     const viols = compEvents.filter(e=>e.framework===fw && (e.result||"")==="violation").length;
-    const score = Math.max(60, base - viols*3);
+    // Use live score from API if available, else derive from base constant minus violations
+    const liveBase = _liveFwScores[fw] || base;
+    const score = Math.max(60, liveBase - viols*2);
     const c = score>90?"var(--ok)":score>80?"var(--accent)":score>70?"var(--warning)":"var(--critical)";
     const fwC = fwColors[fw]||c;
-    return `<div class="scorecard-row" style="display:flex;align-items:center;gap:.6rem;margin:.25rem 0;font-size:.8rem">
-      <span style="width:70px;font-weight:600;color:${fwC};flex-shrink:0">${fw}</span>
-      <div style="flex:1;height:6px;background:var(--bg-raised);border-radius:3px;overflow:hidden">
-        <div style="width:${score}%;height:100%;background:${c};border-radius:3px;transition:width .8s ease"></div>
+    const trend = _liveFwScores[fw] ? ` <span style="font-size:.62rem;color:var(--ok);margin-left:2px">● live</span>` : "";
+    return `<div class="scorecard-row" style="display:flex;align-items:center;gap:.6rem;margin:.3rem 0;font-size:.8rem">
+      <span style="width:74px;font-weight:600;color:${fwC};flex-shrink:0">${fw}${trend}</span>
+      <div style="flex:1;height:7px;background:var(--bg-raised);border-radius:4px;overflow:hidden">
+        <div style="width:${score}%;height:100%;background:${c};border-radius:4px;transition:width 1s ease"></div>
       </div>
-      <span style="width:36px;font-weight:700;color:${c};text-align:right">${score}%</span>
+      <span style="width:40px;font-weight:700;color:${c};text-align:right;font-size:.85rem">${score}%</span>
       ${viols>0
-        ? `<span style="font-size:.67rem;background:rgba(255,71,87,.12);color:var(--critical);padding:1px 6px;border-radius:3px">${viols} viol.</span>`
-        : `<span style="font-size:.67rem;color:var(--ok)">✓ Clean</span>`}
+        ? `<span style="font-size:.67rem;background:rgba(255,71,87,.12);color:var(--critical);padding:1px 7px;border-radius:3px;flex-shrink:0">${viols} viol.</span>`
+        : `<span style="font-size:.67rem;color:var(--ok);flex-shrink:0">✓ Clean</span>`}
     </div>`;
   }).join("");
 }
@@ -1678,7 +1698,7 @@ function showItemDetail(type, idx) {
     alert: alerts, anomaly: anomalies, sap: sapEvents, dlp: dlpEvents,
     shadow: shadowEvents, comp: compEvents, incident: incEvents,
     sbom: sbomEvents, zt: ztEvents, cred: credEvents, cloud: cloudEvents,
-    gateway: alerts, rules: alerts,
+    gateway: alerts, rules: alerts, policy: policyDecisions,
   };
   const arr = arrMap[type]; if (!arr) return;
   const ev = arr[idx];      if (!ev)  return;
@@ -1741,11 +1761,67 @@ function showItemDetail(type, idx) {
     }
   }
 
+  // Playbook timeline for incidents
+  let playbookTimelineHTML = "";
+  if (type === "incident") {
+    const pbStages = [
+      {label:"Detected",   icon:"🔍", desc:"Alert triggered by IntegriShield rules engine"},
+      {label:"Triaged",    icon:"🎯", desc:"L1 SOC analyst confirmed — incident created"},
+      {label:"Contained",  icon:"🛡", desc:"Affected user/session isolated; RFC calls suspended"},
+      {label:"Eradicated", icon:"🧹", desc:"Root cause removed; IOCs cleared from environment"},
+      {label:"Recovered",  icon:"✅", desc:"Systems restored; access controls re-applied"},
+      {label:"Post-mortem",icon:"📋", desc:"Lessons-learned documented; playbook updated"},
+    ];
+    const isResolved = ["resolved","closed","contained"].includes((ev.status||"").toLowerCase());
+    const durations  = ["0m","4m","18m","35m","52m","24h"];
+    const doneCount  = isResolved ? 5 : (ev.status||"").toLowerCase()==="investigating" ? 2 : 1;
+    playbookTimelineHTML = `<div>
+      <div class="drw-section-title">🎬 Playbook Timeline${ev.playbook_id?` — <code style="font-size:.75rem;color:var(--accent)">${ev.playbook_id}</code>`:""}</div>
+      <div class="pb-timeline">
+        ${pbStages.map((stage, i) => {
+          const done   = i < doneCount;
+          const active = i === doneCount && !isResolved;
+          const cls    = done ? "pb-stage-done" : active ? "pb-stage-active" : "pb-stage-pending";
+          return `<div class="pb-stage ${cls}">
+            <div class="pb-stage-icon">${done ? "✓" : active ? stage.icon : "○"}</div>
+            <div class="pb-stage-body">
+              <div class="pb-stage-label">${stage.label}</div>
+              <div class="pb-stage-desc">${stage.desc}</div>
+              ${done || active ? `<div class="pb-stage-duration">${durations[i]}</div>` : ""}
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+      ${ev.mitre_technique ? `<div style="margin-top:.5rem;font-size:.75rem;color:var(--text-muted)">MITRE ATT&CK: <code style="color:var(--accent)">${ev.mitre_technique}</code></div>` : ""}
+    </div>`;
+  }
+
+  // Policy decision detail for m16
+  let policyDetailHTML = "";
+  if (type === "policy") {
+    policyDetailHTML = `<div>
+      <div class="drw-section-title">⚙️ Policy Decision Detail</div>
+      <div class="policy-detail-grid">
+        <div class="policy-detail-row"><span class="policy-detail-key">User</span><span class="policy-detail-val">${ev.user_id||"—"}</span></div>
+        <div class="policy-detail-row"><span class="policy-detail-key">Role</span><span class="policy-detail-val"><code style="background:var(--bg-raised);padding:1px 7px;border-radius:3px;color:var(--accent)">${ev.role||"—"}</code></span></div>
+        <div class="policy-detail-row"><span class="policy-detail-key">Tool Invoked</span><span class="policy-detail-val"><code style="background:var(--bg-raised);padding:1px 7px;border-radius:3px;color:var(--text-hi)">${ev.tool_name||"—"}</code></span></div>
+        <div class="policy-detail-row"><span class="policy-detail-key">Decision</span><span class="policy-detail-val"><span class="badge-${(ev.decision||"deny").toLowerCase()}" style="font-weight:700;font-size:.8rem">${ev.decision||"—"}</span></span></div>
+        <div class="policy-detail-row"><span class="policy-detail-key">Rule Matched</span><span class="policy-detail-val"><code style="background:var(--accent-bg);color:var(--accent);padding:1px 8px;border-radius:3px;font-weight:700">${ev.rule_id||"R-DEFAULT"}</code></span></div>
+        <div class="policy-detail-row"><span class="policy-detail-key">Reason</span><span class="policy-detail-val" style="color:var(--text-hi)">${ev.reason||"—"}</span></div>
+        <div class="policy-detail-row"><span class="policy-detail-key">Session ID</span><span class="policy-detail-val" style="font-family:monospace;font-size:.75rem">${ev.session_id||"—"}</span></div>
+        <div class="policy-detail-row"><span class="policy-detail-key">Source Module</span><span class="policy-detail-val">${ev.source_module||"—"}</span></div>
+        <div class="policy-detail-row"><span class="policy-detail-key">Timestamp</span><span class="policy-detail-val">${ts(ev.timestamp||ev.ts)}</span></div>
+      </div>
+    </div>`;
+  }
+
   if (drwBody) drwBody.innerHTML = `
     <div>
       <div class="drw-section-title">Event Details</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">${fields}</div>
     </div>
+    ${policyDetailHTML}
+    ${playbookTimelineHTML}
     <div>
       <div class="drw-section-title">🧠 What Is This?</div>
       <div class="drw-explain">${explanation}</div>
@@ -2586,32 +2662,57 @@ document.addEventListener("keydown", e => {
 });
 
 // ── Report download — MD + JSON + PDF ────────────────────────
-function downloadReport() {
+function downloadReport(kind, opts) {
+  // Called from panel buttons / top-bar menu: download executive-grade DOCX from backend
+  if (kind) {
+    const routeMap = {
+      compliance:  "compliance.docx",
+      incidents:   "incidents.docx",
+      sbom:        "sbom.docx",
+      dlp:         "dlp.docx",
+      "rbac-audit":"rbac-audit.docx",
+      executive:   "executive.docx",
+    };
+    const route = routeMap[kind];
+    if (!route) { showToast(`Unknown report kind: ${kind}`, "warning"); return; }
+    let url = `${API_BASE}/api/reports/${route}`;
+    if (opts && opts.framework) url += `?framework=${encodeURIComponent(opts.framework)}`;
+    showToast(`⏳ Generating ${kind} report… please wait`, "info", 5000);
+    fetch(url)
+      .then(res => {
+        if (!res.ok) return res.json().then(e => { throw new Error(e.error || res.statusText); });
+        return res.blob();
+      })
+      .then(blob => {
+        const date = new Date().toISOString().slice(0,10);
+        const fw   = opts && opts.framework ? `_${opts.framework}` : "";
+        const fname = `IntegriShield_${kind}${fw}_${date}.docx`;
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = fname;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        showToast(`📄 ${fname} downloaded successfully`, "success", 5000);
+      })
+      .catch(err => showToast(`Report error: ${err.message}`, "error", 6000));
+    return;
+  }
+  // Legacy: drawer-level report (markdown + JSON + PDF)
   const ctx = window._drwCtx; if (!ctx) { showToast("No event context","warning"); return; }
   const { type, ev } = ctx;
   const stamp       = new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
   const scenarioTag = (ev.scenario||type).replace(/[^a-z0-9_-]/gi,"_").toLowerCase();
   const base        = `IntegriShield_${type}_${scenarioTag}_${stamp}`;
-
-  // 1 — Markdown
   const md = _buildReportMarkdown(type, ev);
   _dlBlob(md, `${base}.md`, "text/markdown");
-
-  // 2 — JSON
   const jsonData = {
-    report_id:    base,
-    generated_at: new Date().toISOString(),
-    operator:     _getOperator() || "anonymous",
-    drawer_type:  type,
-    scenario:     ev.scenario || type,
-    event:        ev,
-    receipts:     _loadActionReceipts(`${type}-${ev.ts || ""}`),
+    report_id: base, generated_at: new Date().toISOString(),
+    operator: _getOperator() || "anonymous", drawer_type: type,
+    scenario: ev.scenario || type, event: ev,
+    receipts: _loadActionReceipts(`${type}-${ev.ts || ""}`),
   };
   _dlBlob(JSON.stringify(jsonData, null, 2), `${base}.json`, "application/json");
-
-  // 3 — PDF via hidden print iframe
   _printReportPDF(type, ev, md, base);
-
   showToast(`📄 Report bundle downloaded — MD + JSON + PDF`, "success", 4500);
 }
 
@@ -3995,22 +4096,23 @@ function renderPolicy() {
     return `<span class="${cls}">${dec}</span>`;
   };
 
-  list.innerHTML = v.map(d => {
+  list.innerHTML = v.map((d, i) => {
+    const realIdx = policyDecisions.indexOf(d);
     const mod = d.modified_args ? `<div class="alert-item-meta" style="color:var(--amber)">Modified args: ${JSON.stringify(d.modified_args)}</div>` : "";
-    return `<li class="alert-item sev-${d.decision === "DENY" ? "critical" : d.decision === "MODIFY" ? "medium" : "low"}">
+    return `<li class="alert-item sev-${d.decision === "DENY" ? "critical" : d.decision === "MODIFY" ? "medium" : "low"}" onclick="showItemDetail('policy',${realIdx})" style="cursor:pointer">
       <div class="alert-item-row">
         ${decBadge(d.decision)}
         <code style="font-size:.78rem;margin-left:6px">${d.tool_name}</code>
+        <code style="font-size:.70rem;margin-left:6px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:3px">${d.rule_id||"R-DEFAULT"}</code>
         <span style="margin-left:auto;font-size:.72rem;color:var(--text-dim)">${ts(d.timestamp)}</span>
       </div>
       <div class="alert-item-meta">
         User: <strong>${d.user_id}</strong> · Role: <code style="font-size:.72rem">${d.role}</code>
-        · Rule: <code style="font-size:.72rem">${d.rule_id}</code>
         · Source: ${d.source_module}
-        · <span style="font-size:.72rem;color:var(--text-dim)">${d.session_id}</span>
       </div>
-      <div class="alert-item-meta" style="color:var(--text-dim)">${d.reason}</div>
+      <div class="alert-item-meta" style="color:var(--text-dim);font-size:.72rem">${d.reason}</div>
       ${mod}
+      <div class="alert-item-meta" style="margin-top:3px">${CLICK_HINT}</div>
     </li>`;
   }).join("");
 }

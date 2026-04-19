@@ -1,9 +1,10 @@
-"""Report generator — builds JSON and CSV compliance reports."""
+"""Report generator — builds JSON, CSV, and DOCX compliance reports."""
 
 from __future__ import annotations
 
 import csv
 import io
+import textwrap
 import uuid
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -91,3 +92,42 @@ class ReportGenerator:
                 ctrl.get("last_violation_at", ""),
             ])
         return output.getvalue()
+
+    def get_docx(self, report_id: str) -> bytes | None:
+        """Generate a polished DOCX compliance report using the shared report builder."""
+        report = self._reports.get(report_id)
+        if report is None:
+            return None
+
+        try:
+            from integrishield.m07.services._docx_builder import build_m07_docx
+            return build_m07_docx(report)
+        except Exception:
+            return self._get_docx_fallback(report)
+
+    def _get_docx_fallback(self, report: dict) -> bytes:
+        """Minimal DOCX fallback when the full builder is unavailable."""
+        try:
+            from docx import Document
+            from docx.shared import Pt, RGBColor
+            doc = Document()
+            fw  = report.get("framework", "Unknown")
+            doc.add_heading(f"{fw} Compliance Report", level=0)
+            doc.add_paragraph(f"Generated: {report.get('generated_at', '')}")
+            doc.add_paragraph(f"Tenant: {report.get('tenant_id', 'N/A')}")
+            summary = report.get("summary", {})
+            doc.add_heading("Summary", level=1)
+            for k, v in summary.items():
+                doc.add_paragraph(f"{k}: {v}", style="List Bullet")
+            doc.add_heading("Controls", level=1)
+            for ctrl in report.get("controls", []):
+                doc.add_paragraph(
+                    f"{ctrl['control_id']} — {ctrl['title']} — {ctrl['status'].upper()}",
+                    style="List Bullet",
+                )
+            buf = io.BytesIO()
+            doc.save(buf)
+            buf.seek(0)
+            return buf.read()
+        except Exception:
+            return b""
