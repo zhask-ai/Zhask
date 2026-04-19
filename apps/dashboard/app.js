@@ -1056,7 +1056,7 @@ const PILL_MAP = {
   "m09-dlp":"m09","m10-incident-response":"m10",
   "m11-shadow-integration":"m11","m12-rules-engine":"m12",
   "m13-sbom-scanner":"m13","m14-webhook-gateway":"m14",
-  "m15-multicloud-ispm":"m15",
+  "m15-multicloud-ispm":"m15","m16-mcp-security-layer":"m16",
 };
 function updatePills(mods) {
   for (const [mod,id] of Object.entries(PILL_MAP)) {
@@ -1082,6 +1082,7 @@ const ALL_MODS = {
   "m04-zero-trust-fabric":{dev:"Infrastructure",type:"FastAPI"},
   "m05-sap-mcp-suite":{dev:"Infrastructure",type:"FastAPI"},
   "m15-multicloud-ispm":{dev:"Infrastructure",type:"FastAPI"},
+  "m16-mcp-security-layer":{dev:"Infrastructure",type:"FastAPI"},
 };
 function renderModuleGrid(mods) {
   if (!ui.moduleGrid) return;
@@ -2292,7 +2293,7 @@ async function runDrwActionPhased(actionId, idx) {
   _showActionProgress([]);
   let result;
   try {
-    const resp = await fetch("/api/actions", {
+    const resp = await fetch(`${API_BASE}/api/actions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ drawer_type: type, action_id: actionId, event: ev, operator }),
@@ -2472,7 +2473,7 @@ function showToastWithUndo(message, type, duration, undoToken, undoLabel) {
 async function _undoAction(token, toastEl) {
   toastEl?.remove();
   try {
-    const resp = await fetch("/api/actions/undo", {
+    const resp = await fetch(`${API_BASE}/api/actions/undo`, {
       method: "POST", headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ undo_token: token }),
     });
@@ -2542,7 +2543,7 @@ async function renderActionLog() {
     const params = new URLSearchParams({ limit: "100" });
     if (typeFilter)  params.set("type",  typeFilter);
     if (actorFilter) params.set("actor", actorFilter);
-    const resp = await fetch(`/api/actions?${params}`);
+    const resp = await fetch(`${API_BASE}/api/actions?${params}`);
     const data = await resp.json();
     const rows = data.actions || [];
     if (emptyEl) emptyEl.classList.toggle("hidden", rows.length > 0);
@@ -2845,8 +2846,9 @@ function demoAction(action, param) {
 
 // ── Auto-Tour ─────────────────────────────────────────────────
 let autoTourInterval = null, autoTourIdx = 0, autoTourActive = false;
-const TOUR_TABS = ['alerts','gateway','anomalies','rules','dlp','credentials',
-  'shadow','compliance','incidents','sbom','zero-trust','sap','cloud'];
+const TOUR_TABS = ['launcher','alerts','audit','gateway','anomalies','rules','dlp',
+  'credentials','shadow','compliance','incidents','sbom','zero-trust','sap','cloud',
+  'connectors','traffic','webhooks','policy','cve-feed','webhook-dlq'];
 
 function toggleAutoTour() {
   if (autoTourActive) {
@@ -2969,7 +2971,7 @@ const palette       = $("command-palette");
 const paletteInput  = $("palette-input");
 const paletteResults= $("palette-results");
 const CMDS = [
-  {label:"Alerts Feed",     tab:"alerts",      icon:"🔔",kw:"alerts feed overview"},
+  {label:"Alerts Feed",     tab:"alerts",       icon:"🔔",kw:"alerts feed overview"},
   {label:"Audit Log",       tab:"audit",        icon:"📋",kw:"audit log trail"},
   {label:"M01 Gateway",     tab:"gateway",      icon:"🛡️",kw:"m01 gateway api rfc"},
   {label:"M08 Anomaly",     tab:"anomalies",    icon:"🧠",kw:"m08 anomaly ml"},
@@ -2984,6 +2986,12 @@ const CMDS = [
   {label:"M06 Credentials", tab:"credentials",  icon:"🔑",kw:"m06 credential vault"},
   {label:"M15 Cloud",       tab:"cloud",        icon:"☁️",kw:"m15 cloud aws gcp azure"},
   {label:"⚡ Launcher",     tab:"launcher",     icon:"⚡",kw:"launcher start stop module"},
+  {label:"M02 Connectors",  tab:"connectors",   icon:"🔗",kw:"m02 connector sentinel integration"},
+  {label:"M14 Webhooks",    tab:"webhooks",     icon:"🪝",kw:"m14 webhook gateway subscription"},
+  {label:"M03 Traffic",     tab:"traffic",      icon:"📡",kw:"m03 traffic analyzer rfc flow"},
+  {label:"M16 MCP Policy",  tab:"policy",       icon:"🔏",kw:"m16 mcp policy decisions rbac"},
+  {label:"CVE Feed",        tab:"cve-feed",     icon:"🛡",kw:"cve nvd osv vulnerability feed"},
+  {label:"Webhook DLQ",     tab:"webhook-dlq",  icon:"🗂",kw:"webhook dead letter queue retry"},
 ];
 let palIdx=0, palFiltered=[...CMDS];
 
@@ -3699,29 +3707,55 @@ async function sendChatMessage() {
 
   // Typing indicator
   const typingId = "chat-typing-" + Date.now();
-  msgs.innerHTML += `<div class="chat-msg typing" id="${typingId}">Claude is thinking…</div>`;
+  msgs.innerHTML += `<div class="chat-msg typing" id="${typingId}">Analyzing…</div>`;
   msgs.scrollTop = msgs.scrollHeight;
 
   if (send) send.disabled = true;
   chatHistory.push({ role: "user", content: text });
 
-  // Simulate realistic "thinking" latency then respond from local engine
-  const delay = 600 + Math.floor(Math.random() * 700);
-  await new Promise(r => setTimeout(r, delay));
+  let answerText = "";
+  let answerTools = [];
 
-  const answer = _chatLocalAnswer(text);
+  try {
+    // Attempt to call the backend chat API (uses Claude when configured)
+    const resp = await fetch(`${API_BASE}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, history: chatHistory.slice(-10) }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.status !== "degraded" && data.response) {
+        answerText = data.response;
+        answerTools = data.tools_used || [];
+      } else {
+        // Backend degraded (no API key) — fall back to local
+        const local = _chatLocalAnswer(text);
+        answerText = local.text;
+        answerTools = local.tools || [];
+      }
+    } else {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+  } catch (_) {
+    // Backend unreachable — fall back to local pattern-matching engine
+    const local = _chatLocalAnswer(text);
+    answerText = local.text;
+    answerTools = local.tools || [];
+  }
+
   const typing = $(typingId);
   if (typing) typing.remove();
 
   let toolHtml = "";
-  if (answer.tools && answer.tools.length) {
+  if (answerTools.length) {
     toolHtml = `<div style="margin-bottom:.4rem;display:flex;flex-wrap:wrap;gap:.2rem">` +
-      answer.tools.map(t => `<span class="chat-tool-pill">⚙ ${t}</span>`).join("") +
+      answerTools.map(t => `<span class="chat-tool-pill">⚙ ${t}</span>`).join("") +
       `</div>`;
   }
-  const body = escHtml(answer.text).replace(/\n/g, "<br>");
+  const body = escHtml(answerText).replace(/\n/g, "<br>");
   msgs.innerHTML += `<div class="chat-msg assistant">${toolHtml}${body}</div>`;
-  chatHistory.push({ role: "assistant", content: answer.text });
+  chatHistory.push({ role: "assistant", content: answerText });
 
   msgs.scrollTop = msgs.scrollHeight;
   if (send) send.disabled = false;
@@ -3739,6 +3773,7 @@ function exportCSV(type) {
     sap: sapEvents, compliance: compEvents, incidents: incEvents, sbom: sbomEvents,
     rules: alerts, zt: ztEvents, credentials: credEvents, cloud: cloudEvents,
     gateway: alerts, connectors: connEvents, traffic: trafficEvents, webhooks: webhookEvents,
+    policy: policyDecisions, cve: (cveFeedData?.top_cves || []), dlq: (dlqData?.entries || []),
   };
   const arr = arrMap[type] || [];
   if (!arr.length) { showToast("No data to export", "warning", 2000); return; }
@@ -4156,7 +4191,6 @@ async function retryDlqEntry(deliveryId) {
 }
 
 // ── Wire new tabs into renderActiveTab ───────────────────────────
-const _origRenderActiveTab = renderActiveTab;
 // Extend renderActiveTab to include new tabs
 {
   const origMap = {
