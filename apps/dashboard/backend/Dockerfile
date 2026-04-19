@@ -9,6 +9,11 @@ COPY . /workspace
 
 ENV PYTHONPATH=/workspace
 
+# Demo POC defaults — no Redis / microservices required; synthetic feeds + stubs
+ENV INTEGRISHIELD_POC_MODE=1
+ENV DEMO_GENERATOR=1
+ENV M16_SERVICE_URL=
+
 EXPOSE 8787
 
 # Allow PORT override from hosting platform (Render, Railway, etc.)

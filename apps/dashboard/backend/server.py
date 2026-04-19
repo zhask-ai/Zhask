@@ -54,8 +54,11 @@ REDIS_URL          = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 REDIS_START_ID     = os.getenv("REDIS_START_ID", "0")
 DATABASE_URL       = os.getenv("DATABASE_URL", "")
 SERVER_PORT        = int(os.getenv("PORT", "8787"))
-M16_SERVICE_URL    = os.getenv("M16_SERVICE_URL", "http://localhost:8016")
+# Microservice URLs — empty = skip HTTP proxy; dashboard uses built-in demo data (POC).
+M16_SERVICE_URL    = os.getenv("M16_SERVICE_URL", "").strip()
 WEBHOOK_SECRET     = os.getenv("WEBHOOK_SECRET", "")
+# Default True: demo POC — Redis/modules optional; synthetic data + stubs keep UI alive.
+POC_DEMO_MODE      = os.getenv("INTEGRISHIELD_POC_MODE", "1").lower() in {"1", "true", "yes", "on"}
 # Simple in-memory rate limiter for webhook intake: max N requests per window
 _WEBHOOK_RL_MAX    = int(os.getenv("WEBHOOK_RL_MAX", "60"))
 _WEBHOOK_RL_WINDOW = int(os.getenv("WEBHOOK_RL_WINDOW", "60"))
@@ -101,21 +104,88 @@ ENABLE_DEMO_GENERATOR = os.getenv("DEMO_GENERATOR", "1") not in ("0", "false", "
 
 
 # ──────────────────────────────────────────────────────────────
-# Load M12 rules engine (from the installable package)
+# Load M12 rules engine (full package) or demo stub — POC never hard-fails startup
 # ──────────────────────────────────────────────────────────────
 
+RULES_ENGINE_MODE = "unknown"
+
+
+def _demo_stub_evaluate_event(event: dict) -> dict | None:
+    """Lightweight rules used when M12 package is unavailable (demo / slim images)."""
+    from datetime import datetime, timezone
+
+    try:
+        bo = int(event.get("bytes_out", 0))
+    except (TypeError, ValueError):
+        bo = 0
+    oh = _to_bool(event.get("off_hours", False))
+    unk = _to_bool(event.get("unknown_endpoint", False))
+    if bo > 10_000_000:
+        return {
+            "event_id": event.get("event_id"),
+            "scenario": "bulk-extraction",
+            "severity": "critical",
+            "detail": "Bulk transfer (demo stub)",
+            "source_ip": event.get("source_ip", ""),
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "source_module": "m12-rules-engine-demo",
+        }
+    if oh:
+        return {
+            "event_id": event.get("event_id"),
+            "scenario": "off-hours-rfc",
+            "severity": "medium",
+            "detail": "Off-hours activity (demo stub)",
+            "source_ip": event.get("source_ip", ""),
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "source_module": "m12-rules-engine-demo",
+        }
+    if unk:
+        return {
+            "event_id": event.get("event_id"),
+            "scenario": "shadow-endpoint",
+            "severity": "critical",
+            "detail": "Unknown endpoint (demo stub)",
+            "source_ip": event.get("source_ip", ""),
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "source_module": "m12-rules-engine-demo",
+        }
+    return None
+
+
+def _demo_stub_alert_message(alert: dict) -> str:
+    scenario = alert.get("scenario", "unknown")
+    detail = alert.get("detail", "")
+    return f"{scenario}: {detail}" if detail else f"{scenario} (demo stub)"
+
+
+class _DemoRulesEngine:
+    evaluate_event = staticmethod(_demo_stub_evaluate_event)
+    alert_message = staticmethod(_demo_stub_alert_message)
+
+
 def _load_rules_engine():
-    """Import the M12 services package, adding its src/ tree to sys.path."""
+    """Import full M12 package when present; otherwise use embedded demo stub."""
+    global RULES_ENGINE_MODE
     pkg_src = str(_M12_PKG_SRC)
     if pkg_src not in sys.path:
         sys.path.insert(0, pkg_src)
     try:
         import importlib as _il
+
         mod = _il.import_module("integrishield.m12.services")
-        # Re-export evaluate_event and alert_message at the module level
+        RULES_ENGINE_MODE = "m12-package"
+        logger.info("Rules engine: full M12 package loaded")
         return mod
     except Exception as exc:
-        raise RuntimeError(f"Cannot import M12 rules engine package: {exc}") from exc
+        RULES_ENGINE_MODE = "demo-stub"
+        logger.warning(
+            "Rules engine: using embedded demo stub (M12 package not importable: %s). "
+            "This is normal for POC / demo deployments.",
+            exc,
+        )
+        return _DemoRulesEngine()
+
 
 rules_engine = _load_rules_engine()
 
@@ -881,6 +951,8 @@ def _handle_chat(body: dict) -> dict:
 
 def _proxy_get(url: str) -> dict | None:
     """GET the URL and return the parsed JSON, or None if unavailable."""
+    if not url or not str(url).startswith("http"):
+        return None
     try:
         import urllib.request
         with urllib.request.urlopen(url, timeout=2) as resp:
@@ -891,6 +963,8 @@ def _proxy_get(url: str) -> dict | None:
 
 def _proxy_post(url: str, body: dict) -> dict | None:
     """POST JSON body to the URL and return the parsed JSON, or None if unavailable."""
+    if not url or not str(url).startswith("http"):
+        return None
     try:
         import urllib.request
         data = json.dumps(body).encode("utf-8")
@@ -1046,11 +1120,13 @@ class Handler(BaseHTTPRequestHandler):
                 logger.warning("Webhook rate limit exceeded for source=%s", source)
                 self._json(429, {"error": "rate_limit_exceeded", "source": source}); return
 
-            # Signature verification
-            raw_body = self.rfile.read(0)  # body already read above; use cached bytes
+            # Signature verification (POC without WEBHOOK_SECRET accepts any POST for demos)
             sig = self.headers.get("X-Signature") or self.headers.get("X-Hub-Signature-256") or ""
             body_bytes_for_hmac = json.dumps(body, separators=(",", ":"), sort_keys=True).encode("utf-8")
-            sig_valid = _webhook_verify_signature(body_bytes_for_hmac, sig)
+            if POC_DEMO_MODE and not WEBHOOK_SECRET:
+                sig_valid = True
+            else:
+                sig_valid = _webhook_verify_signature(body_bytes_for_hmac, sig)
             result = "accepted" if sig_valid else "rejected"
             if not sig_valid:
                 reason = "missing signature" if not sig else "invalid signature"
@@ -1098,7 +1174,11 @@ class Handler(BaseHTTPRequestHandler):
         # ── Health ──────────────────────────────────────────────
         if path == "/api/health":
             self._json(200, {
-                "status":              "ok" if state["redis_connected"] else "degraded",
+                "status":              "ok" if state["redis_connected"] or POC_DEMO_MODE else "degraded",
+                "demo_poc":            POC_DEMO_MODE,
+                "rules_engine":        RULES_ENGINE_MODE,
+                "demo_generator":      ENABLE_DEMO_GENERATOR,
+                "m16_proxy_configured": bool(M16_SERVICE_URL),
                 "redis_url":           REDIS_URL,
                 "redis_connected":     state["redis_connected"],
                 "streams_active":      state["streams_active"],

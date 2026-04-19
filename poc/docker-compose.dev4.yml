@@ -12,6 +12,9 @@ services:
     image: integrishield-dashboard-backend
     container_name: integrishield-dashboard-backend
     environment:
+      INTEGRISHIELD_POC_MODE: "1"
+      DEMO_GENERATOR: "1"
+      M16_SERVICE_URL: ""
       REDIS_URL: redis://redis:6379/0
       REDIS_STREAM_KEY: integrishield:api_call_events
       REDIS_START_ID: "$"
