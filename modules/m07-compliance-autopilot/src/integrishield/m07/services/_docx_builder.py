@@ -8,7 +8,8 @@ from datetime import datetime, timezone
 
 def build_m07_docx(report: dict) -> bytes:
     """Build a polished DOCX from a pre-generated report dict."""
-    import sys, os
+    import sys
+    import os
     # Allow importing report_builder from dashboard backend (dev environment).
     # In production the builder would be a shared package; here we locate it dynamically.
     _here = os.path.dirname(os.path.abspath(__file__))
