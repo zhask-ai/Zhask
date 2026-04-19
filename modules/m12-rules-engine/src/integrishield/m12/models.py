@@ -20,6 +20,11 @@ class Scenario(str, Enum):
     BULK_EXTRACTION = "bulk-extraction"
     OFF_HOURS_RFC = "off-hours-rfc"
     SHADOW_ENDPOINT = "shadow-endpoint"
+    VELOCITY_ANOMALY = "velocity-anomaly"
+    PRIVILEGE_ESCALATION = "privilege-escalation"
+    GEO_ANOMALY = "geo-anomaly"
+    DATA_STAGING = "data-staging"
+    CREDENTIAL_ABUSE = "credential-abuse"
 
 
 # ---------------------------------------------------------------------------
@@ -65,10 +70,13 @@ class EvaluateRequest(BaseModel):
     off_hours: bool = False
     unknown_endpoint: bool = False
     source_ip: str = ""
+    rfc_function: str = ""
+    account_type: str = ""
+    credential_id: str = ""
 
 
 class EvaluateResponse(BaseModel):
-    alert: Alert | None = None
+    alert: dict | None = None
     matched: bool = False
 
 
