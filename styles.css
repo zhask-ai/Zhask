@@ -11,27 +11,27 @@
 :root {
   color-scheme: light dark;
 
-  /* ─── Light Mode Definitions (Default) ─── */
-  --bg:              #f8fafc;
-  --bg-raised:       #f1f5f9;
-  --bg-glass:        rgba(255, 255, 255, 0.85);
-  --bg-glass-2:      rgba(241, 245, 249, 0.7);
+  /* ─── Light Mode Definitions (Default) — refined SaaS palette ─── */
+  --bg:              #f6f8fb;
+  --bg-raised:       #eef2f7;
+  --bg-glass:        rgba(255, 255, 255, 0.92);
+  --bg-glass-2:      rgba(246, 248, 251, 0.78);
   --bg-card:         #ffffff;
-  --panel:           rgba(255, 255, 255, 0.95);
-  --panel-hover:     #f8fafc;
-  --panel-active:    #e2e8f0;
+  --panel:           #ffffff;
+  --panel-hover:     #f3f6fb;
+  --panel-active:    #e6ecf4;
 
-  --border:          rgba(203, 213, 225, 0.6);
-  --border-subtle:   rgba(203, 213, 225, 0.3);
-  --border-glow:     rgba(59, 130, 246, 0.15);
-  --border-hover:    rgba(148, 163, 184, 0.5);
+  --border:          #dfe4ec;
+  --border-subtle:   #e7ebf2;
+  --border-glow:     rgba(37, 99, 235, 0.18);
+  --border-hover:    #c4cdd9;
 
-  --text-hi:         #0f172a;
-  --text:            #334155;
-  --text-mid:        #475569;
-  --text-muted:      #64748b;
-  --text-dim:        #94a3b8;
-  --text-faint:      #cbd5e1;
+  --text-hi:         #0b1220;
+  --text:            #1f2a3d;
+  --text-mid:        #3a4757;
+  --text-muted:      #5a6676;
+  --text-dim:        #7a8594;
+  --text-faint:      #b8c0cc;
 
   --critical:        #ef4444;
   --warning:         #f59e0b;
@@ -67,10 +67,10 @@
   --gcp:             #4285f4;
   --azure:           #00a4ef;
 
-  --shadow-sm:       0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md:       0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg:       0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-  --shadow-glow:     0 0 12px rgba(37, 99, 235, 0.05);
+  --shadow-sm:       0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+  --shadow-md:       0 4px 10px -2px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg:       0 12px 24px -6px rgba(15, 23, 42, 0.10), 0 6px 10px -6px rgba(15, 23, 42, 0.06);
+  --shadow-glow:     0 0 0 3px rgba(37, 99, 235, 0.08);
 
   /* ─── Dimensions ─── */
   --sidebar-w:       200px;
@@ -390,10 +390,10 @@ body::after {
    SIDEBAR — Glass, 240px, gradient indicators
    ═══════════════════════════════════════════════════════ */
 .sidebar {
-  background: rgba(8, 12, 20, 0.6);
+  background: #ffffff;
   backdrop-filter: blur(24px) saturate(1.2);
   -webkit-backdrop-filter: blur(24px) saturate(1.2);
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border);
   padding: 0.5rem 0.4rem 1rem;
   overflow-y: auto;
   overflow-x: hidden;
@@ -3109,3 +3109,196 @@ tbody tr:hover {
 .badge-allow  { background: rgba(34,197,94,.15);  color: #22c55e; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 700; }
 .badge-deny   { background: rgba(239,68,68,.15);  color: #ef4444; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 700; }
 .badge-modify { background: rgba(234,179,8,.15);  color: #eab308; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 700; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LIGHT THEME POLISH — Modern SaaS refinement (Stripe/Linear/Notion feel)
+   Scoped so dark mode is unaffected.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Dark-mode sidebar restore (was hardcoded dark before) */
+[data-theme="dark"] .sidebar {
+  background: rgba(8, 12, 20, 0.6);
+  border-right-color: var(--border-subtle);
+}
+
+/* Typography — tighter hierarchy, stronger weights for headings */
+body {
+  font-feature-settings: "cv11", "ss01", "ss03";
+  letter-spacing: -0.005em;
+}
+h1, h2, h3, h4 { letter-spacing: -0.018em; color: var(--text-hi); }
+
+/* Topbar — crisper light-mode glass */
+:root:not([data-theme="dark"]) .topbar {
+  background: rgba(255, 255, 255, 0.88);
+  border-bottom-color: var(--border);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+/* Sidebar polish — better spacing, crisper hover/active */
+:root:not([data-theme="dark"]) .nav-btn {
+  color: var(--text-mid);
+  font-weight: 500;
+  padding: 0.44rem 0.65rem;
+  border-radius: 8px;
+}
+:root:not([data-theme="dark"]) .nav-btn:hover {
+  background: #eef3fb;
+  color: var(--text-hi);
+}
+:root:not([data-theme="dark"]) .nav-btn.active {
+  background: #e6efff;
+  color: #1d4ed8;
+  border-color: transparent;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+}
+:root:not([data-theme="dark"]) .nav-btn.active::before {
+  background: #2563eb;
+  box-shadow: 0 0 0 rgba(0,0,0,0);
+}
+:root:not([data-theme="dark"]) .nav-group-label {
+  color: var(--text-dim);
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+}
+:root:not([data-theme="dark"]) .nav-chip {
+  background: #f3f5f9;
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+/* Stat cards — softer shadow, refined radius, crisper hover */
+:root:not([data-theme="dark"]) .card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+:root:not([data-theme="dark"]) .card:hover {
+  transform: translateY(-2px);
+  border-color: #d4dbe5;
+  box-shadow: 0 8px 20px -6px rgba(15, 23, 42, 0.10), 0 2px 4px rgba(15, 23, 42, 0.04);
+}
+:root:not([data-theme="dark"]) .card h2 {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Panels + chart panels — lifted surfaces */
+:root:not([data-theme="dark"]) .panel,
+:root:not([data-theme="dark"]) .chart-panel {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+:root:not([data-theme="dark"]) .panel:hover,
+:root:not([data-theme="dark"]) .chart-panel:hover {
+  border-color: #d4dbe5;
+  box-shadow: 0 6px 16px -6px rgba(15, 23, 42, 0.10), 0 2px 4px rgba(15, 23, 42, 0.04);
+}
+:root:not([data-theme="dark"]) .panel h2,
+:root:not([data-theme="dark"]) .panel-title-row h2 {
+  color: var(--text-mid);
+  font-weight: 600;
+}
+
+/* Buttons — unified premium style (action + drawer) */
+:root:not([data-theme="dark"]) .action-btn {
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.18);
+  transition: transform .12s ease, box-shadow .15s ease, background .15s ease;
+}
+:root:not([data-theme="dark"]) .action-btn:hover {
+  background: #1d4ed8;
+  box-shadow: 0 4px 10px -2px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+:root:not([data-theme="dark"]) .drw-btn {
+  border-radius: 8px;
+  font-weight: 600;
+  transition: transform .12s ease, box-shadow .15s ease, background .15s ease;
+}
+:root:not([data-theme="dark"]) .drw-btn--neutral {
+  background: #ffffff;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+:root:not([data-theme="dark"]) .drw-btn--neutral:hover {
+  background: #f3f6fb;
+  color: var(--text-hi);
+  border-color: var(--border-hover);
+}
+
+/* Badges / pills — crisper light-mode ink */
+:root:not([data-theme="dark"]) .badge-poc {
+  background: rgba(37, 99, 235, 0.10);
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.22);
+}
+:root:not([data-theme="dark"]) .badge-sprint {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.25);
+}
+:root:not([data-theme="dark"]) .health-pills {
+  background: #ffffff;
+  border-color: var(--border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+/* Logo icon — gradient tile */
+:root:not([data-theme="dark"]) .logo-icon {
+  background: linear-gradient(135deg, #2563eb, #60a5fa);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.30);
+  color: #fff;
+}
+
+/* Keyboard chips — light mode friendly */
+:root:not([data-theme="dark"]) kbd {
+  background: #f3f5f9;
+  color: var(--text-mid);
+  border-color: var(--border);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+}
+
+/* Scrollbar — softer */
+:root:not([data-theme="dark"]) .sidebar::-webkit-scrollbar-thumb {
+  background: #d7dde6;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CLAUDE AI ASSISTANT — cat icon (user-provided asset)
+   ═══════════════════════════════════════════════════════ */
+.chat-fab {
+  background: #0b1220 !important;
+  background-image: url('./assets/ai-assistant.png') !important;
+  background-size: cover !important;
+  background-position: center !important;
+  color: transparent !important;
+  font-size: 0 !important;
+  border: 2px solid rgba(76, 130, 247, 0.35) !important;
+  box-shadow: 0 6px 22px rgba(37, 99, 235, 0.28) !important;
+}
+.chat-fab:hover {
+  box-shadow: 0 8px 30px rgba(37, 99, 235, 0.45) !important;
+}
+.chat-header-icon {
+  display: inline-block;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background-image: url('./assets/ai-assistant.png');
+  background-size: cover;
+  background-position: center;
+  font-size: 0 !important;
+  color: transparent !important;
+  border: 1.5px solid rgba(76, 130, 247, 0.35);
+  flex-shrink: 0;
+}
