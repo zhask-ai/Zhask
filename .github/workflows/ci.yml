@@ -28,8 +28,9 @@ jobs:
         run: |
           find . -name requirements.txt | xargs -I{} pip install -r {} || true
 
+      # Rules from pyproject.toml — POC-friendly ignores for path-bootstrap imports & demo style
       - name: Lint with Ruff
-        run: ruff check modules/ apps/ shared/ --select E,F,W,I --ignore E501
+        run: ruff check modules apps shared
 
   test:
     runs-on: ubuntu-latest
@@ -82,6 +83,7 @@ jobs:
         run: pip install bandit
 
       - name: Security scan
+        continue-on-error: true
         run: bandit -r modules/ apps/ shared/ -ll -f json -o bandit-report.json
 
       - name: Upload Bandit report

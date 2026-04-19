@@ -18,14 +18,15 @@ Subscribes to ALL 12 module Redis streams:
 
 import hashlib
 import hmac
-import importlib.util
 import json
 import logging
 import os
+import random
 import subprocess
 import sys
 import threading
 import time
+import uuid as _uuid
 from collections import deque
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -572,7 +573,6 @@ def _execute_sap_tool(tool_name: str, tool_input: dict) -> dict:
     with LOCK:
         alerts_snap    = list(ALERTS)[:50]
         anomalies_snap = list(ANOMALIES)[:30]
-        sap_snap       = list(SAP_EVENTS)[:30]
         shadow_snap    = list(SHADOW)[:20]
 
     if tool_name == "query_events":
@@ -674,8 +674,6 @@ def _execute_sap_tool(tool_name: str, tool_input: dict) -> dict:
 # M16 Policy Decisions — demo data
 # ──────────────────────────────────────────────────────────────
 
-import random, uuid as _uuid
-
 _M16_DEMO_USERS = [
     ("alice.soc@corp.com", "SOC_ADMIN"),
     ("bob.analyst@corp.com", "SOC_ANALYST"),
@@ -711,7 +709,6 @@ _M16_RULES = [
 ]
 
 def _m16_seed_demo() -> None:
-    import time as _time
     from datetime import timedelta
     now = datetime.now(timezone.utc)
     demo_decisions = [
@@ -921,7 +918,6 @@ def _handle_chat(body: dict) -> dict:
         if resp.stop_reason == "tool_use":
             # Collect all tool use blocks
             tool_results = []
-            assistant_content = [b.__dict__ if hasattr(b, "__dict__") else b for b in resp.content]
             messages.append({"role": "assistant", "content": resp.content})
 
             for block in resp.content:
@@ -1375,7 +1371,6 @@ LAUNCH_CONFIGS: list[dict] = _load_launch_configs()
 LAUNCH_MAP: dict[str, dict] = {c["name"]: c for c in LAUNCH_CONFIGS}
 
 def _proc_status(name: str) -> dict:
-    import time as _time
     with _PROC_LOCK:
         entry = _PROCESSES.get(name)
     if not entry:

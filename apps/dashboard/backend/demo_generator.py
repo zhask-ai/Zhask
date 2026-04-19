@@ -195,10 +195,12 @@ class DemoGenerator:
 
     def _zero_trust(self, api: dict) -> dict:
         policy, decision = random.choice(ZT_POLICIES)
-        if api["scenario"] in ("bulk-extraction","shadow-endpoint"):
-            decision = "BLOCK"; policy = "deny_off_hours_bulk"
+        if api["scenario"] in ("bulk-extraction", "shadow-endpoint"):
+            decision = "BLOCK"
+            policy = "deny_off_hours_bulk"
         elif api["scenario"] == "off-hours-rfc":
-            decision = "MASK"; policy = "require_mfa_sensitive"
+            decision = "MASK"
+            policy = "require_mfa_sensitive"
         return {
             "decision":       decision,
             "policy_matched": policy,
@@ -211,9 +213,12 @@ class DemoGenerator:
     def _credential(self) -> dict:
         ctype, cname, owner, age, days_since_use = random.choice(CREDENTIAL_POOL)
         actions = ["rotate_needed", "stale", "over_privileged", "rotated_ok", "accessed"]
-        if age > 300: action = "rotate_needed"
-        elif days_since_use > 90: action = "stale"
-        else: action = random.choice(actions)
+        if age > 300:
+            action = "rotate_needed"
+        elif days_since_use > 90:
+            action = "stale"
+        else:
+            action = random.choice(actions)
         return {
             "credential_id":  cname,
             "credential_type": ctype,
@@ -337,17 +342,25 @@ class DemoGenerator:
         scenarios = ["off_hours","bulk","shadow"] if scenario == "all" else [scenario]
         for s in scenarios:
             api = self._api_call(s)
-            self.publish("api_calls", api); count += 1
+            self.publish("api_calls", api)
+            count += 1
             alert = self._alert_from(api)
-            self.publish("alerts", alert); count += 1
-            self.publish("anomalies", self._anomaly(api)); count += 1
-            if s in ("bulk","shadow"):
-                self.publish("dlp", self._dlp(api)); count += 1
+            self.publish("alerts", alert)
+            count += 1
+            self.publish("anomalies", self._anomaly(api))
+            count += 1
+            if s in ("bulk", "shadow"):
+                self.publish("dlp", self._dlp(api))
+                count += 1
             if s == "shadow":
-                self.publish("shadow", self._shadow(api)); count += 1
-            self.publish("zero_trust", self._zero_trust(api)); count += 1
-            self.publish("incidents", self._incident(alert)); count += 1
-            self.publish("compliance", self._compliance(alert)); count += 1
+                self.publish("shadow", self._shadow(api))
+                count += 1
+            self.publish("zero_trust", self._zero_trust(api))
+            count += 1
+            self.publish("incidents", self._incident(alert))
+            count += 1
+            self.publish("compliance", self._compliance(alert))
+            count += 1
         return count
 
     # ── Steady-state loop ──────────────────────────────────────

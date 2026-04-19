@@ -71,9 +71,12 @@ def _read_action_log(limit=200, filter_type=None, filter_actor=None, filter_acti
                     continue
                 try:
                     r = json.loads(line)
-                    if filter_type   and r.get("drawer_type") != filter_type:   continue
-                    if filter_actor  and r.get("operator")    != filter_actor:   continue
-                    if filter_action and r.get("action_id_label") != filter_action: continue
+                    if filter_type and r.get("drawer_type") != filter_type:
+                        continue
+                    if filter_actor and r.get("operator") != filter_actor:
+                        continue
+                    if filter_action and r.get("action_id_label") != filter_action:
+                        continue
                     rows.append(r)
                 except Exception:
                     pass
