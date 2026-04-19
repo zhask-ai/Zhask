@@ -2,8 +2,8 @@
 import os
 
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
-INPUT_STREAM: str = os.getenv("INPUT_STREAM", "analyzed_events")
-OUTPUT_STREAM: str = os.getenv("OUTPUT_STREAM", "dlp_alerts")
+INPUT_STREAM: str = os.getenv("INPUT_STREAM", "integrishield:traffic_flow_events")
+OUTPUT_STREAM: str = os.getenv("OUTPUT_STREAM", "integrishield:dlp_alerts")
 CONSUMER_NAME: str = os.getenv("CONSUMER_NAME", "m09-dlp")
 GROUP_NAME: str = os.getenv("GROUP_NAME", "m09-consumers")
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
