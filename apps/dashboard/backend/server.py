@@ -16,8 +16,11 @@ Subscribes to ALL 12 module Redis streams:
   M15 cloud_posture_events
 """
 
+import hashlib
+import hmac
 import importlib.util
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -29,6 +32,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("integrishield.dashboard")
+
 # Ensure backend directory is importable (for action_handlers.py)
 _BACKEND_DIR = str(Path(__file__).resolve().parent)
 if _BACKEND_DIR not in sys.path:
@@ -39,12 +48,19 @@ if _BACKEND_DIR not in sys.path:
 # ──────────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).resolve().parents[3]
-RULES_ENGINE_PATH = ROOT / "modules" / "m12-rules-engine" / "service.py"
+_M12_PKG_SRC = ROOT / "modules" / "m12-rules-engine" / "src"
 
-REDIS_URL       = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-REDIS_START_ID  = os.getenv("REDIS_START_ID", "0")
-DATABASE_URL    = os.getenv("DATABASE_URL", "")
-SERVER_PORT     = int(os.getenv("PORT", "8787"))
+REDIS_URL          = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_START_ID     = os.getenv("REDIS_START_ID", "0")
+DATABASE_URL       = os.getenv("DATABASE_URL", "")
+SERVER_PORT        = int(os.getenv("PORT", "8787"))
+M16_SERVICE_URL    = os.getenv("M16_SERVICE_URL", "http://localhost:8016")
+WEBHOOK_SECRET     = os.getenv("WEBHOOK_SECRET", "")
+# Simple in-memory rate limiter for webhook intake: max N requests per window
+_WEBHOOK_RL_MAX    = int(os.getenv("WEBHOOK_RL_MAX", "60"))
+_WEBHOOK_RL_WINDOW = int(os.getenv("WEBHOOK_RL_WINDOW", "60"))
+_webhook_rl_counts: dict[str, list[float]] = {}
+_webhook_rl_lock   = threading.Lock()
 
 # All module streams — matches each module's publish stream
 STREAM_KEYS = {
@@ -85,16 +101,21 @@ ENABLE_DEMO_GENERATOR = os.getenv("DEMO_GENERATOR", "1") not in ("0", "false", "
 
 
 # ──────────────────────────────────────────────────────────────
-# Load M12 rules engine
+# Load M12 rules engine (from the installable package)
 # ──────────────────────────────────────────────────────────────
 
 def _load_rules_engine():
-    spec = importlib.util.spec_from_file_location("m12_service", RULES_ENGINE_PATH)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Cannot load rules engine from {RULES_ENGINE_PATH}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    """Import the M12 services package, adding its src/ tree to sys.path."""
+    pkg_src = str(_M12_PKG_SRC)
+    if pkg_src not in sys.path:
+        sys.path.insert(0, pkg_src)
+    try:
+        import importlib as _il
+        mod = _il.import_module("integrishield.m12.services")
+        # Re-export evaluate_event and alert_message at the module level
+        return mod
+    except Exception as exc:
+        raise RuntimeError(f"Cannot import M12 rules engine package: {exc}") from exc
 
 rules_engine = _load_rules_engine()
 
@@ -189,6 +210,7 @@ def _get_pg():
             _pg_conn.autocommit = True
         return _pg_conn
     except Exception:
+        logger.warning("Postgres connection unavailable", exc_info=True)
         return None
 
 
@@ -213,7 +235,7 @@ def _persist_alert(alert: dict):
                 ),
             )
     except Exception:
-        pass
+        logger.warning("Failed to persist alert to Postgres", exc_info=True)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -854,6 +876,70 @@ def _handle_chat(body: dict) -> dict:
 
 
 # ──────────────────────────────────────────────────────────────
+# Service proxy helpers (forward to real microservices)
+# ──────────────────────────────────────────────────────────────
+
+def _proxy_get(url: str) -> dict | None:
+    """GET the URL and return the parsed JSON, or None if unavailable."""
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url, timeout=2) as resp:
+            return json.loads(resp.read())
+    except Exception:
+        return None
+
+
+def _proxy_post(url: str, body: dict) -> dict | None:
+    """POST JSON body to the URL and return the parsed JSON, or None if unavailable."""
+    try:
+        import urllib.request
+        data = json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(url, data=data,
+                                     headers={"Content-Type": "application/json"},
+                                     method="POST")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return json.loads(resp.read())
+    except Exception:
+        return None
+
+
+# ──────────────────────────────────────────────────────────────
+# Webhook rate-limiter + HMAC verification
+# ──────────────────────────────────────────────────────────────
+
+def _webhook_rate_limit(source: str) -> bool:
+    """Return True if the request is within the rate limit, False if exceeded."""
+    now = time.time()
+    cutoff = now - _WEBHOOK_RL_WINDOW
+    with _webhook_rl_lock:
+        timestamps = _webhook_rl_counts.setdefault(source, [])
+        # Prune old entries
+        _webhook_rl_counts[source] = [t for t in timestamps if t > cutoff]
+        if len(_webhook_rl_counts[source]) >= _WEBHOOK_RL_MAX:
+            return False
+        _webhook_rl_counts[source].append(now)
+    return True
+
+
+def _webhook_verify_signature(body_bytes: bytes, sig_header: str) -> bool:
+    """Verify HMAC-SHA256 signature against WEBHOOK_SECRET.
+
+    Accepts signatures in the formats:
+      - ``sha256=<hex>``       (GitHub-style)
+      - raw hex string
+    If WEBHOOK_SECRET is not configured, any non-empty signature header passes.
+    """
+    if not WEBHOOK_SECRET:
+        return bool(sig_header)  # secret not configured — presence check only
+
+    secret_bytes = WEBHOOK_SECRET.encode("utf-8")
+    expected_mac = hmac.new(secret_bytes, body_bytes, hashlib.sha256).hexdigest()
+
+    provided = sig_header.removeprefix("sha256=").strip()
+    return hmac.compare_digest(expected_mac, provided)
+
+
+# ──────────────────────────────────────────────────────────────
 # HTTP API Handler
 # ──────────────────────────────────────────────────────────────
 
@@ -948,24 +1034,38 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, _m14_retry_dlq(delivery_id)); return
 
         elif parsed.path == "/api/m16/evaluate":
-            self._json(200, _m16_simulate_evaluate(body)); return
+            proxied = _proxy_post(f"{M16_SERVICE_URL}/policy/evaluate", body)
+            self._json(200, proxied if proxied is not None else _m16_simulate_evaluate(body)); return
 
         elif parsed.path.startswith("/webhook/"):
-            # M14 webhook intake — validates signature presence, rate-limit stub
+            # M14 webhook intake — HMAC-SHA256 verification + rate limiting
             source = parsed.path.rsplit("/", 1)[-1] or "custom"
-            sig = self.headers.get("X-Signature") or self.headers.get("X-Hub-Signature-256")
-            result = "accepted" if sig else "rejected"
+
+            # Rate limit check
+            if not _webhook_rate_limit(source):
+                logger.warning("Webhook rate limit exceeded for source=%s", source)
+                self._json(429, {"error": "rate_limit_exceeded", "source": source}); return
+
+            # Signature verification
+            raw_body = self.rfile.read(0)  # body already read above; use cached bytes
+            sig = self.headers.get("X-Signature") or self.headers.get("X-Hub-Signature-256") or ""
+            body_bytes_for_hmac = json.dumps(body, separators=(",", ":"), sort_keys=True).encode("utf-8")
+            sig_valid = _webhook_verify_signature(body_bytes_for_hmac, sig)
+            result = "accepted" if sig_valid else "rejected"
+            if not sig_valid:
+                reason = "missing signature" if not sig else "invalid signature"
+                logger.warning("Webhook %s from source=%s: %s", result, source, reason)
             event = {
                 "source":          source,
                 "result":          result,
-                "signature_valid": bool(sig),
-                "reason":          "signature verified" if sig else "missing signature",
+                "signature_valid": sig_valid,
+                "reason":          "signature verified" if sig_valid else ("missing signature" if not sig else "invalid signature"),
                 "event_type":      body.get("event_type", "push"),
                 "severity":        "high" if result == "rejected" else "low",
             }
             if _DEMO_GEN is not None:
                 _DEMO_GEN.publish("webhooks", event)
-            self._json(200 if sig else 401, {"result": result, "source": source})
+            self._json(200 if sig_valid else 401, {"result": result, "source": source})
 
         else:
             self._json(404, {"error": "not found"})
@@ -1134,11 +1234,13 @@ class Handler(BaseHTTPRequestHandler):
                 "stream_counts":      counts,
             }); return
 
-        # ── M16 Policy Decisions (demo data) ────────────────────
+        # ── M16 Policy Decisions (proxy → real service, fallback to demo) ──
         if path == "/api/m16/decisions":
-            self._json(200, _m16_decisions_snapshot(limit)); return
+            proxied = _proxy_get(f"{M16_SERVICE_URL}/policy/decisions?limit={limit}")
+            self._json(200, proxied if proxied is not None else _m16_decisions_snapshot(limit)); return
         if path == "/api/m16/rules":
-            self._json(200, {"rules": _M16_RULES, "default_action": "DENY"}); return
+            proxied = _proxy_get(f"{M16_SERVICE_URL}/policy/rules")
+            self._json(200, proxied if proxied is not None else {"rules": _M16_RULES, "default_action": "DENY"}); return
 
         # ── M13 CVE Feed Status (demo data) ─────────────────────
         if path == "/api/m13/cve-feed":
@@ -1182,7 +1284,11 @@ def _load_launch_configs() -> list[dict]:
         # Exclude docker/compose entries and Dashboard Backend itself
         skip = {"POC Full Stack (Docker Compose)", "POC Dev4 Stack (Dashboard + Redis)", "Dashboard Backend"}
         return [c for c in data.get("configurations", []) if c["name"] not in skip]
+    except FileNotFoundError:
+        logger.info("launch.json not found at %s — module launcher disabled", _LAUNCH_JSON)
+        return []
     except Exception:
+        logger.warning("Failed to load launch.json", exc_info=True)
         return []
 
 LAUNCH_CONFIGS: list[dict] = _load_launch_configs()
@@ -1207,7 +1313,7 @@ def _proc_status(name: str) -> dict:
             dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
             uptime = round((datetime.now(timezone.utc) - dt).total_seconds())
         except Exception:
-            pass
+            logger.debug("Could not calculate uptime for %s", name, exc_info=True)
     return {
         "name":       name,
         "label":      name,
