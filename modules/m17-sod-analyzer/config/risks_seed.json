@@ -1,0 +1,42 @@
+[
+  {
+    "risk_id": "SOD-P2P-01",
+    "title": "Create Vendor + Pay Vendor",
+    "severity": "critical",
+    "description": "Same user can create a vendor master record and release payments to it.",
+    "conflicting_tcodes": [["XK01", "FK01", "MK01"], ["F110", "F-53", "F-58"]],
+    "control_ref": "SOX 404 / P2P"
+  },
+  {
+    "risk_id": "SOD-P2P-02",
+    "title": "Post Goods Receipt + Post Invoice",
+    "severity": "high",
+    "description": "Same user can confirm goods received and post the matching invoice.",
+    "conflicting_tcodes": [["MIGO", "MB01"], ["MIRO", "FB60"]],
+    "control_ref": "SOX 404 / P2P"
+  },
+  {
+    "risk_id": "SOD-O2C-01",
+    "title": "Create Customer + Release Credit",
+    "severity": "high",
+    "description": "Same user can create a customer master and release their credit block.",
+    "conflicting_tcodes": [["XD01", "FD01"], ["VKM1", "VKM3"]],
+    "control_ref": "O2C"
+  },
+  {
+    "risk_id": "SOD-HCM-01",
+    "title": "Maintain HR Master + Run Payroll",
+    "severity": "critical",
+    "description": "Same user can edit employee bank data and trigger payroll run.",
+    "conflicting_tcodes": [["PA30", "PA40"], ["PC00_M99_CALC", "PUOC_10"]],
+    "control_ref": "HCM / SOX"
+  },
+  {
+    "risk_id": "SOD-BASIS-01",
+    "title": "Create User + Assign SAP_ALL",
+    "severity": "critical",
+    "description": "Same user can create SAP users and assign the SAP_ALL profile.",
+    "conflicting_tcodes": [["SU01"], ["PFCG", "SU10"]],
+    "control_ref": "Basis / ITGC"
+  }
+]

@@ -250,6 +250,66 @@
       "port": 8015
     },
     {
+      "name": "M17 \u2014 SoD Analyzer",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m17.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8017",
+        "--reload",
+        "--reload-dir",
+        "modules/m17-sod-analyzer/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m17-sod-analyzer/src:shared"
+      },
+      "port": 8017
+    },
+    {
+      "name": "M18 \u2014 Audit Ledger",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m18.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8018",
+        "--reload",
+        "--reload-dir",
+        "modules/m18-ledger/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m18-ledger/src:shared"
+      },
+      "port": 8018
+    },
+    {
+      "name": "M19 \u2014 Threat Intel",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "integrishield.m19.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8019",
+        "--reload",
+        "--reload-dir",
+        "modules/m19-threat-intel/src"
+      ],
+      "env": {
+        "PYTHONPATH": "modules/m19-threat-intel/src:shared"
+      },
+      "port": 8019
+    },
+    {
       "name": "POC Full Stack (Docker Compose)",
       "runtimeExecutable": "docker",
       "runtimeArgs": [

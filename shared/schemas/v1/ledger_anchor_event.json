@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LedgerAnchorEvent",
+  "type": "object",
+  "required": ["tenant_id", "window_start", "window_end", "merkle_root", "entry_count"],
+  "properties": {
+    "tenant_id": {"type": "string"},
+    "window_start": {"type": "string", "format": "date-time"},
+    "window_end": {"type": "string", "format": "date-time"},
+    "merkle_root": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "entry_count": {"type": "integer", "minimum": 0},
+    "first_seq": {"type": "integer"},
+    "last_seq": {"type": "integer"},
+    "signed_by": {"type": "string"}
+  }
+}

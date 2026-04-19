@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IntelEnrichmentEvent",
+  "type": "object",
+  "required": ["subject_type", "subject_id", "sources", "observed_at"],
+  "properties": {
+    "subject_type": {"type": "string", "enum": ["cve", "ip", "package", "hash", "sap_note"]},
+    "subject_id": {"type": "string"},
+    "tenant_id": {"type": "string"},
+    "sources": {"type": "array", "items": {"type": "string"}},
+    "kev": {"type": "boolean"},
+    "epss": {"type": "number", "minimum": 0, "maximum": 1},
+    "cvss": {"type": "number", "minimum": 0, "maximum": 10},
+    "sap_note_refs": {"type": "array", "items": {"type": "string"}},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"}
+  }
+}
