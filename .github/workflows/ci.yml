@@ -10,7 +10,6 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     name: Lint & Type Check
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -27,17 +26,14 @@ jobs:
 
       - name: Install project dependencies
         run: |
-          # Collect all requirements.txt files and install them
           find . -name requirements.txt | xargs -I{} pip install -r {} || true
 
       - name: Lint with Ruff
-        run: ruff check modules/ apps/ shared/ --select E,F,W,I --ignore E501
-        continue-on-error: true
+        run: ruff check modules/ apps/ shared/ --select E,F,W,I,N,UP,B --ignore E501
 
   test:
     runs-on: ubuntu-latest
     name: Run Tests
-    continue-on-error: true
     services:
       redis:
         image: redis:7-alpine
@@ -64,20 +60,17 @@ jobs:
           pip install pytest pytest-cov
           find . -name requirements.txt | xargs -I{} pip install -r {} || true
 
-      - name: Run tests
+      - name: Run tests (modules + e2e)
         env:
           REDIS_URL: redis://localhost:6379
         run: |
-          if [ -d "tests" ] && [ -n "$(find tests/ -name '*.py' 2>/dev/null)" ]; then
-            pytest tests/ -v --tb=short
-          else
-            echo "No tests found yet — skipping. Add tests to tests/ to enable this step."
-          fi
+          pytest modules/ tests/ -v --tb=short --ignore=modules/m16-mcp-security-layer/tests || true
+          # Run M16 tests separately with its src on the path
+          PYTHONPATH=modules/m16-mcp-security-layer/src pytest modules/m16-mcp-security-layer/tests/ -v --tb=short
 
   security:
     runs-on: ubuntu-latest
     name: Security Scan
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -91,13 +84,19 @@ jobs:
 
       - name: Security scan
         run: bandit -r modules/ apps/ shared/ -ll -f json -o bandit-report.json
-        continue-on-error: true
+
+      - name: Upload Bandit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-report
+          path: bandit-report.json
 
   build-docker:
     needs: [lint, test, security]
     runs-on: ubuntu-latest
     name: Build Dashboard Docker Image
-    if: always() && github.event_name == 'push'
+    if: github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@v4
@@ -142,4 +141,4 @@ jobs:
         continue-on-error: true
 
       - name: Deployment summary
-        run: echo "✅ Pipeline complete. Set ZHASK_DEPLOY_KEY secret to enable auto-deploy."
+        run: echo "Pipeline complete. Set ZHASK_DEPLOY_KEY secret to enable auto-deploy."
